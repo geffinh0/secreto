@@ -100,12 +100,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: connected ? AppTheme.primary : AppTheme.bgElevated,
+                  color: AppTheme.bgSurface,
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: connected ? AppTheme.primary : AppTheme.border,
+                    width: connected ? 1.5 : 1,
+                  ),
                 ),
-                child: FoxIcon(
-                  color: connected ? Colors.white : AppTheme.textMuted,
-                  size: 36,
+                padding: const EdgeInsets.all(6),
+                child: const FoxIcon(
+                  size: 60,
+                  borderRadius: 14,
                 ),
               ),
               const SizedBox(width: 20),

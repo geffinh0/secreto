@@ -1,11 +1,11 @@
 {
-    "name": "super_moderator",
-    "short_name": "super_moderator",
+    "name": "Super Moderator",
+    "short_name": "SuperMod",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1B140F",
+    "theme_color": "#E07B39",
+    "description": "Painel de Controle e Moderação Automática do Robô SuperLive.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

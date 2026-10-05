@@ -1,16 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Super Moderator App">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Super Moderator — Painel de Controle e Moderação Automática para SuperLive">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="super_moderator">
+  <meta name="apple-mobile-web-app-title" content="Super Moderator">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
@@ -20,49 +21,91 @@
   <link rel="manifest" href="manifest.json">
   <style>
     body {
-      background-color: #0f172a; /* Fundo escuro elegante */
+      background-color: #1B140F;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
       margin: 0;
-      color: white;
-      font-family: system-ui, -apple-system, sans-serif;
+      color: #F7EEE3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
-    }
-    .loader {
-      width: 48px;
-      height: 48px;
-      border: 4px solid #334155;
-      border-bottom-color: #3b82f6; /* Detalhe azul */
-      border-radius: 50%;
-      display: inline-block;
-      box-sizing: border-box;
-      animation: rotation 1s linear infinite;
-    }
-    @keyframes rotation {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      user-select: none;
     }
     .loading-container {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
-      transition: opacity 0.5s ease;
+      gap: 20px;
+      transition: opacity 0.4s ease;
     }
-    .loading-text {
-      font-size: 16px;
-      font-weight: 500;
-      letter-spacing: 2px;
-      color: #94a3b8;
+    .logo-frame {
+      width: 88px;
+      height: 88px;
+      border-radius: 24px;
+      background: #241B15;
+      border: 1px solid #3A2D22;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+      animation: gentle-pulse 2.4s ease-in-out infinite;
+    }
+    .logo-frame img {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+    }
+    .loading-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #F7EEE3;
+    }
+    .loading-sub {
+      font-size: 12px;
+      color: #8C7968;
+      letter-spacing: 0.3px;
+    }
+    .spinner-bar {
+      width: 140px;
+      height: 3px;
+      background: #2C2119;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .spinner-bar::after {
+      content: '';
+      position: absolute;
+      left: -50%;
+      height: 100%;
+      width: 50%;
+      background: #E07B39;
+      border-radius: 3px;
+      animation: indeterminate 1.4s ease-in-out infinite;
+    }
+    @keyframes gentle-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    @keyframes indeterminate {
+      0% { left: -50%; width: 30%; }
+      50% { width: 60%; }
+      100% { left: 100%; width: 30%; }
     }
   </style>
 </head>
 <body>
   <div class="loading-container" id="loading-indicator">
-    <div class="loader"></div>
-    <div class="loading-text">CARREGANDO...</div>
+    <div class="logo-frame">
+      <img src="favicon.png" alt="Super Moderator">
+    </div>
+    <div style="text-align: center;">
+      <div class="loading-title">Super Moderator</div>
+      <div class="loading-sub">Iniciando sistema...</div>
+    </div>
+    <div class="spinner-bar"></div>
   </div>
 
   <script>
@@ -72,7 +115,7 @@
         loadingIndicator.style.opacity = '0';
         setTimeout(function() {
           loadingIndicator.remove();
-        }, 500); // Aguarda a animação de fade out
+        }, 400);
       }
     });
   </script>

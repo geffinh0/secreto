@@ -311,9 +311,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                     : null,
                 onForegroundImageError:
                     isConnected && profile?.avatar != null ? (_, __) {} : null,
-                child: FoxIcon(
-                    color: isConnected ? AppTheme.success : Colors.white,
-                    size: 24),
+                child: const FoxIcon(size: 28),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -712,7 +710,7 @@ class _LiveControlCardState extends State<_LiveControlCard> {
     if (ok) {
       _snack(
         active
-            ? 'Pronto! O robô entra sozinho assim que ela ficar ao vivo.'
+            ? 'Pronto! Moderação automática ativada. O robô entrará e moderará a live assim que ela começar.'
             : 'A streamer favorita foi desativada.',
         AppTheme.success,
       );
@@ -862,7 +860,7 @@ class _LiveControlCardState extends State<_LiveControlCard> {
                 child: TextButton.icon(
                   onPressed: _togglingWatch ? null : () => _toggleWatch(true),
                   icon: const Icon(Icons.favorite_rounded, size: 16),
-                  label: const Text('Favoritar: entrar sozinho quando ela ficar ao vivo'),
+                  label: const Text('Favoritar: entrar e moderar automaticamente ao vivo'),
                 ),
               ),
             ],
@@ -872,13 +870,59 @@ class _LiveControlCardState extends State<_LiveControlCard> {
           const Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 20),
 
+          if (bot.watch.hasTarget && bot.watch.active && !running) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.bgSurface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.radar_rounded, color: AppTheme.primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sentinela Ativa: Moderação Pré-ativada',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Você não precisa apertar nada. O robô entrará na live e aplicará as regras de silenciar e banir automaticamente assim que ela iniciar.',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 11.5, height: 1.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           TextField(
             controller: widget.streamIdController,
             enabled: !running && !bot.isBusy,
             decoration: const InputDecoration(
               labelText: 'ID da Live (livestream_id)',
               prefixIcon: Icon(Icons.tag_rounded),
-              helperText: 'O identificador da transmissão no SuperLive',
+              helperText: 'Opcional se favoritada; necessário para início manual avulso',
               helperStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11),
             ),
           ),
@@ -894,12 +938,20 @@ class _LiveControlCardState extends State<_LiveControlCard> {
                       ? 'Aguardando a próxima live...'
                       : running
                           ? 'Moderando a live...'
-                          : 'Iniciar moderação',
+                          : (bot.watch.hasTarget &&
+                                  bot.watch.active &&
+                                  widget.streamIdController.text.trim().isEmpty)
+                              ? 'Sentinela armada (aguardando live)'
+                              : 'Iniciar moderação manual',
                   icon: session.state == 'waiting_for_live'
                       ? Icons.hourglass_top_rounded
                       : running
                           ? Icons.loop_rounded
-                          : Icons.play_arrow_rounded,
+                          : (bot.watch.hasTarget &&
+                                  bot.watch.active &&
+                                  widget.streamIdController.text.trim().isEmpty)
+                              ? Icons.radar_rounded
+                              : Icons.play_arrow_rounded,
                 ),
               ),
               if (running) ...[
@@ -1041,53 +1093,148 @@ class _FavoriteStreamerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String status;
+    final String statusDescription;
+    final String badgeLabel;
+    final Color badgeColor;
+    final IconData badgeIcon;
+
     if (!watch.active) {
-      status = 'Desativado';
+      badgeLabel = 'Desativada';
+      statusDescription = 'A moderação automática está pausada para esta streamer.';
+      badgeColor = AppTheme.textMuted;
+      badgeIcon = Icons.pause_circle_outline_rounded;
     } else if (running) {
-      status = 'Ao vivo agora, moderando';
+      badgeLabel = 'Moderando ao vivo';
+      statusDescription = 'Conectado à transmissão agora. Aplicando regras de moderação em tempo real.';
+      badgeColor = AppTheme.success;
+      badgeIcon = Icons.shield_rounded;
     } else if (sessionState == 'waiting_for_live') {
-      status = 'Aguardando ela ficar ao vivo...';
+      badgeLabel = 'Aguardando live';
+      statusDescription = 'A transmissão anterior encerrou. O robô continua vigilante para a próxima live.';
+      badgeColor = AppTheme.warning;
+      badgeIcon = Icons.hourglass_top_rounded;
     } else {
-      status = 'Ativo: entra sozinho quando ela ficar ao vivo';
+      badgeLabel = 'Sentinela armada';
+      statusDescription = 'Moderação pré-ativada. O robô monitora o perfil e começará a moderar sozinho assim que ela iniciar a live.';
+      badgeColor = AppTheme.primary;
+      badgeIcon = Icons.radar_rounded;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.bgSurface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: watch.active
+              ? (running
+                  ? AppTheme.success.withValues(alpha: 0.45)
+                  : AppTheme.primary.withValues(alpha: 0.35))
+              : AppTheme.border,
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
-            foregroundImage:
-                watch.avatar != null ? NetworkImage(watch.avatar!) : null,
-            onForegroundImageError: watch.avatar != null ? (_, __) {} : null,
-            child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
+                foregroundImage:
+                    watch.avatar != null ? NetworkImage(watch.avatar!) : null,
+                onForegroundImageError: watch.avatar != null ? (_, __) {} : null,
+                child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            watch.nickname ?? 'Streamer favorita',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: badgeColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: badgeColor.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(badgeIcon, size: 12, color: badgeColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                badgeLabel,
+                                style: TextStyle(
+                                  color: badgeColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'ID Público: ${watch.sharedId}',
+                      style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: watch.active,
+                onChanged: isBusy ? null : onToggle,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.bgCard,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Row(
               children: [
-                Text(watch.nickname ?? 'Streamer favorita',
-                    overflow: TextOverflow.ellipsis,
+                Icon(
+                  watch.active ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                  size: 15,
+                  color: watch.active ? AppTheme.success : AppTheme.textMuted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    statusDescription,
                     style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                Text(status,
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11.5)),
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
               ],
             ),
-          ),
-          Switch(
-            value: watch.active,
-            onChanged: isBusy ? null : onToggle,
           ),
         ],
       ),

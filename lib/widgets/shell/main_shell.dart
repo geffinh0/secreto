@@ -69,17 +69,19 @@ class _MainShellState extends State<MainShell> {
         children: [
           // Logo
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: AppTheme.primary,
+                    color: AppTheme.bgSurface,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.border),
                   ),
-                  child: const FoxIcon(size: 22),
+                  padding: const EdgeInsets.all(4),
+                  child: const FoxIcon(size: 36, borderRadius: 8),
                 ),
                 const SizedBox(width: 12),
                 const Column(
@@ -230,16 +232,32 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildTopBar(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width > 900;
     final (routeIcon, routeTitle) = _getRouteTitleInfo(context);
+    final botProvider = context.watch<BotProvider>();
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: const BoxDecoration(
         color: AppTheme.bgCard,
         border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Row(
         children: [
+          if (!isWide) ...[
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppTheme.bgSurface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.border),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: const FoxIcon(size: 30, borderRadius: 7),
+            ),
+            const SizedBox(width: 12),
+          ],
           Icon(routeIcon, color: AppTheme.primary, size: 20),
           const SizedBox(width: 10),
           Text(
@@ -250,6 +268,40 @@ class _MainShellState extends State<MainShell> {
               fontWeight: FontWeight.w700,
             ),
           ),
+          const Spacer(),
+          if (!isWide)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppTheme.bgSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: botProvider.isConnected
+                          ? AppTheme.success
+                          : AppTheme.error,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    botProvider.isConnected ? 'Robô online' : 'Robô offline',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
