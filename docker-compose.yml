@@ -1,0 +1,39 @@
+name: atilas-client
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    restart: unless-stopped
+    volumes:
+      - backend_data:/data
+    networks:
+      - internal
+    # No ports published: only the web container (on the same internal
+    # network) can reach it. Never expose this directly to the internet.
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # Bound to localhost only: your existing reverse proxy on the VPS
+      # (the one fronting whatever else is already running) forwards your
+      # domain to 127.0.0.1:8088, so this never touches 80/443 directly or
+      # collides with the other service.
+      - "127.0.0.1:8088:80"
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  # Named volume for the SQLite DB (robot token, portal accounts, rules...).
+  # Survives `docker compose down` / image rebuilds; only
+  # `docker volume rm atilas-client_backend_data` would wipe it.
+  backend_data:

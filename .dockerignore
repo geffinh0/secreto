@@ -1,0 +1,31 @@
+# Keeps the build context small and fast - none of this is needed inside
+# either image (see deploy/backend.Dockerfile and deploy/web.Dockerfile,
+# which each COPY only the specific folders they need).
+.git/
+.github/
+
+# Reverse-engineering dumps (huge, gitignored already, but exclude them here
+# too in case this is ever built from a local checkout that still has them).
+/SuperLive_apktool/
+/SuperLive_codigo_app/
+/SuperLive_jadx_completo/
+/SuperLive_recursos/
+/codigo gradele/
+
+# Flutter/Dart build artifacts and caches.
+/build/
+/.dart_tool/
+.flutter-plugins-dependencies
+
+# Backend runtime artifacts - never bake the real DB into an image.
+backend/__pycache__/
+**/__pycache__/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Docs/tools not needed inside either image.
+/docs/
+/tools/
+*.md
