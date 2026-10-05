@@ -462,7 +462,7 @@ class _AddMessageFormState extends State<_AddMessageForm> {
             maxLines: 2,
             maxLength: 280,
             decoration: const InputDecoration(
-              hintText: 'Ex: Divulge meu Instagram! Obrigada por acompanharem! ❤️',
+              hintText: 'Ex: Divulguem meu Instagram! Obrigada por acompanharem!',
               hintMaxLines: 2,
               counterStyle: TextStyle(color: AppTheme.textMuted),
             ),

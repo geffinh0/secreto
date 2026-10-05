@@ -266,6 +266,9 @@ class BotSettingsUpdate(BaseModel):
     message_interval_seconds: Optional[int] = Field(default=None, ge=MIN_INTERVAL_SECONDS, le=3600)
     moderation_enabled: Optional[bool] = None
     kick_permanent: Optional[bool] = None
+    diamond_immunity_enabled: Optional[bool] = None
+    diamond_immunity_threshold: Optional[int] = Field(
+        default=None, ge=db.MIN_DIAMOND_IMMUNITY_THRESHOLD, le=1_000_000)
 
 
 class RobotConnectRequest(BaseModel):
@@ -360,6 +363,7 @@ def register(req: RegisterRequest, conn: sqlite3.Connection = Depends(get_db)):
 
     token = create_session(conn, user_id)
     user = public_user(conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
+    db.log_activity(user_id, "account_created", f"usuário {req.username}")
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 
@@ -388,6 +392,7 @@ def login(req: LoginRequest, request: Request, conn: sqlite3.Connection = Depend
                      (security.hash_password(req.password), row["id"]))
         conn.commit()
     token = create_session(conn, row["id"])
+    db.log_activity(row["id"], "login")
     return {"access_token": token, "token_type": "bearer", "user": public_user(row)}
 
 
@@ -408,10 +413,15 @@ def logout(
 
 
 # ─── Moderation rules ────────────────────────────────────────────────────────
-def _keyword_taken(conn, user_id: int, keyword: str, exclude_id: Optional[int] = None) -> bool:
+def _keyword_taken(conn, user_id: int, keyword: str, action: str,
+                    exclude_id: Optional[int] = None) -> bool:
+    """Whether `keyword` is already registered for this user under this same
+    `action`. Scoped per action so the same word can be a mute rule and a
+    kick rule at once (e.g. escalating a muted word to a ban later)."""
     target = normalize(keyword)
     rows = conn.execute(
-        "SELECT id, keyword FROM moderation_rules WHERE user_id = ?", (user_id,)
+        "SELECT id, keyword FROM moderation_rules WHERE user_id = ? AND action = ?",
+        (user_id, action),
     ).fetchall()
     return any(r["id"] != exclude_id and normalize(r["keyword"]) == target for r in rows)
 
@@ -431,13 +441,14 @@ def list_rules(user_id: int, current_user: dict = Depends(get_current_user),
 def create_rule(req: ModerationRuleCreate, current_user: dict = Depends(get_current_user),
                 conn: sqlite3.Connection = Depends(get_db)):
     require_owner(current_user, req.user_id)
-    if _keyword_taken(conn, req.user_id, req.keyword):
-        raise HTTPException(409, "Essa palavra já está cadastrada")
+    if _keyword_taken(conn, req.user_id, req.keyword, req.action):
+        raise HTTPException(409, "Essa palavra já está cadastrada nessa lista")
     cursor = conn.execute(
         "INSERT INTO moderation_rules (user_id, keyword, action, is_active) VALUES (?, ?, ?, ?)",
         (req.user_id, req.keyword, req.action, int(req.is_active)),
     )
     conn.commit()
+    db.log_activity(req.user_id, "rule_created", f'{req.action}: "{req.keyword}"')
     return row_to_dict(conn.execute(
         "SELECT * FROM moderation_rules WHERE id = ?", (cursor.lastrowid,)).fetchone())
 
@@ -446,24 +457,31 @@ def create_rule(req: ModerationRuleCreate, current_user: dict = Depends(get_curr
 def update_rule(rule_id: int, req: ModerationRuleUpdate,
                 current_user: dict = Depends(get_current_user),
                 conn: sqlite3.Connection = Depends(get_db)):
-    get_owned(conn, "moderation_rules", rule_id, current_user, "Regra não encontrada")
-    updates, values = [], []
+    row = get_owned(conn, "moderation_rules", rule_id, current_user, "Regra não encontrada")
+    updates, values, changed_fields = [], [], []
     if req.keyword is not None:
-        if _keyword_taken(conn, current_user["id"], req.keyword, exclude_id=rule_id):
-            raise HTTPException(409, "Essa palavra já está cadastrada")
+        effective_action = req.action if req.action is not None else row["action"]
+        if _keyword_taken(conn, current_user["id"], req.keyword, effective_action,
+                           exclude_id=rule_id):
+            raise HTTPException(409, "Essa palavra já está cadastrada nessa lista")
         updates.append("keyword = ?")
         values.append(req.keyword)
+        changed_fields.append("keyword")
     if req.action is not None:
         updates.append("action = ?")
         values.append(req.action)
+        changed_fields.append("action")
     if req.is_active is not None:
         updates.append("is_active = ?")
         values.append(int(req.is_active))
+        changed_fields.append("is_active")
     if not updates:
         raise HTTPException(400, "Nenhum campo para atualizar")
     values.append(rule_id)
     conn.execute(f"UPDATE moderation_rules SET {', '.join(updates)} WHERE id = ?", values)
     conn.commit()
+    db.log_activity(current_user["id"], "rule_updated",
+                     f'regra #{rule_id}: {", ".join(changed_fields)}')
     return row_to_dict(conn.execute(
         "SELECT * FROM moderation_rules WHERE id = ?", (rule_id,)).fetchone())
 
@@ -471,9 +489,10 @@ def update_rule(rule_id: int, req: ModerationRuleUpdate,
 @app.delete("/moderation/rules/{rule_id}")
 def delete_rule(rule_id: int, current_user: dict = Depends(get_current_user),
                 conn: sqlite3.Connection = Depends(get_db)):
-    get_owned(conn, "moderation_rules", rule_id, current_user, "Regra não encontrada")
+    row = get_owned(conn, "moderation_rules", rule_id, current_user, "Regra não encontrada")
     conn.execute("DELETE FROM moderation_rules WHERE id = ?", (rule_id,))
     conn.commit()
+    db.log_activity(current_user["id"], "rule_deleted", f'{row["action"]}: "{row["keyword"]}"')
     return {"success": True}
 
 
@@ -497,6 +516,7 @@ def create_message(req: AutoMessageCreate, current_user: dict = Depends(get_curr
         (req.user_id, req.content, req.sort_order, int(req.is_active)),
     )
     conn.commit()
+    db.log_activity(req.user_id, "message_created", f'"{req.content[:80]}"')
     return row_to_dict(conn.execute(
         "SELECT * FROM auto_messages WHERE id = ?", (cursor.lastrowid,)).fetchone())
 
@@ -521,6 +541,9 @@ def update_message(msg_id: int, req: AutoMessageUpdate,
     values.append(msg_id)
     conn.execute(f"UPDATE auto_messages SET {', '.join(updates)} WHERE id = ?", values)
     conn.commit()
+    if req.content is not None or req.is_active is not None:
+        # sort_order-only updates happen on every drag-reorder - too noisy to log.
+        db.log_activity(current_user["id"], "message_updated", f"mensagem #{msg_id}")
     return row_to_dict(conn.execute(
         "SELECT * FROM auto_messages WHERE id = ?", (msg_id,)).fetchone())
 
@@ -531,6 +554,7 @@ def delete_message(msg_id: int, current_user: dict = Depends(get_current_user),
     get_owned(conn, "auto_messages", msg_id, current_user, "Mensagem não encontrada")
     conn.execute("DELETE FROM auto_messages WHERE id = ?", (msg_id,))
     conn.commit()
+    db.log_activity(current_user["id"], "message_deleted", f"mensagem #{msg_id}")
     return {"success": True}
 
 
@@ -542,7 +566,8 @@ def get_settings(user_id: int, current_user: dict = Depends(get_current_user),
     return db.get_settings(conn, user_id)
 
 
-_BOOL_SETTINGS = ("auto_messages_enabled", "moderation_enabled", "kick_permanent")
+_BOOL_SETTINGS = ("auto_messages_enabled", "moderation_enabled", "kick_permanent",
+                  "diamond_immunity_enabled")
 
 
 @app.put("/settings/{user_id}")
@@ -560,10 +585,14 @@ def update_settings(user_id: int, req: BotSettingsUpdate,
     if sent.get("message_interval_seconds") is not None:
         updates.append("message_interval_seconds = ?")
         values.append(sent["message_interval_seconds"])
+    if sent.get("diamond_immunity_threshold") is not None:
+        updates.append("diamond_immunity_threshold = ?")
+        values.append(sent["diamond_immunity_threshold"])
     if updates:
         values.append(user_id)
         conn.execute(f"UPDATE bot_settings SET {', '.join(updates)} WHERE user_id = ?", values)
         conn.commit()
+        db.log_activity(user_id, "settings_updated", ", ".join(sorted(sent.keys())))
     return db.get_settings(conn, user_id)
 
 
@@ -588,6 +617,7 @@ def _robot_payload(conn, user_id: int) -> dict:
         "robot": None if robot is None else {
             "id": robot["sl_user_id"], "nickname": robot["nickname"],
             "avatar": robot["avatar"], "auth_mode": robot["auth_mode"],
+            "last_livestream_id": robot["last_livestream_id"],
         },
         "session": session.snapshot() if session else IDLE_SNAPSHOT,
         "totals": db.action_totals(conn, user_id),
@@ -604,7 +634,8 @@ def _save_robot_account(conn, user_id: int, client: SuperLiveClient, profile: di
         (
             user_id,
             str(profile.get("id") or profile.get("user_id") or "") or None,
-            profile.get("nickname") or profile.get("name") or profile.get("username") or "Robô",
+            profile.get("nickname") or profile.get("name") or profile.get("username")
+            or "Atila's Client",
             profile.get("avatar") or profile.get("profile_picture") or profile.get("picture_url"),
             client.token, client.device_id, mode,
         ),
@@ -650,6 +681,7 @@ async def robot_connect(req: RobotConnectRequest, current_user: dict = Depends(g
         raise _superlive_http_error(exc, "o login do robô", login=True) from None
 
     _save_robot_account(conn, user_id, client, profile, mode)
+    db.log_activity(user_id, "robot_connected", f"modo: {mode}")
     return _robot_payload(conn, user_id)
 
 
@@ -711,6 +743,7 @@ async def robot_connect_phone_verify(
 
     _pending_phone_logins.pop(user_id, None)
     _save_robot_account(conn, user_id, client, profile, "phone")
+    db.log_activity(user_id, "robot_connected", "modo: phone")
     return _robot_payload(conn, user_id)
 
 
@@ -730,6 +763,8 @@ async def robot_disconnect(current_user: dict = Depends(get_current_user),
             pass
     conn.execute("DELETE FROM robot_accounts WHERE user_id = ?", (user_id,))
     conn.commit()
+    if robot is not None:
+        db.log_activity(user_id, "robot_disconnected")
     return _robot_payload(conn, user_id)
 
 
@@ -772,6 +807,10 @@ async def robot_start(req: RobotStartRequest, current_user: dict = Depends(get_c
         raise HTTPException(409, str(exc)) from None
     except SuperLiveError as exc:
         raise _superlive_http_error(exc, "o acesso a essa live") from None
+    conn.execute("UPDATE robot_accounts SET last_livestream_id = ? WHERE user_id = ?",
+                 (req.livestream_id, user_id))
+    conn.commit()
+    db.log_activity(user_id, "session_started", f"live {req.livestream_id}")
     return _robot_payload(conn, user_id)
 
 
@@ -779,7 +818,9 @@ async def robot_start(req: RobotStartRequest, current_user: dict = Depends(get_c
 async def robot_stop(current_user: dict = Depends(get_current_user),
                      conn: sqlite3.Connection = Depends(get_db)):
     user_id = current_user["id"]
-    await sessions.stop(user_id)
+    stopped = await sessions.stop(user_id)
+    if stopped is not None:
+        db.log_activity(user_id, "session_stopped")
     return _robot_payload(conn, user_id)
 
 
@@ -792,6 +833,13 @@ def robot_log(limit: int = 50, current_user: dict = Depends(get_current_user),
         (current_user["id"], limit),
     ).fetchall()
     return [row_to_dict(r) for r in rows]
+
+
+# ─── Account activity (login, rule/message/settings/robot changes) ──────────
+@app.get("/activity")
+def list_activity(limit: int = 50, current_user: dict = Depends(get_current_user),
+                  conn: sqlite3.Connection = Depends(get_db)):
+    return db.list_activity(conn, current_user["id"], limit=max(1, min(limit, 200)))
 
 
 # ─── Health check ────────────────────────────────────────────────────────────

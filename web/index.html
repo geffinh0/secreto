@@ -18,8 +18,64 @@
 
   <title>Super Moderator</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      background-color: #0f172a; /* Fundo escuro elegante */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      color: white;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    .loader {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #334155;
+      border-bottom-color: #3b82f6; /* Detalhe azul */
+      border-radius: 50%;
+      display: inline-block;
+      box-sizing: border-box;
+      animation: rotation 1s linear infinite;
+    }
+    @keyframes rotation {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      transition: opacity 0.5s ease;
+    }
+    .loading-text {
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      color: #94a3b8;
+    }
+  </style>
 </head>
 <body>
+  <div class="loading-container" id="loading-indicator">
+    <div class="loader"></div>
+    <div class="loading-text">CARREGANDO...</div>
+  </div>
+
+  <script>
+    window.addEventListener('flutter-first-frame', function() {
+      var loadingIndicator = document.getElementById('loading-indicator');
+      if (loadingIndicator) {
+        loadingIndicator.style.opacity = '0';
+        setTimeout(function() {
+          loadingIndicator.remove();
+        }, 500); // Aguarda a animação de fade out
+      }
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -200,6 +200,31 @@ class AuthAndApiTests(unittest.TestCase):
         self.assertEqual((status, toggled["is_active"]), (200, False))
         self.assertEqual(api("PUT", "/moderation/rules/99999", {"is_active": True}, token)[0], 404)
 
+    def test_same_keyword_allowed_in_both_mute_and_kick_lists(self):
+        # Escalating a word from "mute" to "kick" (or using it in both) must work:
+        # duplicate-keyword rejection is scoped per action, not per user.
+        _, token, uid = new_user("escalate")
+        post = lambda kw, action: api(
+            "POST", "/moderation/rules", {"user_id": uid, "keyword": kw, "action": action}, token)
+
+        status, mute_rule = post("spam", "mute")
+        self.assertEqual(status, 200)
+        status, kick_rule = post("spam", "kick")               # same word, different action: OK
+        self.assertEqual(status, 200)
+        self.assertEqual(post("spam", "mute")[0], 409)          # still a duplicate within "mute"
+        self.assertEqual(post("spam", "kick")[0], 409)          # still a duplicate within "kick"
+
+        # Escalating an existing mute rule's action to "kick" collides with the kick rule above.
+        _, other = post("outrapalavra", "mute")
+        self.assertEqual(
+            api("PUT", f"/moderation/rules/{other['id']}", {"keyword": "spam", "action": "kick"}, token)[0],
+            409,
+        )
+        # But renaming it while moving to an action with no conflict works.
+        status, moved = api(
+            "PUT", f"/moderation/rules/{other['id']}", {"action": "kick"}, token)
+        self.assertEqual((status, moved["action"]), (200, "kick"))
+
     def test_settings_partial_update_and_validation(self):
         _, token, uid = new_user("settings")
         status, s = api("GET", f"/settings?user_id={uid}", token=token)
@@ -690,6 +715,80 @@ class ModerationFlowTests(RobotTestBase):
         mock.chat(1, "Ana", "feia")
         wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
 
+    def test_diamond_immunity_exempts_generous_gifters(self):
+        self.add_rule("feia", "kick")
+        self.settings(diamond_immunity_enabled=True, diamond_immunity_threshold=50)
+        self.connect_robot()
+        self.start_live()
+
+        # 30 diamonds: below the 50 threshold, still moderated normally.
+        mock.emit("livestream_gift_sent", {
+            "livestream_id": "live1", "user_id": "9", "gift": {"cost": 30},
+        })
+        self.settle(0.3)
+        mock.chat(9, "Gifter", "feia")
+        wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
+
+        # Another 30 (total 60, now >= 50) exempts a different user from the same rule.
+        mock.emit("livestream_gift_sent", {
+            "livestream_id": "live1", "user_id": "10", "gift": {"cost": 60},
+        })
+        self.settle(0.3)
+        mock.chat(10, "BigGifter", "feia")
+        self.settle(0.4)
+        self.assertEqual(len(mock.calls_to("livestream/kick")), 1)   # still just the first one
+
+    def test_diamond_combo_multiplies_the_gift_cost(self):
+        self.add_rule("feia", "kick")
+        self.settings(diamond_immunity_enabled=True, diamond_immunity_threshold=50)
+        self.connect_robot()
+        self.start_live()
+
+        # A single combo frame: 10 diamonds x 6 in the combo = 60, already over the threshold.
+        mock.emit("livestream_gift_sent", {
+            "livestream_id": "live1", "user_id": "11", "gift": {"cost": 10},
+            "gift_combo_detail": {"gift_combo_count": 6},
+        })
+        self.settle(0.3)
+        mock.chat(11, "ComboGifter", "feia")
+        self.settle(0.4)
+        self.assertEqual(len(mock.calls_to("livestream/kick")), 0)
+
+    def test_diamond_immunity_does_nothing_while_disabled(self):
+        self.add_rule("feia", "kick")
+        self.connect_robot()
+        self.start_live()
+        mock.emit("livestream_gift_sent", {
+            "livestream_id": "live1", "user_id": "9", "gift": {"cost": 9999},
+        })
+        self.settle(0.3)
+        mock.chat(9, "Gifter", "feia")
+        wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
+
+    def test_diamond_immunity_resets_on_a_new_live(self):
+        old_poll = engine.LIVE_POLL_INTERVAL_SECONDS
+        engine.LIVE_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.add_rule("feia", "kick")
+            self.settings(diamond_immunity_enabled=True, diamond_immunity_threshold=50)
+            self.connect_robot()
+            self.start_live()
+            mock.emit("livestream_gift_sent", {
+                "livestream_id": "live1", "user_id": "9", "gift": {"cost": 100},
+            })
+            self.settle(0.3)
+
+            mock.end_live(STREAMER_ID, "live1")
+            wait_for(lambda: self.status()["session"]["state"] == "waiting_for_live", 8)
+            mock.start_new_live(STREAMER_ID, "live2")
+            wait_for(lambda: self.status()["session"]["state"] == "running", 8)
+            wait_for(lambda: self.status()["session"]["ws_state"] == "connected", 8)
+
+            mock.chat(9, "Gifter", "feia", livestream_id="live2")   # immunity did not carry over
+            wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
+        finally:
+            engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+
 
 class MessagesFlowTests(RobotTestBase):
     def prepare_messages(self):
@@ -746,16 +845,70 @@ class MessagesFlowTests(RobotTestBase):
                          5, "leave_livestream frame never arrived")
         self.assertEqual(leave[0]["data"], {"livestream_id": "live1"})
 
-    def test_livestream_ended_event_closes_the_session(self):
+    def test_livestream_ended_event_switches_to_waiting_for_the_next_live(self):
+        # We know who the streamer is (resolved from livestream/retrieve on start), so
+        # when her live ends the session keeps running and watches for her next one
+        # instead of shutting down - see test_auto_resumes_moderation_on_the_next_live.
         self.connect_robot()
         self.start_live()
         mock.emit("livestream_ended", {"livestream_id": "another-live"})   # not ours: ignored
         self.settle(0.5)
         self.assertTrue(self.status()["session"]["running"])
-        mock.emit("livestream_ended", {"livestream_id": "live1"})
-        wait_for(lambda: self.status()["session"]["state"] == "stopped", 8, "session did not close")
-        self.assertEqual(self.status()["session"]["stop_reason"], "A live foi encerrada")
+        mock.end_live(STREAMER_ID, "live1")
+        wait_for(lambda: self.status()["session"]["state"] == "waiting_for_live",
+                 8, "session did not switch to waiting_for_live")
+        self.assertTrue(self.status()["session"]["running"])   # still "on", just nothing to connect to
+        self.assertIsNone(self.status()["session"]["livestream_id"])
         wait_for(lambda: not mock.clients, 5, "websocket not closed")
+
+    def test_auto_resumes_moderation_on_the_next_live(self):
+        old_poll = engine.LIVE_POLL_INTERVAL_SECONDS
+        engine.LIVE_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.connect_robot()
+            self.start_live()
+            self.add_rule("feia", "kick")
+
+            mock.end_live(STREAMER_ID, "live1")
+            wait_for(lambda: self.status()["session"]["state"] == "waiting_for_live",
+                     8, "session did not start waiting")
+
+            # Still offline: nothing to reconnect to yet.
+            self.settle(0.5)
+            self.assertEqual(self.status()["session"]["state"], "waiting_for_live")
+
+            mock.start_new_live(STREAMER_ID, "live2")
+            wait_for(lambda: self.status()["session"]["livestream_id"] == "live2",
+                     8, "did not pick up the streamer's new livestream_id")
+            wait_for(lambda: self.status()["session"]["state"] == "running",
+                     8, "session did not resume")
+            wait_for(lambda: self.status()["session"]["ws_state"] == "connected",
+                     8, "did not reconnect to the new live")
+
+            # Moderation keeps working against the new livestream_id.
+            mock.chat(ROBOT_ID + "1", "User", "vc e feia", livestream_id="live2")
+            wait_for(lambda: self.status()["session"]["counters"]["actions_ok"] == 1,
+                     5, "rule was not applied on the new live")
+            kick_call = mock.calls_to("livestream/kick")[0]
+            self.assertEqual(kick_call["body"]["livestream_id"], "live2")
+        finally:
+            engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+
+    def test_gives_up_waiting_if_the_robots_token_expires(self):
+        old_poll = engine.LIVE_POLL_INTERVAL_SECONDS
+        engine.LIVE_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.connect_robot()
+            self.start_live()
+            mock.end_live(STREAMER_ID, "live1")
+            wait_for(lambda: self.status()["session"]["state"] == "waiting_for_live",
+                     8, "session did not start waiting")
+            mock.fail["users/profile"] = (401, {"message": "token expired"})
+            wait_for(lambda: self.status()["session"]["state"] == "error",
+                     8, "session did not fail once the token expired while waiting")
+        finally:
+            engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+            mock.fail.clear()
 
     def test_can_start_a_new_session_after_one_ended(self):
         self.connect_robot()
@@ -763,6 +916,52 @@ class MessagesFlowTests(RobotTestBase):
         api("POST", "/robot/stop", token=self.token)
         self.start_live()
         self.assertTrue(self.status()["session"]["running"])
+
+
+class ActivityLogTests(RobotTestBase):
+    """Account-level activity trail: login, rule/message/settings/robot changes."""
+
+    def activity(self, token=None):
+        return api("GET", "/activity", token=token or self.token)[1]
+
+    def test_rule_and_settings_changes_are_recorded(self):
+        before = len(self.activity())
+        rule = self.add_rule("feia", "kick")
+        self.settings(moderation_enabled=False)
+        api("DELETE", f"/moderation/rules/{rule['id']}", token=self.token)
+        entries = self.activity()
+        actions = [e["action"] for e in entries[:3]]
+        self.assertEqual(actions, ["rule_deleted", "settings_updated", "rule_created"])
+        self.assertEqual(len(entries), before + 3)
+
+    def test_robot_connect_and_session_lifecycle_are_recorded(self):
+        self.connect_robot()
+        self.start_live()
+        api("POST", "/robot/stop", token=self.token)
+        api("POST", "/robot/disconnect", token=self.token)
+        actions = [e["action"] for e in self.activity()[:4]]
+        self.assertEqual(
+            actions, ["robot_disconnected", "session_stopped", "session_started", "robot_connected"]
+        )
+
+    def test_message_reordering_alone_is_not_logged(self):
+        msg = api("POST", "/messages", {"user_id": self.uid, "content": "oi"}, self.token)[1]
+        before = len(self.activity())
+        api("PUT", f"/messages/{msg['id']}", {"sort_order": 5}, self.token)  # drag-reorder only
+        self.assertEqual(len(self.activity()), before)
+        api("PUT", f"/messages/{msg['id']}", {"content": "oi de novo"}, self.token)
+        self.assertEqual(len(self.activity()), before + 1)
+
+    def test_activity_is_private_to_each_user(self):
+        self.add_rule("feia", "kick")
+        _, other_token, _ = new_user("otheractivity")
+        other_entries = api("GET", "/activity", token=other_token)[1]
+        self.assertEqual([e["action"] for e in other_entries], ["account_created"])  # just their own signup
+        self.assertGreater(len(self.activity()), 0)
+
+    def test_login_is_recorded(self):
+        api("POST", "/auth/login", {"username": self.name, "password": "senha-forte-1"})
+        self.assertEqual(self.activity()[0]["action"], "login")
 
 
 # ── upgrading a database created by the previous version ─────────────────────

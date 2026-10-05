@@ -14,18 +14,22 @@ DEFAULT_SETTINGS = {
     "message_interval_seconds": 120,
     "moderation_enabled": True,
     "kick_permanent": False,
+    "diamond_immunity_enabled": False,
+    "diamond_immunity_threshold": 50,
 }
+
+MIN_DIAMOND_IMMUNITY_THRESHOLD = 50
 
 _BOOL_KEYS = (
     "is_active", "is_admin", "auto_messages_enabled",
-    "moderation_enabled", "kick_permanent", "ok",
+    "moderation_enabled", "kick_permanent", "diamond_immunity_enabled", "ok",
 )
 
 # bot_settings columns exposed via the API. end_message_enabled/end_message_template
 # still exist in older databases (discontinued; see init_db) but are never read back.
 _SETTINGS_COLUMNS = (
     "id, user_id, auto_messages_enabled, message_interval_seconds, "
-    "moderation_enabled, kick_permanent"
+    "moderation_enabled, kick_permanent, diamond_immunity_enabled, diamond_immunity_threshold"
 )
 
 
@@ -152,6 +156,22 @@ def init_db():
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_modlog_user ON moderation_log(user_id, id DESC)"
         )
+        # Account-level activity trail (login, rule/message/settings changes, robot
+        # connect/disconnect, session start/stop) - separate from moderation_log,
+        # which only covers automatic mute/kick actions against chat users.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS user_activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                detail TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_activity_user ON user_activity_log(user_id, id DESC)"
+        )
 
         # ---- additive migrations for databases created by older versions ----
         if "expires_at" not in _columns(conn, "sessions"):
@@ -162,6 +182,17 @@ def init_db():
         )
         if "kick_permanent" not in _columns(conn, "bot_settings"):
             c.execute("ALTER TABLE bot_settings ADD COLUMN kick_permanent INTEGER DEFAULT 0")
+        if "diamond_immunity_enabled" not in _columns(conn, "bot_settings"):
+            c.execute(
+                "ALTER TABLE bot_settings ADD COLUMN diamond_immunity_enabled INTEGER DEFAULT 0"
+            )
+        if "diamond_immunity_threshold" not in _columns(conn, "bot_settings"):
+            c.execute(
+                "ALTER TABLE bot_settings ADD COLUMN diamond_immunity_threshold "
+                f"INTEGER DEFAULT {MIN_DIAMOND_IMMUNITY_THRESHOLD}"
+            )
+        if "last_livestream_id" not in _columns(conn, "robot_accounts"):
+            c.execute("ALTER TABLE robot_accounts ADD COLUMN last_livestream_id TEXT")
 
         c.execute("DELETE FROM sessions WHERE expires_at < datetime('now')")
         conn.commit()
@@ -230,6 +261,37 @@ def log_action(user_id, livestream_id, target_user_id, target_name, action,
         return cur.lastrowid
     finally:
         conn.close()
+
+
+MAX_ACTIVITY_ROWS = 500  # per portal user
+
+
+def log_activity(user_id: int, action: str, detail: str = None) -> None:
+    """Record an account-level action (login, rule/message/settings change, robot
+    connect/disconnect, session start/stop) for the user's own activity history."""
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT INTO user_activity_log (user_id, action, detail) VALUES (?, ?, ?)",
+            (user_id, action, detail),
+        )
+        conn.execute(
+            "DELETE FROM user_activity_log WHERE user_id = ? AND id <= "
+            "(SELECT id FROM user_activity_log WHERE user_id = ? ORDER BY id DESC LIMIT 1 OFFSET ?)",
+            (user_id, user_id, MAX_ACTIVITY_ROWS),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_activity(conn, user_id: int, limit: int = 100) -> list:
+    rows = conn.execute(
+        "SELECT id, action, detail, created_at FROM user_activity_log "
+        "WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    return [row_to_dict(r) for r in rows]
 
 
 def action_totals(conn, user_id: int) -> dict:

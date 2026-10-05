@@ -32,7 +32,7 @@ start "Super Moderator - Backend" cmd /k "cd /d %~dp0backend && python main.py"
 
 echo [3/3] Iniciando o portal (Flutter Web) em http://localhost:3000 ...
 echo       A primeira compilacao leva de 30 a 90 segundos.
-start "Super Moderator - Portal" cmd /k "cd /d %~dp0 && flutter run -d web-server --web-port 3000 --web-hostname localhost"
+start "Super Moderator - Portal" cmd /k "cd /d %~dp0 && flutter run -d web-server --release --web-port 3000 --web-hostname localhost"
 
 :: Abre o navegador padrao assim que o portal responder (espera ate ~3 min).
 :: (o timeout precisa ser maior que 2s: "localhost" pode levar ~2s tentando IPv6 primeiro)

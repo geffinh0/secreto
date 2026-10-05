@@ -53,6 +53,9 @@ backend/tests/__pycache__/
 *.db-wal
 *.db-shm
 
+# Claude Code runtime state (local only)
+.claude/
+
 # Reverse-engineering source dumps (huge, not part of the product; kept locally only).
 # Our own write-ups about them live in docs/ and ARE versioned.
 /SuperLive_apktool/

@@ -194,12 +194,17 @@ class BotSettings {
   static const int minIntervalSeconds = 10;
   static const int maxIntervalSeconds = 3600;
 
+  /// Lowest diamond threshold the backend accepts for immunity.
+  static const int minDiamondImmunityThreshold = 50;
+
   final int? id;
   final int userId;
   final bool autoMessagesEnabled;
   final int messageIntervalSeconds;
   final bool moderationEnabled;
   final bool kickPermanent;
+  final bool diamondImmunityEnabled;
+  final int diamondImmunityThreshold;
 
   BotSettings({
     this.id,
@@ -208,6 +213,8 @@ class BotSettings {
     this.messageIntervalSeconds = 120,
     this.moderationEnabled = true,
     this.kickPermanent = false,
+    this.diamondImmunityEnabled = false,
+    this.diamondImmunityThreshold = minDiamondImmunityThreshold,
   });
 
   factory BotSettings.fromJson(Map<String, dynamic> json) {
@@ -218,6 +225,9 @@ class BotSettings {
       messageIntervalSeconds: asInt(json['message_interval_seconds'], 120),
       moderationEnabled: asBool(json['moderation_enabled'], true),
       kickPermanent: asBool(json['kick_permanent']),
+      diamondImmunityEnabled: asBool(json['diamond_immunity_enabled']),
+      diamondImmunityThreshold:
+          asInt(json['diamond_immunity_threshold'], minDiamondImmunityThreshold),
     );
   }
 
@@ -227,6 +237,8 @@ class BotSettings {
         'message_interval_seconds': messageIntervalSeconds,
         'moderation_enabled': moderationEnabled,
         'kick_permanent': kickPermanent,
+        'diamond_immunity_enabled': diamondImmunityEnabled,
+        'diamond_immunity_threshold': diamondImmunityThreshold,
       };
 
   BotSettings copyWith({
@@ -236,6 +248,8 @@ class BotSettings {
     int? messageIntervalSeconds,
     bool? moderationEnabled,
     bool? kickPermanent,
+    bool? diamondImmunityEnabled,
+    int? diamondImmunityThreshold,
   }) {
     return BotSettings(
       id: id ?? this.id,
@@ -245,6 +259,10 @@ class BotSettings {
           messageIntervalSeconds ?? this.messageIntervalSeconds,
       moderationEnabled: moderationEnabled ?? this.moderationEnabled,
       kickPermanent: kickPermanent ?? this.kickPermanent,
+      diamondImmunityEnabled:
+          diamondImmunityEnabled ?? this.diamondImmunityEnabled,
+      diamondImmunityThreshold:
+          diamondImmunityThreshold ?? this.diamondImmunityThreshold,
     );
   }
 }
@@ -260,20 +278,26 @@ class RobotInfo {
   final String? avatar;
   final String authMode; // 'password' | 'token'
 
+  /// The last livestream_id this robot was moderating, if any - lets the UI
+  /// offer to resume right away instead of asking for the ID again.
+  final String? lastLivestreamId;
+
   const RobotInfo({
     this.id,
     required this.nickname,
     this.avatar,
     this.authMode = 'password',
+    this.lastLivestreamId,
   });
 
   factory RobotInfo.fromJson(Map<String, dynamic> json) => RobotInfo(
         id: json['id']?.toString(),
         nickname: (json['nickname'] as String?)?.trim().isNotEmpty == true
             ? json['nickname'] as String
-            : 'Robô',
+            : "Atila's Client",
         avatar: json['avatar'] as String?,
         authMode: json['auth_mode'] as String? ?? 'password',
+        lastLivestreamId: json['last_livestream_id'] as String?,
       );
 }
 
@@ -371,7 +395,7 @@ class ModerationAction {
 class RobotSession {
   final bool running;
 
-  /// idle | starting | running | stopping | stopped | error
+  /// idle | starting | running | waiting_for_live | stopping | stopped | error
   final String state;
 
   /// disconnected | connecting | connected
@@ -456,4 +480,47 @@ class RobotStatus {
       totalActionsFailed: asInt(totals['actions_failed']),
     );
   }
+}
+
+// =====================================================
+// ACCOUNT ACTIVITY (login, rule/message/settings/robot changes)
+// =====================================================
+class ActivityEntry {
+  final int id;
+  final String action;
+  final String? detail;
+  final DateTime? createdAt;
+
+  const ActivityEntry({
+    required this.id,
+    required this.action,
+    this.detail,
+    this.createdAt,
+  });
+
+  factory ActivityEntry.fromJson(Map<String, dynamic> json) => ActivityEntry(
+        id: asInt(json['id']),
+        action: json['action'] as String? ?? '',
+        detail: json['detail'] as String?,
+        createdAt: parseDate(json['created_at']),
+      );
+
+  /// Human-readable label for [action], in Portuguese, matching the backend's
+  /// action strings (see db.log_activity call sites in main.py).
+  String get label => switch (action) {
+        'login' => 'Login no portal',
+        'account_created' => 'Conta criada',
+        'rule_created' => 'Palavra de moderação adicionada',
+        'rule_updated' => 'Palavra de moderação alterada',
+        'rule_deleted' => 'Palavra de moderação removida',
+        'message_created' => 'Mensagem automática adicionada',
+        'message_updated' => 'Mensagem automática alterada',
+        'message_deleted' => 'Mensagem automática removida',
+        'settings_updated' => 'Configurações alteradas',
+        'robot_connected' => 'Robô conectado',
+        'robot_disconnected' => 'Robô desconectado',
+        'session_started' => 'Moderação iniciada',
+        'session_stopped' => 'Moderação parada',
+        _ => action,
+      };
 }

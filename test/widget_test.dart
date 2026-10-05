@@ -123,12 +123,23 @@ void main() {
         'message_interval_seconds': 45,
         'moderation_enabled': false,
         'kick_permanent': true,
+        'diamond_immunity_enabled': true,
+        'diamond_immunity_threshold': 200,
       });
       expect(s.kickPermanent, isTrue);
       expect(s.moderationEnabled, isFalse);
+      expect(s.diamondImmunityEnabled, isTrue);
+      expect(s.diamondImmunityThreshold, 200);
       expect(s.toJson()['message_interval_seconds'], 45);
       expect(s.toJson()['kick_permanent'], isTrue);
+      expect(s.toJson()['diamond_immunity_threshold'], 200);
       expect(s.toJson().containsKey('end_message_enabled'), isFalse);
+    });
+
+    test('BotSettings defaults the diamond immunity threshold to the minimum', () {
+      final s = BotSettings(userId: 1);
+      expect(s.diamondImmunityEnabled, isFalse);
+      expect(s.diamondImmunityThreshold, BotSettings.minDiamondImmunityThreshold);
     });
 
     test('RobotStatus parses the backend payload', () {

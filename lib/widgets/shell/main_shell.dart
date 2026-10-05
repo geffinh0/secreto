@@ -236,7 +236,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildTopBar(BuildContext context) {
-    final routeTitle = _getRouteTitle(context);
+    final (routeIcon, routeTitle) = _getRouteTitleInfo(context);
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -246,6 +246,8 @@ class _MainShellState extends State<MainShell> {
       ),
       child: Row(
         children: [
+          Icon(routeIcon, color: AppTheme.primary, size: 20),
+          const SizedBox(width: 10),
           Text(
             routeTitle,
             style: const TextStyle(
@@ -261,13 +263,15 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  String _getRouteTitle(BuildContext context) {
+  (IconData, String) _getRouteTitleInfo(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/moderation')) return '🛡️ Moderação';
-    if (location.startsWith('/messages')) return '💬 Mensagens Automáticas';
-    if (location.startsWith('/bot')) return '🤖 Controle do Robô';
-    if (location.startsWith('/settings')) return '⚙️ Configurações';
-    return '📊 Dashboard';
+    if (location.startsWith('/moderation')) return (Icons.shield_rounded, 'Moderação');
+    if (location.startsWith('/messages')) {
+      return (Icons.chat_bubble_rounded, 'Mensagens Automáticas');
+    }
+    if (location.startsWith('/bot')) return (Icons.smart_toy_rounded, 'Controle do Robô');
+    if (location.startsWith('/settings')) return (Icons.settings_rounded, 'Configurações');
+    return (Icons.dashboard_rounded, 'Dashboard');
   }
 
   Widget _buildBottomNav(BuildContext context, int currentIndex) {

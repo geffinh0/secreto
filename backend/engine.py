@@ -33,6 +33,7 @@ CONFIG_TTL_SECONDS = 5         # how often rules/settings are re-read from the D
 MAX_QUEUED_ACTIONS = 200
 MAX_WS_FAILURES = 12
 ACTION_LEVEL = {"mute": 1, "kick": 2}
+LIVE_POLL_INTERVAL_SECONDS = 20  # how often to check whether the streamer went live again
 
 
 def now_iso() -> str:
@@ -109,7 +110,7 @@ class BotSession:
         self.livestream_id = livestream_id
         self.ws_url_override = ws_url_override
 
-        self.state = "starting"          # starting|running|stopping|stopped|error
+        self.state = "starting"          # starting|running|waiting_for_live|stopping|stopped|error
         self.ws_state = "disconnected"   # disconnected|connecting|connected
         self.started_at = None
         self.stop_reason = None
@@ -132,6 +133,7 @@ class BotSession:
         self._queue = asyncio.Queue(maxsize=MAX_QUEUED_ACTIONS)
         self._pending = set()
         self._acted = {}                 # user_id -> highest action level applied
+        self._diamonds = {}              # user_id -> diamonds sent in the CURRENT live
         self._cfg = None
         self._cfg_at = 0.0
         self._forbidden_hits = 0
@@ -141,7 +143,7 @@ class BotSession:
     # ---- lifecycle ---------------------------------------------------------
     @property
     def is_active(self) -> bool:
-        return self.state in ("starting", "running")
+        return self.state in ("starting", "running", "waiting_for_live")
 
     async def start(self) -> None:
         """Validate the livestream, resolve the WebSocket URL and start the workers.
@@ -224,6 +226,13 @@ class BotSession:
     async def _ws_loop(self) -> None:
         backoff, failures = 1, 0
         while self.is_active:
+            if self.livestream_id is None:
+                # The live we were in ended; wait here until the streamer goes live
+                # again (or the session is stopped) instead of tearing everything down.
+                if not await self._wait_for_next_live():
+                    return
+                backoff, failures = 1, 0
+
             connected_at = time.monotonic()
             try:
                 self.ws_state = "connecting"
@@ -260,12 +269,44 @@ class BotSession:
 
             if not self.is_active:
                 return
+            if self.livestream_id is None:
+                continue  # the live ended again (or ended mid-connect); go back to waiting
             failures = 0 if time.monotonic() - connected_at > 30 else failures + 1
             if failures >= MAX_WS_FAILURES:
                 self._fail("Não foi possível manter a conexão em tempo real com o SuperLive.")
                 return
             await asyncio.sleep(backoff)
             backoff = 1 if failures == 0 else min(backoff * 2, 30)
+
+    async def _wait_for_next_live(self) -> bool:
+        """Polls SuperLive for the streamer's next broadcast while the moderator
+        stays "on" with nothing to connect to. Returns False if the session was
+        stopped (or the robot's token failed) while waiting."""
+        self.state = "waiting_for_live"
+        self.ws_state = "disconnected"
+        self.stop_reason = None
+        log.info("session %s: live %s ended, watching for the next one",
+                  self.user_id, self.livestream_id or "?")
+        while self.is_active and self.livestream_id is None:
+            try:
+                result = await self.client.find_live_by_user_id(self.streamer_id)
+            except SuperLiveError as exc:
+                if exc.is_auth_error:
+                    self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
+                    return False
+                result = None
+            if result and result.get("live") and result.get("livestream_id"):
+                self.livestream_id = str(result["livestream_id"])
+                self._diamonds.clear()  # diamond immunity is per-live, not cumulative
+                log.info("session %s: streamer is live again on %s",
+                         self.user_id, self.livestream_id)
+            else:
+                await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
+        if not self.is_active:
+            return False
+        self.state = "running"
+        self.last_error = None
+        return True
 
     async def _heartbeat(self, ws) -> None:
         while True:
@@ -286,10 +327,26 @@ class BotSession:
                 return
             if kind == "livestream_message_sent":
                 self._on_chat(data)
+            elif kind == "livestream_gift_sent":
+                self._on_gift(data)
             elif kind == "livestream_ended":
-                self._spawn(self.stop(reason="A live foi encerrada"))
+                await self._on_live_ended()
         except Exception:  # noqa: BLE001 - one bad frame must not kill the loop
             log.exception("could not handle frame")
+
+    async def _on_live_ended(self) -> None:
+        if not self.streamer_id:
+            # We don't know who the streamer is (e.g. the session was started
+            # straight from a livestream_id, not resolved from her profile), so
+            # there's nothing to poll for. Fall back to the old behaviour.
+            self._spawn(self.stop(reason="A live foi encerrada"))
+            return
+        self.livestream_id = None  # makes _ws_loop switch into "wait for the next live"
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:  # noqa: BLE001
+                pass
 
     # ---- chat handling -----------------------------------------------------
     def _on_chat(self, data: dict) -> None:
@@ -312,6 +369,8 @@ class BotSession:
         cfg = self._config()
         if not cfg["settings"].get("moderation_enabled", True):
             return
+        if cfg["settings"].get("diamond_immunity_enabled") and self._is_diamond_immune(user_id, cfg):
+            return
         hit = cfg["matcher"].match(text)
         if not hit:
             return
@@ -325,6 +384,33 @@ class BotSession:
             return
         self._pending.add((user_id, action))
         entry.action = action
+
+    def _is_diamond_immune(self, user_id: str, cfg: dict) -> bool:
+        threshold = cfg["settings"].get("diamond_immunity_threshold") or db.MIN_DIAMOND_IMMUNITY_THRESHOLD
+        return self._diamonds.get(user_id, 0) >= threshold
+
+    # ---- gifts / diamonds ---------------------------------------------------
+    def _on_gift(self, data: dict) -> None:
+        """Accumulates diamonds sent by each user during the current live, so
+        ``diamond_immunity_enabled`` can exempt generous gifters from mute/kick
+        rules. Field names come from the decompiled app (``GiftStreamEventData`` /
+        ``APIGift`` / ``APIGiftComboDetail``): a gift's value is ``gift.cost``,
+        multiplied by the combo count when the gift was sent as part of a combo
+        (``gift_combo_detail.gift_combo_count``), falling back to
+        ``gift_batch_size`` for batched sends, or 1 for a single gift.
+        """
+        user_id = str(data.get("user_id") or "")
+        gift = data.get("gift") if isinstance(data.get("gift"), dict) else {}
+        cost = gift.get("cost")
+        if not user_id or not isinstance(cost, (int, float)) or cost <= 0:
+            return
+        combo = data.get("gift_combo_detail") if isinstance(data.get("gift_combo_detail"), dict) else {}
+        multiplier = combo.get("gift_combo_count") or data.get("gift_batch_size") or 1
+        try:
+            multiplier = int(multiplier)
+        except (TypeError, ValueError):
+            multiplier = 1
+        self._diamonds[user_id] = self._diamonds.get(user_id, 0) + int(cost) * max(1, multiplier)
 
     async def _action_worker(self) -> None:
         while True:
@@ -377,6 +463,8 @@ class BotSession:
             try:
                 await asyncio.sleep(self._interval(self._config(force=True)))
                 cfg = self._config(force=True)
+                if self.livestream_id is None:
+                    continue  # waiting for the streamer's next live; nowhere to send to
                 if not cfg["settings"].get("auto_messages_enabled") or not cfg["messages"]:
                     continue
                 text = cfg["messages"][index % len(cfg["messages"])]

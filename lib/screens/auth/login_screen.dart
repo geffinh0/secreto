@@ -154,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen>
                           const SizedBox(height: 12),
                           const _FeatureChip(icon: Icons.chat_bubble_rounded, label: 'Mensagens recorrentes'),
                           const SizedBox(height: 12),
-                          const _FeatureChip(icon: Icons.bar_chart_rounded, label: 'Estatísticas da live'),
+                          const _FeatureChip(icon: Icons.bolt_rounded, label: 'Conectado em tempo real'),
                         ],
                       ),
                     ),

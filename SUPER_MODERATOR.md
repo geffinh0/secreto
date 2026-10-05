@@ -67,10 +67,13 @@ O front usa `http://localhost:8000`; para outro endereço:
 1. **Criar conta** no portal e entrar.
 2. **Moderação:** cadastre palavras em *Silenciar* e *Banir*.
 3. **Mensagens:** monte a fila, escolha o intervalo (mínimo 10 s) e ligue o envio automático.
-4. **Robô:** conecte a conta do robô no SuperLive — e-mail/senha, **celular** (SMS) ou
-   token da sessão —, informe o **ID da live** e clique em *Iniciar moderação*. Se só
-   tiver o **ID público do perfil** dela (ex.: `69622983`), use a busca "ID público da
-   streamer": se ela estiver ao vivo, o ID da live é preenchido sozinho.
+4. **Robô ("Atila's Client"):** conecte a conta do robô no SuperLive — e-mail/senha,
+   **celular** (SMS) ou token da sessão —, informe o **ID da live** e clique em *Iniciar
+   moderação*. Se só tiver o **ID público do perfil** dela (ex.: `69622983`), use a busca
+   "ID público da streamer": se ela estiver ao vivo, o ID da live é preenchido sozinho. O
+   formulário lembra o último modo de login e identificador usados (nunca a senha/token),
+   e, se a live que ele moderava tiver acabado, o campo mostra o último ID usado para
+   retomar com um clique.
 5. **A streamer precisa adicionar o robô como moderador da live**; sem isso o SuperLive
    recusa mute/kick (o portal mostra o erro e continua registrando as tentativas).
 
@@ -82,8 +85,21 @@ O front usa `http://localhost:8000`; para outro endereço:
 - Se uma mensagem casa com regras de silenciar e de banir, vale **banir**.
 - Nunca são moderados: o próprio robô e a streamer da live.
 - Cada usuário é punido uma vez por sessão (silenciar → banir é permitido, repetir não).
+- Uma mesma palavra pode estar cadastrada em silenciar **e** em banir ao mesmo tempo (a
+  duplicidade só é bloqueada dentro da mesma lista).
 - *Banimento permanente* (opção na tela de Moderação) usa `permanent: true` no kick.
+- *Imunidade por diamantes* (opção na tela de Moderação, mínimo 50): quem já enviou
+  diamantes suficientes **naquela live** fica isento de silenciar/banir. O valor acumulado
+  zera a cada nova live (não é cumulativo entre transmissões).
 - Mudar regras/opções durante a live vale em poucos segundos.
+
+### Quando a live termina e uma nova começa
+Se a live que o robô está moderando terminar (evento `livestream_ended`) e o robô souber
+quem é a streamer (resolvido via `livestream/retrieve` ao iniciar), ele **não para** — fica
+com o estado `waiting_for_live`, consultando o perfil dela periodicamente (a cada
+`engine.LIVE_POLL_INTERVAL_SECONDS`, 20s por padrão) até ela abrir uma nova live, e então
+retoma a moderação sozinho no novo `livestream_id`, sem precisar reconectar nada. Só volta a
+`stopped`/`error` se o usuário parar manualmente ou o token do robô expirar nesse meio tempo.
 
 ## API do portal
 
@@ -111,6 +127,7 @@ Erros de validação sempre voltam como `{"detail": "texto legível"}`.
 | POST | `/robot/start` | `{livestream_id}` — entra na live e começa a moderar |
 | POST | `/robot/stop` | para a sessão e sai da live |
 | GET | `/robot/log?limit=` | histórico de ações de moderação |
+| GET | `/activity?limit=` | histórico de atividade da conta (login, regras, mensagens, configurações, robô) |
 
 ## Integração com o SuperLive
 
@@ -143,9 +160,13 @@ app faz na primeira abertura). Um UUID inventado é recusado com HTTP 400 `unkno
 backend registra o aparelho na primeira conexão do robô e reaproveita o mesmo `guid` depois.
 
 WebSocket: o servidor envia `{"id","type","data"}` (`livestream_message_sent` traz
-`user_id`, `name`, `text`, `livestream_id`; `livestream_ended` encerra a sessão). O robô envia
-`{"id","action","data"}`: `enter_livestream`, `heartbeat` (`"state":"livestream:<id>"`) e
-`leave_livestream`. Reconecta sozinho com backoff.
+`user_id`, `name`, `text`, `livestream_id`; `livestream_gift_sent` traz `user_id`,
+`gift.cost` (valor em diamantes) e, quando enviado em combo,
+`gift_combo_detail.gift_combo_count` — total = `gift.cost * gift_combo_count` (ou
+`gift_batch_size` quando não há combo); `livestream_ended` avisa que a live acabou — ver
+"Quando a live termina e uma nova começa" acima). O robô envia `{"id","action","data"}`:
+`enter_livestream`, `heartbeat` (`"state":"livestream:<id>"`) e `leave_livestream`.
+Reconecta sozinho com backoff.
 
 ### Confirmado contra o SuperLive real
 - **Login por e-mail/senha e por celular** (`device/register` → `email_signin`/
@@ -172,6 +193,12 @@ WebSocket: o servidor envia `{"id","type","data"}` (`livestream_message_sent` tr
 O resto foi implementado a partir do código decompilado e testado contra um SuperLive
 simulado (`backend/tests/mock_superlive.py`), não contra o serviço de verdade:
 
+- **Imunidade por diamantes**: os nomes de campo (`gift.cost`,
+  `gift_combo_detail.gift_combo_count`, `gift_batch_size`) vêm direto das classes
+  decompiladas (`GiftStreamEventData`/`APIGift`/`APIGiftComboDetail`, alta confiança), mas
+  o evento `livestream_gift_sent` em si nunca foi observado contra o serviço real — só
+  simulado nos testes. Se o formato real divergir, `_on_gift` em `engine.py` simplesmente
+  não acumula diamantes (sem erro), e a imunidade fica sempre desligada na prática.
 - O app real envia `client_params` (dados do aparelho) em cada requisição; se a API exigir,
   será preciso adicioná-los em `superlive.py`.
 - O WebSocket pode recusar clientes que não sejam o app; nesse caso a sessão para com a
@@ -190,15 +217,18 @@ simulado (`backend/tests/mock_superlive.py`), não contra o serviço de verdade:
   puro no SQLite local, e nunca é devolvido pela API. Proteja o arquivo `.db`.
 - O histórico de ações (`moderation_log`) guarda o texto das mensagens moderadas (até 300
   caracteres, no máximo 2000 registros por usuária).
+- `user_activity_log` guarda o histórico de ações da própria conta (login, mudanças de
+  regra/mensagem/configuração, conectar/desconectar o robô, iniciar/parar a moderação) —
+  até 500 registros por usuária, visível em Configurações → "Atividade da conta".
 
 ## Testes
 
 ```bash
 cd backend
-python -m unittest discover -s tests -t . -v      # 72 testes (unitários + integração)
+python -m unittest discover -s tests -t . -v      # 84 testes (unitários + integração)
 cd ..
 flutter analyze
-flutter test                                       # 27 testes
+flutter test                                       # 28 testes
 ```
 Os testes de integração sobem a API de verdade, um SuperLive simulado (HTTP + WebSocket) e
 usam um banco temporário; o `super_moderator.db` não é tocado (a migração é testada numa

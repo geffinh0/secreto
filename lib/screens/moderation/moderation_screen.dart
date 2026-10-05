@@ -501,10 +501,28 @@ class _RuleItem extends StatelessWidget {
   }
 }
 
-/// The two switches that change how the robot applies the rules. They are saved
+/// The switches that change how the robot applies the rules. They are saved
 /// right away and picked up by a running live within a few seconds.
-class _ModerationOptionsCard extends StatelessWidget {
+class _ModerationOptionsCard extends StatefulWidget {
   const _ModerationOptionsCard();
+
+  @override
+  State<_ModerationOptionsCard> createState() => _ModerationOptionsCardState();
+}
+
+class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
+  final _thresholdController = TextEditingController();
+  final _thresholdFocus = FocusNode();
+  // -1 (not a valid threshold) so the very first build always seeds the
+  // field's text, even when the real value already equals the default.
+  int _lastKnownThreshold = -1;
+
+  @override
+  void dispose() {
+    _thresholdController.dispose();
+    _thresholdFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> _save(
       BuildContext context, BotSettings Function(BotSettings) change) async {
@@ -523,11 +541,29 @@ class _ModerationOptionsCard extends StatelessWidget {
     }
   }
 
+  void _saveThreshold(BuildContext context) {
+    final parsed = int.tryParse(_thresholdController.text.trim());
+    final value = (parsed == null || parsed < BotSettings.minDiamondImmunityThreshold)
+        ? BotSettings.minDiamondImmunityThreshold
+        : parsed;
+    _thresholdController.text = '$value';
+    if (value == _lastKnownThreshold) return;
+    _lastKnownThreshold = value;
+    _save(context, (s) => s.copyWith(diamondImmunityThreshold: value));
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AutoMessageProvider>().settings;
     final enabled = settings?.moderationEnabled ?? true;
     final permanent = settings?.kickPermanent ?? false;
+    final diamondImmunity = settings?.diamondImmunityEnabled ?? false;
+    final threshold =
+        settings?.diamondImmunityThreshold ?? BotSettings.minDiamondImmunityThreshold;
+    if (threshold != _lastKnownThreshold && !_thresholdFocus.hasFocus) {
+      _lastKnownThreshold = threshold;
+      _thresholdController.text = '$threshold';
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -567,6 +603,55 @@ class _ModerationOptionsCard extends StatelessWidget {
               style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
             ),
           ),
+          SwitchListTile(
+            value: diamondImmunity,
+            onChanged: (v) =>
+                _save(context, (s) => s.copyWith(diamondImmunityEnabled: v)),
+            title: const Text('Imunidade por diamantes',
+                style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+              'Quem já enviou diamantes suficientes nesta live fica isento de '
+              'silenciar/banir, mesmo usando uma palavra da lista.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          ),
+          if (diamondImmunity)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.diamond_rounded, color: AppTheme.accent, size: 18),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Diamantes mínimos na live para ficar imune',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: _thresholdController,
+                      focusNode: _thresholdFocus,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      onSubmitted: (_) => _saveThreshold(context),
+                      onTapOutside: (_) => _saveThreshold(context),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        helperText: 'mín. ${BotSettings.minDiamondImmunityThreshold}',
+                        helperStyle: TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

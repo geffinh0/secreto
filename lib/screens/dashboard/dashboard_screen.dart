@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
 import '../../providers/moderation_provider.dart';
 import '../../providers/auto_message_provider.dart';
+import '../../widgets/common/fox_icon.dart';
 import '../../widgets/common/stat_card.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -84,13 +85,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '$greeting, $name! 👋',
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                children: [
+                  Text(
+                    '$greeting, $name!',
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.waving_hand_rounded,
+                      color: AppTheme.warning, size: 22),
+                ],
               ),
               const SizedBox(height: 6),
               Text(
@@ -200,8 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       colors: [AppTheme.bgElevated, AppTheme.bgSurface]),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(
-              Icons.smart_toy_rounded,
+            child: FoxIcon(
               color: bot.isConnected ? Colors.white : AppTheme.textMuted,
               size: 28,
             ),

@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/models/models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/auto_message_provider.dart';
 import '../../providers/bot_provider.dart';
+import '../../widgets/common/fox_icon.dart';
 import '../../widgets/common/gradient_button.dart';
 
 String _time(DateTime? t) =>
@@ -36,7 +39,10 @@ class _BotControlScreenState extends State<BotControlScreen> {
     await bot.refresh();
     if (!mounted) return;
     if (user != null) msg.load(user.id); // settings tell whether an end message is on
-    final liveId = bot.session.livestreamId;
+    // Prefer the live the robot is moderating right now; if it's idle (e.g. the
+    // backend restarted), fall back to the last one it moderated so resuming
+    // takes one click instead of hunting for the ID again.
+    final liveId = bot.session.livestreamId ?? bot.botProfile?.lastLivestreamId;
     if (liveId != null && _streamIdController.text.isEmpty) {
       _streamIdController.text = liveId;
     }
@@ -102,6 +108,12 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
   Timer? _resendTimer;
 
   @override
+  void initState() {
+    super.initState();
+    _restoreLastLogin();
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -110,6 +122,33 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
     _codeController.dispose();
     _resendTimer?.cancel();
     super.dispose();
+  }
+
+  /// Starts the form on whichever mode/identifier worked last time, so
+  /// reconnecting doesn't mean reselecting "Celular" and retyping the number
+  /// (or the e-mail) every single time. Never remembers a password or token.
+  Future<void> _restoreLastLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final mode = prefs.getString(AppConstants.keyLastRobotLoginMode);
+    final email = prefs.getString(AppConstants.keyLastRobotEmail);
+    final phone = prefs.getString(AppConstants.keyLastRobotPhone);
+    setState(() {
+      if (mode == 'phone') {
+        _mode = _LoginMode.phone;
+      } else if (mode == 'password') {
+        _mode = _LoginMode.password;
+      }
+      if (email != null && email.isNotEmpty) _emailController.text = email;
+      if (phone != null && phone.isNotEmpty) _phoneController.text = phone;
+    });
+  }
+
+  Future<void> _rememberLogin({String? mode, String? email, String? phone}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mode != null) await prefs.setString(AppConstants.keyLastRobotLoginMode, mode);
+    if (email != null) await prefs.setString(AppConstants.keyLastRobotEmail, email);
+    if (phone != null) await prefs.setString(AppConstants.keyLastRobotPhone, phone);
   }
 
   void _setMode(_LoginMode mode) {
@@ -143,6 +182,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
         return;
       }
       ok = await bot.connectRobot(email, password);
+      if (ok) await _rememberLogin(mode: 'password', email: email);
     }
     if (ok) {
       // Don't keep secrets around once the backend has them.
@@ -193,6 +233,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
     final ok = await bot.connectRobotWithPhoneCode(phone, code);
     if (!mounted) return;
     if (ok) {
+      await _rememberLogin(mode: 'phone', phone: phone);
       _codeController.clear();
       _resendTimer?.cancel();
       setState(() => _codeSent = false);
@@ -278,7 +319,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                     : null,
                 onForegroundImageError:
                     isConnected && profile?.avatar != null ? (_, __) {} : null,
-                child: Icon(Icons.smart_toy_rounded,
+                child: FoxIcon(
                     color: isConnected ? AppTheme.success : Colors.white,
                     size: 24),
               ),
@@ -289,7 +330,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   children: [
                     Text(
                       isConnected
-                          ? profile?.nickname ?? 'Robô'
+                          ? profile?.nickname ?? "Atila's Client"
                           : 'Conta do Robô — SuperLive',
                       style: const TextStyle(
                         color: AppTheme.textPrimary,
@@ -470,6 +511,10 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   ? Icons.sms_rounded
                   : Icons.link_rounded,
             ),
+            if (isConnecting) ...[
+              const SizedBox(height: 10),
+              const _ConnectingStatus(),
+            ],
           ] else ...[
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -488,6 +533,55 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Rotates through short status phrases while the robot is connecting, so a
+/// multi-step login (register device -> log in -> load profile) feels like
+/// it's actually progressing instead of a single frozen spinner.
+class _ConnectingStatus extends StatefulWidget {
+  const _ConnectingStatus();
+
+  @override
+  State<_ConnectingStatus> createState() => _ConnectingStatusState();
+}
+
+class _ConnectingStatusState extends State<_ConnectingStatus> {
+  static const _phrases = [
+    'Conectando ao SuperLive...',
+    'Validando as credenciais...',
+    'Carregando o perfil do robô...',
+  ];
+
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 1400), (_) {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _phrases.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Text(
+        _phrases[_index],
+        key: ValueKey(_index),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
       ),
     );
   }
@@ -545,6 +639,20 @@ class _LiveControlCardState extends State<_LiveControlCard> {
   final _streamerIdController = TextEditingController();
   bool _looking = false;
   StreamerLookup? _lookupResult;
+
+  @override
+  void didUpdateWidget(covariant _LiveControlCard old) {
+    super.didUpdateWidget(old);
+    // While the robot is running it may auto-detect a new livestream_id on its
+    // own (the streamer ended one live and started another) - keep the field
+    // in sync so it always shows what the robot is actually moderating.
+    final liveId = widget.bot.session.livestreamId;
+    if (widget.bot.session.running &&
+        liveId != null &&
+        liveId != widget.streamIdController.text) {
+      widget.streamIdController.text = liveId;
+    }
+  }
 
   @override
   void dispose() {
@@ -639,10 +747,19 @@ class _LiveControlCardState extends State<_LiveControlCard> {
                   ),
                 ),
               ),
-              if (running) _WsPill(wsState: session.wsState),
+              if (running) _WsPill(state: session.state, wsState: session.wsState),
             ],
           ),
           const SizedBox(height: 16),
+          if (session.state == 'waiting_for_live') ...[
+            const _Banner(
+              icon: Icons.hourglass_top_rounded,
+              color: AppTheme.warning,
+              text: 'A live anterior terminou. O robô está de olho no perfil da streamer e '
+                  'volta a moderar automaticamente assim que ela abrir uma nova live.',
+            ),
+            const SizedBox(height: 16),
+          ],
           const _Banner(
             icon: Icons.shield_rounded,
             color: AppTheme.accent,
@@ -724,8 +841,16 @@ class _LiveControlCardState extends State<_LiveControlCard> {
                   id: 'start_robot_button',
                   onPressed: (running || bot.isBusy) ? null : _start,
                   isLoading: bot.isBusy && !running,
-                  label: running ? 'Moderando a live...' : 'Iniciar moderação',
-                  icon: running ? Icons.loop_rounded : Icons.play_arrow_rounded,
+                  label: session.state == 'waiting_for_live'
+                      ? 'Aguardando a próxima live...'
+                      : running
+                          ? 'Moderando a live...'
+                          : 'Iniciar moderação',
+                  icon: session.state == 'waiting_for_live'
+                      ? Icons.hourglass_top_rounded
+                      : running
+                          ? Icons.loop_rounded
+                          : Icons.play_arrow_rounded,
                   startColor: AppTheme.accent,
                   endColor: AppTheme.primary,
                 ),
@@ -851,13 +976,24 @@ class _StreamerLookupResult extends StatelessWidget {
 }
 
 class _WsPill extends StatelessWidget {
+  final String state;
   final String wsState;
-  const _WsPill({required this.wsState});
+  const _WsPill({required this.state, required this.wsState});
 
   @override
   Widget build(BuildContext context) {
+    final waiting = state == 'waiting_for_live';
     final connected = wsState == 'connected';
-    final color = connected ? AppTheme.success : AppTheme.warning;
+    final color = waiting
+        ? AppTheme.warning
+        : connected
+            ? AppTheme.success
+            : AppTheme.warning;
+    final label = waiting
+        ? 'Aguardando nova live'
+        : connected
+            ? 'Chat conectado'
+            : 'Reconectando...';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -874,7 +1010,7 @@ class _WsPill extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            connected ? 'Chat conectado' : 'Reconectando...',
+            label,
             style: TextStyle(
                 color: color, fontSize: 11, fontWeight: FontWeight.w600),
           ),

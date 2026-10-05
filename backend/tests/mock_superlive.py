@@ -41,6 +41,11 @@ class MockSuperLive:
         self.ws_connects = 0
         self.heartbeat_seconds = 1
         self.clients = set()
+        # user_id -> current livestream_id (None if offline), and the reverse
+        # lookup livestream_id -> user_id, used by users/profile and
+        # livestream/retrieve. Lets a test move a streamer between broadcasts.
+        self.user_live_id = {STREAMER_ID: "live1", OFFLINE_STREAMER_ID: None}
+        self.streams = {"live1": STREAMER_ID}
         self.loop = None
         self.port = None
         self.server = None
@@ -69,6 +74,17 @@ class MockSuperLive:
             for ws in list(self.clients):
                 await ws.close(code=1011)
         asyncio.run_coroutine_threadsafe(_drop(), self.loop).result(5)
+
+    def end_live(self, user_id, livestream_id):
+        """Simulate ``user_id``'s broadcast ending: she's offline again and an
+        ``livestream_ended`` frame goes out to whoever is in that live."""
+        self.user_live_id[user_id] = None
+        self.emit("livestream_ended", {"livestream_id": livestream_id})
+
+    def start_new_live(self, user_id, livestream_id):
+        """Simulate ``user_id`` starting a new broadcast under a new id."""
+        self.user_live_id[user_id] = livestream_id
+        self.streams[livestream_id] = user_id
 
     async def _broadcast(self, frame):
         for ws in list(self.clients):
@@ -173,12 +189,14 @@ class MockSuperLive:
                 target = body.get("user_id")
                 if target == STREAMER_ID:
                     return {"user": {
-                        "user_id": STREAMER_ID, "name": "Streamer", "livestream_id": "live1",
+                        "user_id": STREAMER_ID, "name": "Streamer",
+                        "livestream_id": mock.user_live_id.get(STREAMER_ID),
                         "profile_images": [{"url": "http://x/streamer.png"}],
                     }}
                 if target == OFFLINE_STREAMER_ID:
                     return {"user": {
-                        "user_id": OFFLINE_STREAMER_ID, "name": "Offline", "livestream_id": None,
+                        "user_id": OFFLINE_STREAMER_ID, "name": "Offline",
+                        "livestream_id": mock.user_live_id.get(OFFLINE_STREAMER_ID),
                         "profile_images": [],
                     }}
                 if target == DECOY_USER_ID:
@@ -209,9 +227,10 @@ class MockSuperLive:
                 return {"websocket": {"url": f"ws://127.0.0.1:{mock.port}/ws",
                                       "heartbeat": mock.heartbeat_seconds}}
             if path == "livestream/retrieve":
-                if body.get("livestream_id") != "live1":
+                owner = mock.streams.get(body.get("livestream_id"))
+                if owner is None:
                     return JSONResponse({"message": "livestream not found"}, status_code=404)
-                return {"user": {"id": int(STREAMER_ID), "nickname": "Streamer"}}
+                return {"user": {"id": int(owner), "nickname": "Streamer"}}
             if path in ("livestream/chat/mute", "livestream/kick",
                         "livestream/chat/send_text_message", "user/logout"):
                 return {"success": True}
