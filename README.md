@@ -1,4 +1,4 @@
-# Super Moderator
+# Atila's Client
 
 Moderação automática de lives do SuperLive: um robô entra na live, silencia/bane quem usar
 palavras proibidas e envia mensagens recorrentes. Portal em Flutter Web + backend

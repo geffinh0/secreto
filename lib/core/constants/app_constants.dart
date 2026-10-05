@@ -17,7 +17,7 @@ class AppConstants {
   static const String keyLastRobotPhone = 'last_robot_phone';
 
   // App info
-  static const String appName = 'Super Moderator';
+  static const String appName = "Atila's Client";
   static const String appVersion = '2.0.0';
   static const String appTagline = 'Moderação inteligente para suas lives';
 }

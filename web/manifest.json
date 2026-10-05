@@ -1,6 +1,6 @@
 {
-    "name": "Super Moderator",
-    "short_name": "SuperMod",
+    "name": "Atila's Client",
+    "short_name": "Atila",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1B140F",

@@ -5,15 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:super_moderator/core/constants/app_constants.dart';
-import 'package:super_moderator/core/models/models.dart';
-import 'package:super_moderator/core/services/portal_api_service.dart';
-import 'package:super_moderator/core/theme/app_theme.dart';
-import 'package:super_moderator/providers/auth_provider.dart';
-import 'package:super_moderator/providers/auto_message_provider.dart';
-import 'package:super_moderator/providers/bot_provider.dart';
-import 'package:super_moderator/screens/auth/login_screen.dart';
-import 'package:super_moderator/screens/bot/bot_control_screen.dart';
+import 'package:atilas_client/core/constants/app_constants.dart';
+import 'package:atilas_client/core/models/models.dart';
+import 'package:atilas_client/core/services/portal_api_service.dart';
+import 'package:atilas_client/core/theme/app_theme.dart';
+import 'package:atilas_client/providers/auth_provider.dart';
+import 'package:atilas_client/providers/auto_message_provider.dart';
+import 'package:atilas_client/providers/bot_provider.dart';
+import 'package:atilas_client/screens/auth/login_screen.dart';
+import 'package:atilas_client/screens/bot/bot_control_screen.dart';
 
 /// A scripted backend: responses are looked up by "METHOD /path".
 class FakeApi extends PortalApiService {

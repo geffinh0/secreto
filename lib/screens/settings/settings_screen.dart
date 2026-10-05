@@ -104,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
 
           // About section
           const _SectionCard(
-            title: 'Sobre o Super Moderator',
+            title: "Sobre o Atila's Client",
             accent: AppTheme.textDisabled,
             children: [
               _InfoRow(label: 'Versão', value: AppConstants.appVersion),

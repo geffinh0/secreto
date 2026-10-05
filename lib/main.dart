@@ -78,7 +78,7 @@ class _AppWithRouterState extends State<_AppWithRouter> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Super Moderator',
+      title: "Atila's Client",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       routerConfig: _router,

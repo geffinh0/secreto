@@ -59,7 +59,7 @@ async def lifespan(_app: FastAPI):
             watchers.start(watch["user_id"])
     finally:
         conn.close()
-    print("[OK] Super Moderator API iniciada!")
+    print("[OK] Atila's Client API iniciada!")
     print(f"[DB] Banco de dados: {db.DB_PATH}")
     print("[DOCS] Docs: http://localhost:8000/docs")
     yield
@@ -68,7 +68,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Super Moderator API",
+    title="Atila's Client API",
     description="Backend portal para o robô moderador de lives SuperLive",
     version="2.0.0",
     lifespan=lifespan,
@@ -928,7 +928,7 @@ def list_activity(limit: int = 50, current_user: dict = Depends(get_current_user
 # ─── Health check ────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "Super Moderator API", "version": app.version}
+    return {"status": "ok", "service": "Atila's Client API", "version": app.version}
 
 
 if __name__ == "__main__":

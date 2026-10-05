@@ -79,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen>
                       Image.asset('assets/images/fox_hero.webp', width: 260),
                       const SizedBox(height: 24),
                       const Text(
-                        'Super Moderator',
+                        "Atila's Client",
                         style: TextStyle(
                           color: AppTheme.textPrimary,
                           fontSize: 32,

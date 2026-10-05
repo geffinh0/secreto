@@ -1,10 +1,10 @@
 @echo off
-title Super Moderator - Launcher
+title Atila's Client - Launcher
 color 0A
 
 echo.
 echo  =========================================
-echo   Super Moderator - iniciando...
+echo   Atila's Client - iniciando...
 echo  =========================================
 echo.
 
@@ -28,11 +28,11 @@ echo [1/3] Instalando dependencias do backend...
 python -m pip install -r backend\requirements.txt -q
 
 echo [2/3] Iniciando a API (FastAPI + SQLite) em http://localhost:8000 ...
-start "Super Moderator - Backend" cmd /k "cd /d %~dp0backend && python main.py"
+start "Atila's Client - Backend" cmd /k "cd /d %~dp0backend && python main.py"
 
 echo [3/3] Iniciando o portal (Flutter Web) em http://localhost:3000 ...
 echo       A primeira compilacao leva de 30 a 90 segundos.
-start "Super Moderator - Portal" cmd /k "cd /d %~dp0 && flutter run -d web-server --release --web-port 3000 --web-hostname localhost"
+start "Atila's Client - Portal" cmd /k "cd /d %~dp0 && flutter run -d web-server --release --web-port 3000 --web-hostname localhost"
 
 :: Abre o navegador padrao assim que o portal responder (espera ate ~3 min).
 :: (o timeout precisa ser maior que 2s: "localhost" pode levar ~2s tentando IPv6 primeiro)

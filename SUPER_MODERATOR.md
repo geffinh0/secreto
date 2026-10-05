@@ -1,4 +1,4 @@
-# Super Moderator — Documentação Técnica
+# Atila's Client — Documentação Técnica
 
 ## Visão geral
 

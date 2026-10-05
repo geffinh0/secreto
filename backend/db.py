@@ -1,4 +1,4 @@
-"""SQLite access + schema/migrations for the Super Moderator backend."""
+"""SQLite access + schema/migrations for the Atila's Client backend."""
 import os
 import sqlite3
 
