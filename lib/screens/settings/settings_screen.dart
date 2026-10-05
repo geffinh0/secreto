@@ -25,8 +25,7 @@ class SettingsScreen extends StatelessWidget {
           // Profile section
           _SectionCard(
             title: 'Sua conta',
-            icon: Icons.person_rounded,
-            iconColor: AppTheme.primary,
+            accent: AppTheme.primary,
             children: [
               _InfoRow(label: 'Nome', value: user?.displayName ?? 'N/A'),
               const SizedBox(height: 12),
@@ -52,8 +51,7 @@ class SettingsScreen extends StatelessWidget {
           // Robot account section
           _SectionCard(
             title: 'Conta do Robô (SuperLive)',
-            icon: Icons.smart_toy_rounded,
-            iconColor: AppTheme.accent,
+            accent: AppTheme.accent,
             children: [
               Container(
                 padding: const EdgeInsets.all(14),
@@ -107,8 +105,7 @@ class SettingsScreen extends StatelessWidget {
           // About section
           const _SectionCard(
             title: 'Sobre o Super Moderator',
-            icon: Icons.info_rounded,
-            iconColor: AppTheme.textMuted,
+            accent: AppTheme.textDisabled,
             children: [
               _InfoRow(label: 'Versão', value: AppConstants.appVersion),
               SizedBox(height: 12),
@@ -127,42 +124,39 @@ class SettingsScreen extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String title;
-  final IconData icon;
-  final Color iconColor;
+  final Color accent;
   final List<Widget> children;
 
   const _SectionCard({
     required this.title,
-    required this.icon,
-    required this.iconColor,
+    required this.accent,
     required this.children,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(17, 20, 20, 20),
       decoration: BoxDecoration(
         color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border(
+          top: const BorderSide(color: AppTheme.border),
+          right: const BorderSide(color: AppTheme.border),
+          bottom: const BorderSide(color: AppTheme.border),
+          left: BorderSide(color: accent, width: 3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: iconColor, size: 18),
-              const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 20),
           ...children,
@@ -260,8 +254,7 @@ class _ActivitySectionState extends State<_ActivitySection> {
   Widget build(BuildContext context) {
     return _SectionCard(
       title: 'Atividade da conta',
-      icon: Icons.history_rounded,
-      iconColor: AppTheme.primary,
+      accent: AppTheme.secondary,
       children: [
         if (_error != null)
           Text(_error!, style: const TextStyle(color: AppTheme.error, fontSize: 12.5))

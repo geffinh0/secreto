@@ -6,7 +6,6 @@ import '../../providers/bot_provider.dart';
 import '../../providers/moderation_provider.dart';
 import '../../providers/auto_message_provider.dart';
 import '../../widgets/common/fox_icon.dart';
-import '../../widgets/common/stat_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -50,19 +49,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Welcome header
-            _buildWelcomeHeader(user?.displayName ?? user?.username ?? 'Usuário', bot),
-            const SizedBox(height: 28),
+            Text(
+              '${_greeting()}, ${user?.displayName ?? user?.username ?? "Usuária"}',
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
 
-            // Stats row
-            _buildStatsGrid(bot, mod, msg),
-            const SizedBox(height: 28),
-
-            // Bot status card
-            _buildBotStatusCard(bot),
+            // The robot, front and centre: this screen exists to answer one
+            // question - "is Atila working right now?" - everything else is
+            // secondary detail, not a grid of equally-weighted tiles.
+            _buildHero(bot, mod, msg),
             const SizedBox(height: 24),
 
-            // Two-column cards row
             _buildActivityRow(mod, msg),
           ],
         ),
@@ -70,192 +72,112 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildWelcomeHeader(String name, BotProvider bot) {
+  String _greeting() {
     final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? 'Bom dia'
-        : hour < 18
-            ? 'Boa tarde'
-            : 'Boa noite';
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$greeting, $name!',
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                bot.isConnected
-                    ? 'Robô ativo e pronto para moderar suas lives.'
-                    : 'Configure o robô para começar a moderação automática.',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
   }
 
-  Widget _buildStatsGrid(
-    BotProvider bot,
-    ModerationProvider mod,
-    AutoMessageProvider msg,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 700 ? 4 : 2;
-        return GridView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          // fixed row height: an aspect ratio made the cards overflow on some widths
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            mainAxisExtent: 122,
-          ),
-          children: [
-            StatCard(
-              icon: Icons.smart_toy_rounded,
-              label: 'Status do Robô',
-              value: bot.isConnected ? 'Conectado' : 'Offline',
-              valueColor: bot.isConnected ? AppTheme.success : AppTheme.error,
-            ),
-            StatCard(
-              icon: Icons.shield_rounded,
-              label: 'Regras de Moderação',
-              value: '${mod.rules.length}',
-              valueColor: AppTheme.primary,
-            ),
-            StatCard(
-              icon: Icons.chat_bubble_rounded,
-              label: 'Mensagens na Fila',
-              value: '${msg.messages.length}',
-              valueColor: AppTheme.accent,
-            ),
-            StatCard(
-              icon: Icons.block_rounded,
-              label: 'Ações Executadas',
-              value: '${bot.totalActionsOk}',
-              valueColor: AppTheme.warning,
-            ),
-          ],
-        );
-      },
-    );
-  }
+  Widget _buildHero(BotProvider bot, ModerationProvider mod, AutoMessageProvider msg) {
+    final connected = bot.isConnected;
+    final live = connected && bot.isRunning;
 
-  Widget _buildBotStatusCard(BotProvider bot) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: bot.isConnected ? AppTheme.primary : AppTheme.border,
-        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: connected ? AppTheme.primary : AppTheme.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: bot.isConnected
-                  ? AppTheme.primary
-                  : AppTheme.bgElevated,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: FoxIcon(
-              color: bot.isConnected ? Colors.white : AppTheme.textMuted,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: connected ? AppTheme.primary : AppTheme.bgElevated,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: FoxIcon(
+                  color: connected ? Colors.white : AppTheme.textMuted,
+                  size: 36,
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Robô Moderador',
-                      style: TextStyle(
+                    Text(
+                      connected
+                          ? bot.botProfile?.nickname ?? "Atila's Client"
+                          : "Atila's Client",
+                      style: const TextStyle(
                         color: AppTheme.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    _StatusBadge(isActive: bot.isConnected),
+                    const SizedBox(height: 4),
+                    Text(
+                      connected
+                          ? (live
+                              ? 'Moderando a live agora.'
+                              : 'Conectado. Nenhuma live no momento.')
+                          : bot.error ?? 'Ainda não conectado - veja a aba "Robô".',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13.5,
+                        height: 1.4,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  bot.isConnected
-                      ? 'Conta: ${bot.botProfile?.nickname ?? "Carregando..."}'
-                      : bot.error ?? 'Configure as credenciais do robô na aba "Robô"',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                  ),
+              ),
+              const SizedBox(width: 12),
+              _StatusPill(connected: connected, live: live),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: AppTheme.border, height: 1),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _HeroStat(value: '${mod.rules.length}', label: 'regras ativas'),
+              _heroDivider(),
+              _HeroStat(value: '${msg.messages.length}', label: 'mensagens na fila'),
+              _heroDivider(),
+              _HeroStat(
+                value: '${bot.totalActionsOk}',
+                label: 'ações no total',
+                color: AppTheme.warning,
+              ),
+              if (live) ...[
+                _heroDivider(),
+                _HeroStat(
+                  value: '${bot.session.messagesSent}',
+                  label: 'enviadas nesta live',
+                  color: AppTheme.accent,
                 ),
-                if (bot.isConnected && bot.isRunning) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppTheme.error,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'AO VIVO',
-                        style: TextStyle(
-                          color: AppTheme.error,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${bot.session.messagesSent} msgs enviadas · '
-                        '${bot.session.actionsOk} ações',
-                        style: const TextStyle(
-                          color: AppTheme.textMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  Widget _heroDivider() => Container(
+        width: 1,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        color: AppTheme.border,
+      );
 
   Widget _buildActivityRow(ModerationProvider mod, AutoMessageProvider msg) {
     return LayoutBuilder(
@@ -264,8 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final children = [
           _QuickInfoCard(
             title: 'Últimas regras de moderação',
-            icon: Icons.shield_rounded,
-            iconColor: AppTheme.primary,
+            accent: AppTheme.primary,
             emptyText: 'Nenhuma regra cadastrada ainda',
             items: mod.rules.take(4).map((r) {
               return _QuickInfoItem(
@@ -280,8 +201,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           _QuickInfoCard(
             title: 'Fila de mensagens automáticas',
-            icon: Icons.chat_bubble_rounded,
-            iconColor: AppTheme.accent,
+            accent: AppTheme.accent,
             emptyText: 'Nenhuma mensagem na fila',
             items: msg.messages.take(4).map((m) {
               return _QuickInfoItem(
@@ -318,39 +238,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  final bool isActive;
-  const _StatusBadge({required this.isActive});
+/// Three states, not two: offline / connected-but-idle / live. A live is the
+/// one moment worth calling out loudly (red, pulsing-style dot); the other
+/// two are quiet by comparison on purpose.
+class _StatusPill extends StatelessWidget {
+  final bool connected;
+  final bool live;
+  const _StatusPill({required this.connected, required this.live});
 
   @override
   Widget build(BuildContext context) {
+    final color = live ? AppTheme.error : (connected ? AppTheme.success : AppTheme.textMuted);
+    final label = live ? 'AO VIVO' : (connected ? 'Online' : 'Offline');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: (isActive ? AppTheme.success : AppTheme.error).withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: (isActive ? AppTheme.success : AppTheme.error).withValues(alpha: 0.3),
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isActive ? AppTheme.success : AppTheme.error,
-            ),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
           ),
-          const SizedBox(width: 5),
+          const SizedBox(width: 6),
           Text(
-            isActive ? 'Online' : 'Offline',
+            label,
             style: TextStyle(
-              color: isActive ? AppTheme.success : AppTheme.error,
+              color: color,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
+              letterSpacing: live ? 1.0 : 0,
             ),
           ),
         ],
@@ -359,17 +280,43 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
+class _HeroStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color? color;
+  const _HeroStat({required this.value, required this.label, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: color ?? AppTheme.textPrimary,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
 class _QuickInfoCard extends StatelessWidget {
   final String title;
-  final IconData icon;
-  final Color iconColor;
+  final Color accent;
   final String emptyText;
   final List<_QuickInfoItem> items;
 
   const _QuickInfoCard({
     required this.title,
-    required this.icon,
-    required this.iconColor,
+    required this.accent,
     required this.emptyText,
     required this.items,
   });
@@ -377,28 +324,27 @@ class _QuickInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 18, 18, 18),
       decoration: BoxDecoration(
         color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border(
+          top: const BorderSide(color: AppTheme.border),
+          right: const BorderSide(color: AppTheme.border),
+          bottom: const BorderSide(color: AppTheme.border),
+          left: BorderSide(color: accent, width: 3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: iconColor, size: 18),
-              const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 16),
           if (items.isEmpty)

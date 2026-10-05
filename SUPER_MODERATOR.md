@@ -220,19 +220,26 @@ simulado (`backend/tests/mock_superlive.py`), não contra o serviço de verdade:
 O mascote do robô é "Atila's Client" - uma raposinha. A paleta (`lib/core/theme/app_theme.dart`)
 é toda derivada da própria foto dela (laranja-raposa, marrom-toca, creme), em vez das cores
 roxo/rosa/ciano "neon" de SaaS genérico usadas antes; fonte Nunito (arredondada, combina com
-o mascote). Sem gradientes decorativos nem glows - `GradientButton` e `StatCard` usam
-preenchimento sólido.
+o mascote). Sem gradientes decorativos nem glows - `GradientButton` usa preenchimento sólido.
+As telas de Dashboard e Configurações também fogem do "grid de 4 cards idênticos" genérico:
+o robô tem um painel único em destaque (com as estatísticas numa faixa inline, não em caixas
+separadas) e as seções usam uma barra colorida na lateral em vez de ícone-em-caixinha repetido.
 
-- `assets/images/fox_mascot_source.webp`: a foto original (fonte para gerar os ícones).
-- `assets/images/fox_hero.webp`: recorte tratado (fundo removido, franja de compressão
-  limpa), usado como destaque nas telas de login/cadastro.
+- `assets/images/fox_mascot_source.webp`: a foto original, inteira (fonte para gerar os
+  ícones - a imagem **nunca é cortada**, só reenquadrada dentro de um canvas quadrado/
+  retangular com a cor de fundo do app por trás).
+- `assets/images/fox_hero.webp`: a foto inteira tratada (franja de compressão removida de
+  verdade - threshold de alfa + descontaminação de cor pelo pixel opaco mais próximo via
+  `scipy.ndimage.distance_transform_edt`, não só erosão), usada como destaque nas telas de
+  login/cadastro.
 - `assets/icons/fox.svg`: versão vetorial simples (silhueta), usada como ícone do robô
-  dentro do app (`FoxIcon`, em `lib/widgets/common/fox_icon.dart`) onde um PNG ficaria
-  borrado em tamanhos pequenos.
-- `web/favicon.png`, `web/icons/Icon-*.png`: gerados a partir da mesma foto, com o fundo
-  `AppTheme.bgDark` por trás (os ícones "maskable" deixam a raposa menor, dentro da
-  "safe zone" de ~80% que o Android pode recortar). Para gerar de novo depois de trocar a
-  foto fonte: `python tools/generate_icons.py` (precisa de `pip install pillow`).
+  dentro do app (`FoxIcon`, em `lib/widgets/common/fox_icon.dart`) onde uma foto ficaria
+  borrada em tamanhos pequenos (menos de ~40px).
+- `web/favicon.png`, `web/icons/Icon-*.png`: a foto inteira (sem corte) encaixada num
+  canvas quadrado com `AppTheme.bgDark` por trás (os ícones "maskable" deixam a raposa
+  menor, dentro da "safe zone" de ~80% que o Android pode recortar). Para gerar de novo
+  depois de trocar a foto fonte: `python tools/generate_icons.py`
+  (precisa de `pip install pillow scipy`).
 
 ## Segurança
 
