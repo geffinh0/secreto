@@ -155,6 +155,8 @@ Instalação (uma vez só):
 # cole o conteudo de deploy/notebook-proxy/setup_elevated.ps1
 
 # na VPS, como root
+# Libera o gateway da rede Docker interna pra acessar a porta do proxy SOCKS5
+ufw allow from 172.28.0.0/24 to 172.28.0.1 port 1080 proto tcp comment 'Atila notebook SOCKS5 proxy from Docker'
 cp deploy/notebook-proxy/atila-notebook-proxy.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now atila-notebook-proxy
