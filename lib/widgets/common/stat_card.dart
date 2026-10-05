@@ -6,7 +6,6 @@ class StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color valueColor;
-  final Gradient gradient;
 
   const StatCard({
     super.key,
@@ -14,7 +13,6 @@ class StatCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.valueColor,
-    required this.gradient,
   });
 
   @override
@@ -37,10 +35,10 @@ class StatCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  gradient: gradient,
+                  color: valueColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: Colors.white, size: 18),
+                child: Icon(icon, color: valueColor, size: 18),
               ),
             ],
           ),

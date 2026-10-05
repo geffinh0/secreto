@@ -67,98 +67,44 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: AppTheme.bgDark,
       body: Row(
         children: [
-          // Left decorative panel (only on wide screens)
+          // Left hero panel (only on wide screens): Atila, front and centre.
           if (isWide)
             Expanded(
               child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0A0A1F), Color(0xFF120A28)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                color: AppTheme.bgCard,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset('assets/images/fox_hero.webp', width: 260),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Super Moderator',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Moderação inteligente\npara suas lives SuperLive',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 16,
+                          height: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      const _FeatureChip(icon: Icons.shield_rounded, label: 'Moderação automática'),
+                      const SizedBox(height: 12),
+                      const _FeatureChip(icon: Icons.chat_bubble_rounded, label: 'Mensagens recorrentes'),
+                      const SizedBox(height: 12),
+                      const _FeatureChip(icon: Icons.bolt_rounded, label: 'Conectado em tempo real'),
+                    ],
                   ),
-                ),
-                child: Stack(
-                  children: [
-                    // Background glow effects
-                    Positioned(
-                      top: -100,
-                      left: -100,
-                      child: Container(
-                        width: 400,
-                        height: 400,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppTheme.primary.withValues(alpha: 0.1),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: -80,
-                      right: -80,
-                      child: Container(
-                        width: 300,
-                        height: 300,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppTheme.secondary.withValues(alpha: 0.1),
-                        ),
-                      ),
-                    ),
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              gradient: AppTheme.primaryGradient,
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.primary.withValues(alpha: 0.4),
-                                  blurRadius: 30,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.smart_toy_rounded,
-                              color: Colors.white,
-                              size: 40,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          const Text(
-                            'Super Moderator',
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 32,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Moderação inteligente\npara suas lives SuperLive',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 16,
-                              height: 1.6,
-                            ),
-                          ),
-                          const SizedBox(height: 48),
-                          const _FeatureChip(icon: Icons.shield_rounded, label: 'Moderação automática'),
-                          const SizedBox(height: 12),
-                          const _FeatureChip(icon: Icons.chat_bubble_rounded, label: 'Mensagens recorrentes'),
-                          const SizedBox(height: 12),
-                          const _FeatureChip(icon: Icons.bolt_rounded, label: 'Conectado em tempo real'),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -181,18 +127,9 @@ class _LoginScreenState extends State<LoginScreen>
                         children: [
                           if (!isWide) ...[
                             Center(
-                              child: Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  gradient: AppTheme.primaryGradient,
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: const Icon(Icons.smart_toy_rounded,
-                                    color: Colors.white, size: 30),
-                              ),
+                              child: Image.asset('assets/images/fox_hero.webp', width: 120),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 20),
                           ],
                           const Text(
                             'Bem-vindo de volta!',

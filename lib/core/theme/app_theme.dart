@@ -1,63 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// Palette drawn from Atila's own fur: fox orange, warm burrow browns, a
+/// soft cream for the belly fur. Flat and restrained on purpose - no neon
+/// glows, no decorative multi-hue gradients.
 class AppTheme {
   // Brand Colors
-  static const Color primary = Color(0xFF7C3AED); // Vibrant purple
-  static const Color primaryLight = Color(0xFF9D5FFF);
-  static const Color primaryDark = Color(0xFF5B21B6);
+  static const Color primary = Color(0xFFE07B39); // Fox orange
+  static const Color primaryDark = Color(0xFFB35F26); // pressed/hover state
 
-  static const Color secondary = Color(0xFFEC4899); // Hot pink accent
-  static const Color secondaryLight = Color(0xFFF472B6);
+  static const Color secondary = Color(0xFFA24A32); // Ember (deep rust)
+  static const Color accent = Color(0xFFD9A441); // Warm gold
 
-  static const Color accent = Color(0xFF06B6D4); // Cyan accent
-
-  // Background
-  static const Color bgDark = Color(0xFF0A0A0F);
-  static const Color bgCard = Color(0xFF12121A);
-  static const Color bgSurface = Color(0xFF1A1A28);
-  static const Color bgElevated = Color(0xFF22223A);
+  // Background (a den at dusk, not a cold black)
+  static const Color bgDark = Color(0xFF1B140F);
+  static const Color bgCard = Color(0xFF241B15);
+  static const Color bgSurface = Color(0xFF2C2119);
+  static const Color bgElevated = Color(0xFF362820);
 
   // Text
-  static const Color textPrimary = Color(0xFFF8F8FF);
-  static const Color textSecondary = Color(0xFFB0B0CC);
-  static const Color textMuted = Color(0xFF6B6B8F);
-  static const Color textDisabled = Color(0xFF404060);
+  static const Color textPrimary = Color(0xFFF7EEE3);
+  static const Color textSecondary = Color(0xFFCBB8A4);
+  static const Color textMuted = Color(0xFF8C7968);
+  static const Color textDisabled = Color(0xFF5A4C40);
 
-  // Status
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  // Status (muted, same warm family)
+  static const Color success = Color(0xFF6E9B5E);
+  static const Color warning = Color(0xFFD9A441);
+  static const Color error = Color(0xFFC2543A);
 
   // Borders
-  static const Color border = Color(0xFF2A2A40);
-  static const Color borderLight = Color(0xFF383858);
-
-  // Gradients
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF7C3AED), Color(0xFFEC4899)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF1A1A28), Color(0xFF12121A)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient successGradient = LinearGradient(
-    colors: [Color(0xFF10B981), Color(0xFF059669)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient dangerGradient = LinearGradient(
-    colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static const Color border = Color(0xFF3A2D22);
+  static const Color borderLight = Color(0xFF4A3A2C);
 
   static ThemeData get darkTheme {
     return ThemeData(
@@ -73,7 +47,7 @@ class AppTheme {
         onSecondary: textPrimary,
         onSurface: textPrimary,
       ),
-      textTheme: GoogleFonts.interTextTheme(
+      textTheme: GoogleFonts.nunitoTextTheme(
         ThemeData.dark().textTheme.copyWith(
               displayLarge: const TextStyle(
                 color: textPrimary,

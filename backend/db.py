@@ -22,7 +22,7 @@ MIN_DIAMOND_IMMUNITY_THRESHOLD = 50
 
 _BOOL_KEYS = (
     "is_active", "is_admin", "auto_messages_enabled",
-    "moderation_enabled", "kick_permanent", "diamond_immunity_enabled", "ok",
+    "moderation_enabled", "kick_permanent", "diamond_immunity_enabled", "ok", "active",
 )
 
 # bot_settings columns exposed via the API. end_message_enabled/end_message_template
@@ -136,6 +136,21 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
+        # The streamer the user wants the robot to auto-join: remembered across
+        # restarts, so when `active` is on the backend watches her profile and
+        # starts moderating the moment she goes live, with no manual step.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS streamer_watch (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE NOT NULL,
+                shared_id TEXT NOT NULL,
+                nickname TEXT,
+                avatar TEXT,
+                active INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
         # Audit trail of every automatic moderation action.
         c.execute("""
             CREATE TABLE IF NOT EXISTS moderation_log (
@@ -239,6 +254,30 @@ def get_robot(conn, user_id: int):
     return row_to_dict(
         conn.execute("SELECT * FROM robot_accounts WHERE user_id = ?", (user_id,)).fetchone()
     )
+
+
+def get_watch(conn, user_id: int):
+    return row_to_dict(
+        conn.execute("SELECT * FROM streamer_watch WHERE user_id = ?", (user_id,)).fetchone()
+    )
+
+
+def set_watch(conn, user_id: int, shared_id: str, nickname, avatar, active: bool):
+    conn.execute(
+        "INSERT INTO streamer_watch (user_id, shared_id, nickname, avatar, active, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, datetime('now')) "
+        "ON CONFLICT(user_id) DO UPDATE SET shared_id = excluded.shared_id, "
+        "nickname = excluded.nickname, avatar = excluded.avatar, active = excluded.active, "
+        "updated_at = excluded.updated_at",
+        (user_id, shared_id, nickname, avatar, int(active)),
+    )
+    conn.commit()
+
+
+def all_active_watches(conn):
+    return [row_to_dict(r) for r in conn.execute(
+        "SELECT * FROM streamer_watch WHERE active = 1"
+    )]
 
 
 def log_action(user_id, livestream_id, target_user_id, target_name, action,

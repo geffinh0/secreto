@@ -474,8 +474,6 @@ class _AddMessageFormState extends State<_AddMessageForm> {
             isLoading: _isAdding,
             label: 'Adicionar à fila',
             icon: Icons.add_rounded,
-            startColor: AppTheme.accent,
-            endColor: AppTheme.primary,
           ),
         ],
       ),

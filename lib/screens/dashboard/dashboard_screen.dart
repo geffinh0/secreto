@@ -85,20 +85,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '$greeting, $name!',
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.waving_hand_rounded,
-                      color: AppTheme.warning, size: 22),
-                ],
+              Text(
+                '$greeting, $name!',
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -142,28 +135,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: 'Status do Robô',
               value: bot.isConnected ? 'Conectado' : 'Offline',
               valueColor: bot.isConnected ? AppTheme.success : AppTheme.error,
-              gradient: bot.isConnected ? AppTheme.successGradient : AppTheme.dangerGradient,
             ),
             StatCard(
               icon: Icons.shield_rounded,
               label: 'Regras de Moderação',
               value: '${mod.rules.length}',
               valueColor: AppTheme.primary,
-              gradient: AppTheme.primaryGradient,
             ),
             StatCard(
               icon: Icons.chat_bubble_rounded,
               label: 'Mensagens na Fila',
               value: '${msg.messages.length}',
               valueColor: AppTheme.accent,
-              gradient: const LinearGradient(colors: [AppTheme.accent, AppTheme.primary]),
             ),
             StatCard(
               icon: Icons.block_rounded,
               label: 'Ações Executadas',
               value: '${bot.totalActionsOk}',
               valueColor: AppTheme.warning,
-              gradient: const LinearGradient(colors: [AppTheme.warning, AppTheme.secondary]),
             ),
           ],
         );
@@ -175,26 +164,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A1428), Color(0xFF120F20)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: bot.isConnected
-              ? AppTheme.primary.withValues(alpha: 0.4)
-              : AppTheme.border,
+          color: bot.isConnected ? AppTheme.primary : AppTheme.border,
         ),
-        boxShadow: bot.isConnected
-            ? [
-                BoxShadow(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                )
-              ]
-            : null,
       ),
       child: Row(
         children: [
@@ -202,10 +176,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              gradient: bot.isConnected
-                  ? AppTheme.primaryGradient
-                  : const LinearGradient(
-                      colors: [AppTheme.bgElevated, AppTheme.bgSurface]),
+              color: bot.isConnected
+                  ? AppTheme.primary
+                  : AppTheme.bgElevated,
               borderRadius: BorderRadius.circular(16),
             ),
             child: FoxIcon(

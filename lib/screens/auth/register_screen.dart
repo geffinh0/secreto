@@ -80,23 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                 children: [
                   // Logo
                   Center(
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.primaryGradient,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primary.withValues(alpha: 0.35),
-                            blurRadius: 24,
-                            spreadRadius: 3,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.smart_toy_rounded,
-                          color: Colors.white, size: 32),
-                    ),
+                    child: Image.asset('assets/images/fox_hero.webp', width: 110),
                   ),
                   const SizedBox(height: 32),
                   const Text(

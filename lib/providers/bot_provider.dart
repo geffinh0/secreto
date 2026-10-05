@@ -34,6 +34,7 @@ class BotProvider extends ChangeNotifier {
   RobotInfo? get botProfile => _status.robot;
   RobotSession get session => _status.session;
   bool get isRunning => _status.session.running;
+  StreamerWatch get watch => _status.watch;
   bool get isBusy => _busy;
   bool get isLoaded => _loaded;
   String? get error => _error;
@@ -216,6 +217,26 @@ class BotProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Favourite [sharedId] ([active] = true) so the robot auto-joins her live by
+  /// itself the moment she goes live - or stop watching ([active] = false).
+  /// If she's already live when this is called, moderation starts right away.
+  Future<bool> setWatch(String sharedId, bool active) async {
+    _busy = true;
+    _error = null;
+    notifyListeners();
+    final result = await _api.put('/robot/watch', {'shared_id': sharedId, 'active': active});
+    if (_disposed) return false;
+    _busy = false;
+    final ok = result['success'] == true && result['data'] is Map;
+    if (ok) {
+      await refresh(); // pulls in both the new watch state and any session it just started
+    } else {
+      _error = PortalApiService.errorMessage(result, 'Não foi possível salvar a streamer favorita');
+      notifyListeners();
+    }
+    return ok;
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();
@@ -242,9 +263,11 @@ class BotProvider extends ChangeNotifier {
     _syncPolling();
   }
 
-  /// Poll only while a session is running; it is cheap and keeps the live feed fresh.
+  /// Poll while a session is running (keeps the live feed fresh) or while
+  /// watching a favourited streamer (so the UI notices the moment the robot
+  /// auto-joins her, with no manual refresh).
   void _syncPolling() {
-    if (isRunning) {
+    if (isRunning || watch.active) {
       _pollTimer ??= Timer.periodic(pollInterval, (_) => refresh());
     } else {
       _pollTimer?.cancel();

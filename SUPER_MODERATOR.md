@@ -76,6 +76,12 @@ O front usa `http://localhost:8000`; para outro endereço:
    retomar com um clique.
 5. **A streamer precisa adicionar o robô como moderador da live**; sem isso o SuperLive
    recusa mute/kick (o portal mostra o erro e continua registrando as tentativas).
+6. **Streamer favorita:** depois de buscar pelo ID público, dá pra "favoritar" ela com um
+   botão. Enquanto estiver ativo, o backend fica de olho no perfil dela em segundo plano
+   (mesmo com o robô ocioso) e começa a moderar sozinho assim que ela ficar ao vivo - sem
+   precisar voltar ao portal pra colar o ID e clicar em "Iniciar". Continua vigiando mesmo
+   depois de um "Parar" manual ou de a live terminar, e sobrevive a um restart do backend
+   (fica salvo em `streamer_watch`, reativado no próximo `python main.py`).
 
 ### Como as palavras são comparadas
 - Comparação por **palavra inteira** (ou frase inteira), sem diferenciar maiúsculas, acentos
@@ -122,8 +128,10 @@ Erros de validação sempre voltam como `{"detail": "texto legível"}`.
 | POST | `/robot/connect/phone/send_code` | `{phone_number,resend}` — envia o código por SMS |
 | POST | `/robot/connect/phone/verify` | `{phone_number,code}` — confirma o código e conecta |
 | POST | `/robot/disconnect` | para a sessão e esquece o robô |
-| GET | `/robot/status` | robô, sessão atual (chat/ações recentes, contadores) e totais |
+| GET | `/robot/status` | robô, sessão atual (chat/ações recentes, contadores), totais e a streamer favorita (`watch`) |
 | POST | `/robot/lookup_streamer` | `{shared_id}` — acha o `livestream_id` atual pelo ID público do perfil (se ela estiver ao vivo) |
+| GET | `/robot/watch` | a streamer favorita atual (`shared_id`, `nickname`, `avatar`, `active`) |
+| PUT | `/robot/watch` | `{shared_id,active}` — favorita/desfavorita; se ela já estiver ao vivo, começa a moderar na hora |
 | POST | `/robot/start` | `{livestream_id}` — entra na live e começa a moderar |
 | POST | `/robot/stop` | para a sessão e sai da live |
 | GET | `/robot/log?limit=` | histórico de ações de moderação |
@@ -207,6 +215,25 @@ simulado (`backend/tests/mock_superlive.py`), não contra o serviço de verdade:
 - A API é privada/não documentada e pode mudar sem aviso; o uso por robôs pode ir contra os
   termos do SuperLive. Use apenas em lives suas, com a conta do robô.
 
+## Identidade visual
+
+O mascote do robô é "Atila's Client" - uma raposinha. A paleta (`lib/core/theme/app_theme.dart`)
+é toda derivada da própria foto dela (laranja-raposa, marrom-toca, creme), em vez das cores
+roxo/rosa/ciano "neon" de SaaS genérico usadas antes; fonte Nunito (arredondada, combina com
+o mascote). Sem gradientes decorativos nem glows - `GradientButton` e `StatCard` usam
+preenchimento sólido.
+
+- `assets/images/fox_mascot_source.webp`: a foto original (fonte para gerar os ícones).
+- `assets/images/fox_hero.webp`: recorte tratado (fundo removido, franja de compressão
+  limpa), usado como destaque nas telas de login/cadastro.
+- `assets/icons/fox.svg`: versão vetorial simples (silhueta), usada como ícone do robô
+  dentro do app (`FoxIcon`, em `lib/widgets/common/fox_icon.dart`) onde um PNG ficaria
+  borrado em tamanhos pequenos.
+- `web/favicon.png`, `web/icons/Icon-*.png`: gerados a partir da mesma foto, com o fundo
+  `AppTheme.bgDark` por trás (os ícones "maskable" deixam a raposa menor, dentro da
+  "safe zone" de ~80% que o Android pode recortar). Para gerar de novo depois de trocar a
+  foto fonte: `python tools/generate_icons.py` (precisa de `pip install pillow`).
+
 ## Segurança
 
 - Senhas do portal: PBKDF2-SHA256 com salt (hashes antigos em SHA-256 são aceitos e
@@ -225,10 +252,10 @@ simulado (`backend/tests/mock_superlive.py`), não contra o serviço de verdade:
 
 ```bash
 cd backend
-python -m unittest discover -s tests -t . -v      # 84 testes (unitários + integração)
+python -m unittest discover -s tests -t . -v      # 93 testes (unitários + integração)
 cd ..
 flutter analyze
-flutter test                                       # 28 testes
+flutter test                                       # 32 testes
 ```
 Os testes de integração sobem a API de verdade, um SuperLive simulado (HTTP + WebSocket) e
 usam um banco temporário; o `super_moderator.db` não é tocado (a migração é testada numa

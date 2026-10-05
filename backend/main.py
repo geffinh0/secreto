@@ -18,12 +18,13 @@ from pydantic import BaseModel, Field, field_validator
 import db
 import security
 from db import row_to_dict
-from engine import IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, SessionManager, normalize
+from engine import IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, SessionManager, WatchManager, normalize
 from superlive import SuperLiveClient, SuperLiveError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 sessions = SessionManager()
+watchers = WatchManager(sessions)
 throttle = security.LoginThrottle()
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
@@ -52,10 +53,17 @@ _pending_phone_logins: dict[int, _PendingPhoneLogin] = {}
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.init_db()
+    conn = db.connect()
+    try:
+        for watch in db.all_active_watches(conn):
+            watchers.start(watch["user_id"])
+    finally:
+        conn.close()
     print("[OK] Super Moderator API iniciada!")
     print(f"[DB] Banco de dados: {db.DB_PATH}")
     print("[DOCS] Docs: http://localhost:8000/docs")
     yield
+    await watchers.shutdown()
     await sessions.shutdown()
 
 
@@ -339,6 +347,21 @@ class RobotLookupStreamerRequest(BaseModel):
         return v
 
 
+class RobotWatchRequest(BaseModel):
+    """Favourite a streamer (by her public profile id) for the robot to
+    auto-join the moment she goes live, with ``active`` toggling it off again."""
+    shared_id: str = Field(min_length=1, max_length=40)
+    active: bool = True
+
+    @field_validator("shared_id")
+    @classmethod
+    def _shared_id(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit():
+            raise ValueError("use o ID numérico público do perfil dela no SuperLive")
+        return v
+
+
 # ─── Auth ────────────────────────────────────────────────────────────────────
 @app.post("/auth/register")
 def register(req: RegisterRequest, conn: sqlite3.Connection = Depends(get_db)):
@@ -609,6 +632,16 @@ def _superlive_http_error(exc: SuperLiveError, action: str, login: bool = False)
     return HTTPException(400, message)
 
 
+def _watch_payload(conn, user_id: int) -> dict:
+    watch = db.get_watch(conn, user_id)
+    if watch is None:
+        return {"shared_id": None, "nickname": None, "avatar": None, "active": False}
+    return {
+        "shared_id": watch["shared_id"], "nickname": watch["nickname"],
+        "avatar": watch["avatar"], "active": watch["active"],
+    }
+
+
 def _robot_payload(conn, user_id: int) -> dict:
     robot = db.get_robot(conn, user_id)
     session = sessions.get(user_id)
@@ -621,6 +654,7 @@ def _robot_payload(conn, user_id: int) -> dict:
         },
         "session": session.snapshot() if session else IDLE_SNAPSHOT,
         "totals": db.action_totals(conn, user_id),
+        "watch": _watch_payload(conn, user_id),
     }
 
 
@@ -752,6 +786,7 @@ async def robot_disconnect(current_user: dict = Depends(get_current_user),
                            conn: sqlite3.Connection = Depends(get_db)):
     user_id = current_user["id"]
     await sessions.stop(user_id)
+    await watchers.stop(user_id)
     _pending_phone_logins.pop(user_id, None)
     robot = db.get_robot(conn, user_id)
     # Only end the SuperLive session if we created it (password/phone login). A pasted
@@ -766,6 +801,54 @@ async def robot_disconnect(current_user: dict = Depends(get_current_user),
     if robot is not None:
         db.log_activity(user_id, "robot_disconnected")
     return _robot_payload(conn, user_id)
+
+
+@app.get("/robot/watch")
+def robot_watch_status(current_user: dict = Depends(get_current_user),
+                       conn: sqlite3.Connection = Depends(get_db)):
+    return _watch_payload(conn, current_user["id"])
+
+
+@app.put("/robot/watch")
+async def robot_watch_set(req: RobotWatchRequest, current_user: dict = Depends(get_current_user),
+                          conn: sqlite3.Connection = Depends(get_db)):
+    """Favourite a streamer so the robot auto-joins her next live by itself.
+
+    Resolves ``shared_id`` right away (same lookup as /robot/lookup_streamer) both
+    to validate it and to grab her nickname/avatar for display, and - if she
+    happens to already be live - starts moderating immediately instead of
+    waiting for the first background poll.
+    """
+    user_id = current_user["id"]
+    robot = db.get_robot(conn, user_id)
+    if robot is None:
+        raise HTTPException(400, "Conecte a conta do robô primeiro.")
+
+    client = SuperLiveClient(robot["token"], robot["device_id"])
+    try:
+        found = await client.find_live_by_shared_id(req.shared_id)
+    except SuperLiveError as exc:
+        raise _superlive_http_error(exc, "a busca pelo ID da streamer") from None
+
+    db.set_watch(conn, user_id, req.shared_id, found.get("nickname"), found.get("avatar"), req.active)
+    db.log_activity(
+        user_id, "watch_updated",
+        f'{found.get("nickname") or req.shared_id}: {"ativo" if req.active else "inativo"}',
+    )
+
+    if req.active:
+        watchers.start(user_id)
+        session = sessions.get(user_id)
+        if (session is None or not session.is_active) and found.get("live") and found.get("livestream_id"):
+            try:
+                await sessions.start(user_id, client, robot["sl_user_id"], str(found["livestream_id"]),
+                                     ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None)
+            except (RuntimeError, SuperLiveError):
+                pass  # the background watcher will retry
+    else:
+        await watchers.stop(user_id)
+
+    return _watch_payload(conn, user_id)
 
 
 @app.get("/robot/status")

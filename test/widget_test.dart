@@ -62,6 +62,7 @@ Map<String, dynamic> statusPayload({
   List<Map<String, dynamic>> actions = const [],
   int totalOk = 0,
   String authMode = 'password',
+  Map<String, dynamic>? watch,
 }) =>
     {
       'connected': connected,
@@ -86,6 +87,8 @@ Map<String, dynamic> statusPayload({
         'recent_actions': actions,
       },
       'totals': {'actions_ok': totalOk, 'actions_failed': 0},
+      'watch': watch ??
+          {'shared_id': null, 'nickname': null, 'avatar': null, 'active': false},
     };
 
 void main() {
@@ -160,6 +163,16 @@ void main() {
       expect(status.session.recentActions.single.targetName, 'Bia');
       expect(status.totalActionsOk, 5);
       expect(RobotStatus.fromJson(statusPayload(connected: false)).connected, isFalse);
+    });
+
+    test('RobotStatus carries the favourited streamer', () {
+      final status = RobotStatus.fromJson(statusPayload(watch: {
+        'shared_id': '555100', 'nickname': 'Streamer', 'avatar': 'http://x/a.png', 'active': true,
+      }));
+      expect(status.watch.hasTarget, isTrue);
+      expect(status.watch.nickname, 'Streamer');
+      expect(status.watch.active, isTrue);
+      expect(RobotStatus.fromJson(statusPayload()).watch.hasTarget, isFalse);
     });
   });
 
@@ -291,6 +304,46 @@ void main() {
       final callsAfterEnd = api.calls.length;
       await Future<void>.delayed(const Duration(milliseconds: 120));
       expect(api.calls.length, callsAfterEnd, reason: 'no polling after the session ended');
+      bot.dispose();
+    });
+
+    test('polls while a favourited streamer is active, even with no session running',
+        () async {
+      final api = FakeApi()
+        ..on('GET /robot/status', ok(statusPayload(watch: {
+          'shared_id': '555100', 'nickname': 'Streamer', 'avatar': null, 'active': true,
+        })))
+        ..on('GET /robot/status', ok(statusPayload(running: true, watch: {
+          'shared_id': '555100', 'nickname': 'Streamer', 'avatar': null, 'active': true,
+        })));
+      final bot = BotProvider(api: api, pollInterval: const Duration(milliseconds: 20));
+      await bot.refresh(); // not running, but watching -> still starts the timer
+      expect(bot.isRunning, isFalse);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(bot.isRunning, isTrue, reason: 'picked up the auto-started session via polling');
+      bot.dispose();
+    });
+
+    test('setWatch saves the favourite and refreshes the status', () async {
+      final api = FakeApi()
+        ..on('PUT /robot/watch', ok({'shared_id': '555100', 'nickname': 'Streamer', 'avatar': null, 'active': true}))
+        ..on('GET /robot/status', ok(statusPayload(watch: {
+          'shared_id': '555100', 'nickname': 'Streamer', 'avatar': null, 'active': true,
+        })));
+      final bot = BotProvider(api: api, pollInterval: const Duration(hours: 1));
+      expect(await bot.setWatch('555100', true), isTrue);
+      expect(bot.watch.active, isTrue);
+      expect(bot.watch.nickname, 'Streamer');
+      expect(api.calls, ['PUT /robot/watch', 'GET /robot/status']);
+      bot.dispose();
+    });
+
+    test('setWatch surfaces the server message on failure', () async {
+      final api = FakeApi()
+        ..on('PUT /robot/watch', fail(400, {'detail': 'Não encontramos nenhuma conta com esse ID.'}));
+      final bot = BotProvider(api: api);
+      expect(await bot.setWatch('0', true), isFalse);
+      expect(bot.error, 'Não encontramos nenhuma conta com esse ID.');
       bot.dispose();
     });
 

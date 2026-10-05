@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 
+/// A flat, solid-color primary action button. No gradient, no glow - just a
+/// confident fill that darkens a touch on hover/press.
 class GradientButton extends StatefulWidget {
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
   final bool isLoading;
   final String? id;
+
+  /// The button's fill color. Defaults to [AppTheme.primary].
   final Color? startColor;
+
+  /// Unused - kept so existing call sites compiled for the old two-tone
+  /// gradient don't need to change. The button is a flat fill now.
   final Color? endColor;
   final bool isOutlined;
   final double? width;
@@ -36,6 +43,7 @@ class _GradientButtonState extends State<GradientButton> {
   @override
   Widget build(BuildContext context) {
     final isDisabled = widget.onPressed == null || widget.isLoading;
+    final fill = widget.startColor ?? AppTheme.primary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -49,50 +57,29 @@ class _GradientButtonState extends State<GradientButton> {
         onTapCancel: () => setState(() => _pressed = false),
         onTap: isDisabled ? null : widget.onPressed,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: const Duration(milliseconds: 120),
           width: widget.width ?? double.infinity,
           height: 50,
-          transform: _pressed
-              ? (Matrix4.identity()..scaleByDouble(0.98, 0.98, 1.0, 1.0))
-              : Matrix4.identity(),
-          transformAlignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: isDisabled
-                ? null
+            color: isDisabled
+                ? AppTheme.textDisabled
                 : widget.isOutlined
                     ? null
-                    : LinearGradient(
-                        colors: [
-                          widget.startColor ?? AppTheme.primary,
-                          widget.endColor ?? AppTheme.secondary,
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-            color: isDisabled ? AppTheme.textDisabled : null,
+                    : (_pressed || _hovered)
+                        ? Color.lerp(fill, Colors.black, 0.12)
+                        : fill,
             border: widget.isOutlined
                 ? Border.all(color: AppTheme.primary, width: 1.5)
                 : null,
             borderRadius: BorderRadius.circular(12),
-            boxShadow: !isDisabled && !widget.isOutlined
-                ? [
-                    BoxShadow(
-                      color: (widget.startColor ?? AppTheme.primary)
-                          .withValues(alpha: _hovered ? 0.45 : 0.25),
-                      blurRadius: _hovered ? 20 : 12,
-                      spreadRadius: _hovered ? 2 : 0,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
           ),
           child: widget.isLoading
-              ? const Center(
+              ? Center(
                   child: SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: widget.isOutlined ? AppTheme.primary : Colors.white,
                       strokeWidth: 2,
                     ),
                   ),
@@ -101,13 +88,15 @@ class _GradientButtonState extends State<GradientButton> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (widget.icon != null) ...[
-                      Icon(widget.icon, color: Colors.white, size: 18),
+                      Icon(widget.icon,
+                          color: widget.isOutlined ? AppTheme.primary : Colors.white,
+                          size: 18),
                       const SizedBox(width: 8),
                     ],
                     Text(
                       widget.label,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: widget.isOutlined ? AppTheme.primary : Colors.white,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.3,

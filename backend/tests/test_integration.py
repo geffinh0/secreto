@@ -268,6 +268,12 @@ class RobotTestBase(unittest.TestCase):
         mock.fail.clear()
         mock.require_captcha = False
         mock.ws_auth_ok = True
+        # a streamer's "current live" is mutable server-side state (tests move her
+        # between broadcasts) - reset it so one test's changes can't leak into another.
+        mock.user_live_id.clear()
+        mock.user_live_id.update({STREAMER_ID: "live1", mock_superlive.OFFLINE_STREAMER_ID: None})
+        mock.streams.clear()
+        mock.streams.update({"live1": STREAMER_ID})
         self.name, self.token, self.uid = new_user("robot")
 
     def tearDown(self):
@@ -788,6 +794,110 @@ class ModerationFlowTests(RobotTestBase):
             wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
         finally:
             engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+
+
+class StreamerWatchTests(RobotTestBase):
+    """Favouriting a streamer (`PUT /robot/watch`) so the robot auto-joins her
+    live by itself, with no manual "Iniciar moderação" click."""
+
+    def watch(self, shared_id=mock_superlive.STREAMER_SHARED_ID, active=True):
+        return api("PUT", "/robot/watch", {"shared_id": shared_id, "active": active}, self.token)
+
+    def test_requires_a_connected_robot(self):
+        self.assertEqual(self.watch()[0], 400)
+
+    def test_favouriting_a_streamer_already_live_starts_moderating_right_away(self):
+        self.connect_robot()
+        status, body = self.watch()
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body, {
+            "shared_id": mock_superlive.STREAMER_SHARED_ID, "nickname": "Streamer",
+            "avatar": "http://x/streamer.png", "active": True,
+        })
+        wait_for(lambda: self.status()["session"]["running"], 5, "did not auto-start")
+        self.assertEqual(self.status()["session"]["livestream_id"], "live1")
+
+    def test_favouriting_an_offline_streamer_does_not_start_anything_yet(self):
+        self.connect_robot()
+        status, body = self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+        self.assertEqual(status, 200, body)
+        self.assertFalse(body["avatar"])  # Offline's mock profile has no picture
+        self.settle(0.3)
+        self.assertFalse(self.status()["session"]["running"])
+
+    def test_get_watch_reflects_stored_state(self):
+        self.connect_robot()
+        self.watch()
+        status, body = api("GET", "/robot/watch", token=self.token)
+        self.assertEqual(status, 200)
+        self.assertTrue(body["active"])
+        self.assertEqual(body["nickname"], "Streamer")
+
+    def test_robot_status_also_carries_the_watch(self):
+        self.connect_robot()
+        self.assertEqual(self.status()["watch"], {
+            "shared_id": None, "nickname": None, "avatar": None, "active": False,
+        })
+        self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID, active=False)
+        self.assertEqual(self.status()["watch"], {
+            "shared_id": mock_superlive.OFFLINE_STREAMER_SHARED_ID, "nickname": "Offline",
+            "avatar": None, "active": False,
+        })
+
+    def test_turning_it_off_stops_the_background_watch(self):
+        self.connect_robot()
+        self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+        self.assertTrue(main.watchers.is_watching(self.uid))
+        status, body = self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID, active=False)
+        self.assertEqual((status, body["active"]), (200, False))
+        wait_for(lambda: not main.watchers.is_watching(self.uid), 3, "watch task did not stop")
+
+    def test_auto_joins_once_the_favourited_streamer_goes_live(self):
+        old_poll = engine.WATCH_POLL_INTERVAL_SECONDS
+        engine.WATCH_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.connect_robot()
+            self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+            self.settle(0.3)
+            self.assertFalse(self.status()["session"]["running"])
+
+            mock.start_new_live(mock_superlive.OFFLINE_STREAMER_ID, "live3")
+            wait_for(lambda: self.status()["session"]["running"],
+                     5, "did not auto-join once she went live")
+            self.assertEqual(self.status()["session"]["livestream_id"], "live3")
+        finally:
+            engine.WATCH_POLL_INTERVAL_SECONDS = old_poll
+
+    def test_keeps_watching_after_a_manual_stop(self):
+        old_poll = engine.WATCH_POLL_INTERVAL_SECONDS
+        engine.WATCH_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.connect_robot()
+            self.watch()  # already live on "live1" -> auto-starts immediately
+            wait_for(lambda: self.status()["session"]["running"], 5)
+
+            api("POST", "/robot/stop", token=self.token)
+            wait_for(lambda: self.status()["session"]["state"] == "stopped", 5)
+            mock.end_live(STREAMER_ID, "live1")
+            mock.start_new_live(STREAMER_ID, "live4")
+
+            wait_for(lambda: self.status()["session"]["running"]
+                     and self.status()["session"]["livestream_id"] == "live4",
+                     5, "did not resume watching after a manual stop")
+        finally:
+            engine.WATCH_POLL_INTERVAL_SECONDS = old_poll
+
+    def test_watches_are_re_armed_on_restart(self):
+        # What `lifespan()` does at startup - re-arm every active watch row.
+        self.connect_robot()
+        self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+        conn = sqlite3.connect(db.DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = db.all_active_watches(conn)
+        finally:
+            conn.close()
+        self.assertIn(self.uid, [r["user_id"] for r in rows])
 
 
 class MessagesFlowTests(RobotTestBase):

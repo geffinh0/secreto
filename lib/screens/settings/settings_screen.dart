@@ -44,7 +44,6 @@ class SettingsScreen extends StatelessWidget {
                 label: 'Sair da conta',
                 icon: Icons.logout_rounded,
                 startColor: AppTheme.error,
-                endColor: const Color(0xFFDC2626),
               ),
             ],
           ),

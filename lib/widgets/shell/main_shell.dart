@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
+import '../common/fox_icon.dart';
 
 class MainShell extends StatefulWidget {
   final Widget child;
@@ -75,14 +76,10 @@ class _MainShellState extends State<MainShell> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
+                    color: AppTheme.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.smart_toy_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
+                  child: const FoxIcon(size: 22),
                 ),
                 const SizedBox(width: 12),
                 const Column(
@@ -131,9 +128,6 @@ class _MainShellState extends State<MainShell> {
                     color: botProvider.isConnected
                         ? AppTheme.success
                         : AppTheme.error,
-                    boxShadow: botProvider.isConnected
-                        ? [BoxShadow(color: AppTheme.success.withValues(alpha: 0.4), blurRadius: 6)]
-                        : null,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -256,8 +250,6 @@ class _MainShellState extends State<MainShell> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const Spacer(),
-          const _NotificationBell(),
         ],
       ),
     );
@@ -384,18 +376,3 @@ class _SidebarItemState extends State<_SidebarItem> {
   }
 }
 
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.notifications_rounded, color: AppTheme.textMuted),
-          onPressed: () {},
-        ),
-      ],
-    );
-  }
-}

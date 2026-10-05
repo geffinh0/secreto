@@ -326,6 +326,31 @@ class StreamerLookup {
       );
 }
 
+/// The favourited streamer the robot auto-joins the moment she goes live
+/// (`GET`/`PUT /robot/watch`). Persists across reloads and backend restarts.
+class StreamerWatch {
+  final String? sharedId;
+  final String? nickname;
+  final String? avatar;
+  final bool active;
+
+  const StreamerWatch({
+    this.sharedId,
+    this.nickname,
+    this.avatar,
+    this.active = false,
+  });
+
+  bool get hasTarget => sharedId != null;
+
+  factory StreamerWatch.fromJson(Map<String, dynamic> json) => StreamerWatch(
+        sharedId: json['shared_id'] as String?,
+        nickname: json['nickname'] as String?,
+        avatar: json['avatar'] as String?,
+        active: asBool(json['active']),
+      );
+}
+
 /// A chat message seen by the robot in the live.
 class ChatMessage {
   final String id;
@@ -458,12 +483,14 @@ class RobotStatus {
   final RobotSession session;
   final int totalActionsOk;
   final int totalActionsFailed;
+  final StreamerWatch watch;
 
   const RobotStatus({
     this.robot,
     this.session = const RobotSession(),
     this.totalActionsOk = 0,
     this.totalActionsFailed = 0,
+    this.watch = const StreamerWatch(),
   });
 
   bool get connected => robot != null;
@@ -478,6 +505,9 @@ class RobotStatus {
           : const RobotSession(),
       totalActionsOk: asInt(totals['actions_ok']),
       totalActionsFailed: asInt(totals['actions_failed']),
+      watch: json['watch'] is Map
+          ? StreamerWatch.fromJson((json['watch'] as Map).cast<String, dynamic>())
+          : const StreamerWatch(),
     );
   }
 }

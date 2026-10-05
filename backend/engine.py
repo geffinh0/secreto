@@ -7,6 +7,7 @@ real-time WebSocket, applies the user's keyword rules to every chat message
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -550,3 +551,80 @@ class SessionManager:
             return_exceptions=True,
         )
         self._sessions.clear()
+
+
+WATCH_POLL_INTERVAL_SECONDS = 30  # how often a favourited streamer is checked
+
+
+class WatchManager:
+    """Keeps one background task per user watching their favourited streamer
+    (``streamer_watch`` in the DB). While the watch is active and the robot has
+    no session running, it polls her profile and starts moderating the moment
+    she goes live - no manual "Iniciar moderação" click needed. Once a session
+    is running, the engine's own reconnect-on-new-live logic takes over; this
+    task just keeps idling in the background so it can pick up again if that
+    session ever ends.
+    """
+
+    def __init__(self, sessions: SessionManager):
+        self._sessions = sessions
+        self._tasks: dict[int, asyncio.Task] = {}
+
+    def is_watching(self, user_id: int) -> bool:
+        task = self._tasks.get(user_id)
+        return task is not None and not task.done()
+
+    def start(self, user_id: int) -> None:
+        if self.is_watching(user_id):
+            return
+        self._tasks[user_id] = asyncio.create_task(
+            self._watch_loop(user_id), name=f"watch-{user_id}")
+
+    async def stop(self, user_id: int) -> None:
+        task = self._tasks.pop(user_id, None)
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def shutdown(self) -> None:
+        await asyncio.gather(
+            *(self.stop(uid) for uid in list(self._tasks)), return_exceptions=True,
+        )
+
+    async def _watch_loop(self, user_id: int) -> None:
+        while True:
+            conn = db.connect()
+            try:
+                watch = db.get_watch(conn, user_id)
+                robot = db.get_robot(conn, user_id)
+            finally:
+                conn.close()
+            if watch is None or not watch["active"] or robot is None:
+                self._tasks.pop(user_id, None)
+                return
+
+            session = self._sessions.get(user_id)
+            if session is None or not session.is_active:
+                client = SuperLiveClient(robot["token"], robot["device_id"])
+                try:
+                    result = await client.find_live_by_shared_id(watch["shared_id"])
+                except SuperLiveError:
+                    result = None
+                if result and result.get("live") and result.get("livestream_id"):
+                    try:
+                        await self._sessions.start(
+                            user_id, client, robot["sl_user_id"], str(result["livestream_id"]),
+                            ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None,
+                        )
+                        log.info("session %s: auto-started on the favourited streamer's live %s",
+                                 user_id, result["livestream_id"])
+                        db.log_activity(
+                            user_id, "session_auto_started",
+                            f'live {result["livestream_id"]} ({watch.get("nickname") or watch["shared_id"]})',
+                        )
+                    except (RuntimeError, SuperLiveError):
+                        pass  # lost a race with a manual start, or a transient error; retry next cycle
+            await asyncio.sleep(WATCH_POLL_INTERVAL_SECONDS)

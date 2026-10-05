@@ -290,18 +290,10 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isConnected
-              ? [const Color(0xFF0D2818), const Color(0xFF0A1F12)]
-              : [const Color(0xFF1A1428), const Color(0xFF120F20)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isConnected
-              ? AppTheme.success.withValues(alpha: 0.4)
-              : AppTheme.border,
+          color: isConnected ? AppTheme.success : AppTheme.border,
         ),
       ),
       child: Column(
@@ -331,7 +323,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                     Text(
                       isConnected
                           ? profile?.nickname ?? "Atila's Client"
-                          : 'Conta do Robô — SuperLive',
+                          : 'Conta do robô no SuperLive',
                       style: const TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 16,
@@ -638,7 +630,15 @@ class _LiveControlCard extends StatefulWidget {
 class _LiveControlCardState extends State<_LiveControlCard> {
   final _streamerIdController = TextEditingController();
   bool _looking = false;
+  bool _togglingWatch = false;
   StreamerLookup? _lookupResult;
+
+  @override
+  void initState() {
+    super.initState();
+    final savedId = widget.bot.watch.sharedId;
+    if (savedId != null) _streamerIdController.text = savedId;
+  }
 
   @override
   void didUpdateWidget(covariant _LiveControlCard old) {
@@ -693,6 +693,32 @@ class _LiveControlCardState extends State<_LiveControlCard> {
       widget.streamIdController.text = result.livestreamId!;
       _snack('${result.nickname} está ao vivo agora! ID da live preenchido.',
           AppTheme.success);
+    }
+  }
+
+  /// Favourites (or un-favourites) a streamer so the robot auto-joins her live
+  /// by itself. [sharedId] defaults to whatever is currently in the search
+  /// field, so the "ativo" switch on the saved favourite can also call this.
+  Future<void> _toggleWatch(bool active, {String? sharedId}) async {
+    final id = sharedId ?? _streamerIdController.text.trim();
+    if (id.isEmpty) {
+      _snack('Informe o ID público da streamer', AppTheme.warning);
+      return;
+    }
+    setState(() => _togglingWatch = true);
+    final ok = await context.read<BotProvider>().setWatch(id, active);
+    if (!mounted) return;
+    setState(() => _togglingWatch = false);
+    if (ok) {
+      _snack(
+        active
+            ? 'Pronto! O robô entra sozinho assim que ela ficar ao vivo.'
+            : 'A streamer favorita foi desativada.',
+        AppTheme.success,
+      );
+    } else {
+      _snack(context.read<BotProvider>().error ?? 'Não foi possível salvar',
+          AppTheme.error);
     }
   }
 
@@ -766,6 +792,17 @@ class _LiveControlCardState extends State<_LiveControlCard> {
             text: 'Para silenciar e banir, o robô precisa ser moderador da live. '
                 'Peça à streamer para adicioná-lo como moderador antes de começar.',
           ),
+          if (bot.watch.hasTarget) ...[
+            const SizedBox(height: 16),
+            _FavoriteStreamerCard(
+              watch: bot.watch,
+              running: running,
+              sessionState: session.state,
+              isBusy: _togglingWatch || bot.isBusy,
+              onToggle: (active) =>
+                  _toggleWatch(active, sharedId: bot.watch.sharedId),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Find the live by the streamer's public profile id (easier to get than the
@@ -817,6 +854,18 @@ class _LiveControlCardState extends State<_LiveControlCard> {
           if (_lookupResult != null) ...[
             const SizedBox(height: 10),
             _StreamerLookupResult(result: _lookupResult!),
+            if (_streamerIdController.text.trim() != bot.watch.sharedId ||
+                !bot.watch.active) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _togglingWatch ? null : () => _toggleWatch(true),
+                  icon: const Icon(Icons.favorite_rounded, size: 16),
+                  label: const Text('Favoritar: entrar sozinho quando ela ficar ao vivo'),
+                ),
+              ),
+            ],
           ],
 
           const SizedBox(height: 20),
@@ -851,8 +900,6 @@ class _LiveControlCardState extends State<_LiveControlCard> {
                       : running
                           ? Icons.loop_rounded
                           : Icons.play_arrow_rounded,
-                  startColor: AppTheme.accent,
-                  endColor: AppTheme.primary,
                 ),
               ),
               if (running) ...[
@@ -968,6 +1015,79 @@ class _StreamerLookupResult extends StatelessWidget {
               style: TextStyle(
                   color: color, fontSize: 11, fontWeight: FontWeight.w700),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The streamer the robot remembers and auto-joins the moment she goes live,
+/// with a switch to turn that off without losing who she is.
+class _FavoriteStreamerCard extends StatelessWidget {
+  final StreamerWatch watch;
+  final bool running;
+  final String sessionState;
+  final bool isBusy;
+  final ValueChanged<bool> onToggle;
+
+  const _FavoriteStreamerCard({
+    required this.watch,
+    required this.running,
+    required this.sessionState,
+    required this.isBusy,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String status;
+    if (!watch.active) {
+      status = 'Desativado';
+    } else if (running) {
+      status = 'Ao vivo agora, moderando';
+    } else if (sessionState == 'waiting_for_live') {
+      status = 'Aguardando ela ficar ao vivo...';
+    } else {
+      status = 'Ativo: entra sozinho quando ela ficar ao vivo';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
+            foregroundImage:
+                watch.avatar != null ? NetworkImage(watch.avatar!) : null,
+            onForegroundImageError: watch.avatar != null ? (_, __) {} : null,
+            child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(watch.nickname ?? 'Streamer favorita',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+                Text(status,
+                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11.5)),
+              ],
+            ),
+          ),
+          Switch(
+            value: watch.active,
+            onChanged: isBusy ? null : onToggle,
           ),
         ],
       ),
