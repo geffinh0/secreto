@@ -1,108 +1,113 @@
-# Deploy do Atila's Client numa VPS (Docker, isolado)
+# Deploy do Atila's Client numa VPS (Docker, isolado do cata-pobre)
 
-Isso sobe o portal + backend inteiros dentro de **dois containers Docker**, numa
-rede interna própria, sem tocar em nada que já esteja rodando na VPS. O único
-ponto exposto é `127.0.0.1:8088` (só acessível de dentro da própria VPS) - quem
-expõe isso pro mundo é o reverse proxy que já existe aí, apontando um subdomínio
-seu pra essa porta.
+Domínio: **atilaclient.tech** (Hostinger, separado do catapobre.com.br).
 
-Eu não tenho como rodar isso por você: só recebi a chave **pública** SSH (a
-privada, que autentica de verdade, nunca deve sair da sua máquina/VPS). Os
-comandos abaixo são pra você rodar via `ssh root@187.77.235.245`. Se algo der
-erro, cola a saída aqui que eu te ajudo a resolver.
+Levantamento feito na VPS (187.77.235.245): o que já roda lá é o **cata-pobre**
+(`/root/cade_o_cata_pobre/`) — nginx, app Node e um servidor de IA, todos em
+Docker, nginx ocupando as portas 80/443. Nada disso é tocado por este deploy:
+o Atila's Client sobe em containers **próprios**, numa rede interna **própria**,
+e se conecta ao nginx do cata-pobre só através de uma rede Docker
+**compartilhada** (`proxy_shared`) — já criada, sem host port juggling nem
+`host.docker.internal`.
 
-## 1. Pré-requisitos na VPS
+Tudo que precisa de acesso a `/root/cade_o_cata_pobre/` (que o usuário
+`deploy` não tem, de propósito) fica marcado abaixo como **"rodar como
+root"**. O resto eu já rodo/testei direto com o acesso que tenho.
+
+## 1. DNS (Hostinger)
+
+Registro **A** pra `atilaclient.tech` e outro pra `www.atilaclient.tech`,
+ambos apontando pra `187.77.235.245`. Pode levar alguns minutos pra propagar
+— o passo 3 (certbot) só funciona depois que isso já resolver.
+
+## 2. Subir o Atila's Client (não depende do passo 3/DNS pra funcionar localmente)
+
+Como `deploy` (`ssh -i ~/.ssh/atila_deploy deploy@187.77.235.245`):
 
 ```bash
-# Docker + Compose plugin, se ainda não tiver
-curl -fsSL https://get.docker.com | sh
-docker compose version   # confirma que o plugin "compose" está presente
-```
-
-## 2. Clonar e subir
-
-```bash
-cd /opt   # ou onde preferir manter os serviços
+cd /home/deploy
 git clone https://github.com/geffinh0/secreto.git atilas-client
 cd atilas-client
 docker compose up -d --build
+docker compose ps                     # os dois serviços "running"
+curl -s localhost:8088 | head -5      # devolve o HTML do portal
 ```
 
-A primeira build demora alguns minutos (baixa a imagem do Flutter pra compilar
-o portal). Depois disso:
+A rede `proxy_shared` já existe (`docker network create proxy_shared`, já
+rodei). O `docker-compose.yml` já está configurado pra usá-la.
+
+## 3. Encaixar no nginx do cata-pobre (rodar como root)
+
+Isso adiciona um arquivo **novo** (`nginx/atila.conf`, copiado do repo que
+você acabou de clonar) e **uma linha** no Dockerfile deles — não edita
+`app.conf`, `common.conf` nem nenhum dos outros. `docker compose up -d nginx`
+só recria o container `nginx`; `app` e `ia` continuam rodando do jeito que
+estão, sem interrupção.
 
 ```bash
-docker compose ps                 # os dois serviços devem estar "running"
-curl -s localhost:8088 | head -5  # deve devolver o HTML do portal
+# 3a. copiar o bloco de servidor (já com o domínio certo)
+cp /home/deploy/atilas-client/deploy/nginx-cata-pobre-snippet.conf \
+   /root/cade_o_cata_pobre/nginx/atila.conf
+
+# 3b. uma linha a mais no Dockerfile, logo depois das outras COPY do nginx
+#     (dentro do estágio "nginx_final")
+sed -i '/COPY nginx\/security_headers.conf/a COPY nginx/atila.conf /etc/nginx/conf.d/atila.conf' \
+    /root/cade_o_cata_pobre/Dockerfile
+grep -B1 -A1 "atila.conf" /root/cade_o_cata_pobre/Dockerfile   # confirma a linha certa
+
+# 3c. certificado (mesmo método webroot que o catapobre.com.br já usa)
+certbot certonly --webroot -w /var/www/certbot -d atilaclient.tech -d www.atilaclient.tech --key-type ecdsa
+
+# 3d. rebuild só do nginx e troca sem derrubar app/ia
+cd /root/cade_o_cata_pobre
+docker compose build nginx
+docker compose up -d nginx
+docker compose ps          # confirma: app e ia com o mesmo "CREATED" de antes
 ```
 
-O banco (`backend_data`) é um volume Docker nomeado: sobrevive a
-`docker compose down` e a rebuilds. Só `docker volume rm atilas-client_backend_data`
-apaga de verdade (cuidado).
+O certbot já tem um timer systemd cuidando da renovação de tudo que está em
+`/etc/letsencrypt/renewal/` — o certificado novo entra nesse mesmo ciclo
+automaticamente, nada a mais pra configurar.
 
-## 3. Apontar seu domínio
-
-Na Hostinger, crie um registro **A** pro subdomínio que você quiser usar (ex.:
-`atila.seudominio.com`) apontando pro IP da VPS: `187.77.235.245`.
-
-Na VPS, o que já está rodando (nginx, Caddy, outro container, etc.) precisa
-**encaminhar esse subdomínio pra `127.0.0.1:8088`**. Se for nginx "normal" no
-host, um bloco assim resolve (ajuste o domínio):
-
-```nginx
-server {
-    listen 80;
-    server_name atila.seudominio.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8088;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+## 4. Conferir
 
 ```bash
-# depois de criar o arquivo acima em /etc/nginx/sites-available/atila.conf
-ln -s /etc/nginx/sites-available/atila.conf /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-
-# HTTPS (obrigatório pro PWA instalar) via Let's Encrypt
-certbot --nginx -d atila.seudominio.com
+curl -sI https://atilaclient.tech | head -5
 ```
 
-Se o que já roda na VPS for Caddy ou outro proxy (Traefik, etc.), me avisa qual
-é que eu monto a config certa pra ele - a ideia é sempre a mesma: esse
-subdomínio → `127.0.0.1:8088`, com HTTPS.
+Deve devolver `HTTP/2 200` e vir do nginx deles (não do meu `:8088` direto).
 
-## 4. PWA (instalar como app)
+## 5. PWA (instalar como app)
 
-Já está tudo pronto no código pra isso: `web/manifest.json` com nome, cores e
-ícones (a raposinha, em `web/icons/Icon-*` e `web/icons/Icon-maskable-*`), e o
-Flutter gera o service worker (`flutter_service_worker.js`) sozinho no build de
-produção. A única coisa que falta pra funcionar é **servir via HTTPS** (passo
-3 acima) - sem isso o navegador recusa o "Instalar app".
+Já está tudo pronto no código: `web/manifest.json` com nome, cores e a
+raposinha como ícone (normal e "maskable"), e o Flutter gera o service worker
+sozinho no build de produção. A única coisa que faltava era servir via
+HTTPS — e isso o passo 3 resolve.
 
-Depois do HTTPS no ar: abrir `https://atila.seudominio.com` no Chrome/Edge
-(desktop ou Android) deve mostrar um ícone de instalação na barra de endereço;
-no Android, o próprio navegador também costuma sugerir "Adicionar à tela
-inicial" sozinho.
+Depois do HTTPS no ar: abrir `https://atilaclient.tech` no Chrome/Edge mostra
+um ícone de instalação na barra de endereço; no Android o navegador também
+costuma sugerir "Adicionar à tela inicial" sozinho.
 
-## 5. Atualizando depois de um novo push
+## 6. Atualizando depois de um novo push
 
 ```bash
-cd /opt/atilas-client
+# como deploy
+cd /home/deploy/atilas-client
 git pull
 docker compose up -d --build
 ```
 
-Isso reconstrói as imagens e troca os containers sem perder o banco (que fica
-no volume, fora dos containers).
+Isso reconstrói e troca só os containers do Atila's Client — não toca no
+cata-pobre. O banco (`backend_data`) é um volume nomeado: sobrevive ao
+rebuild. Só `docker volume rm atilas-client_backend_data` apaga de verdade.
 
-## 6. Backup do banco
+Se um dia o `nginx/atila.conf` precisar mudar, é só repetir o passo 3a (copiar
+de novo) + 3d (rebuild só do nginx) — não precisa mexer no certbot de novo a
+menos que o domínio mude.
+
+## 7. Backup do banco
 
 ```bash
-docker compose exec backend sh -c 'cat /data/super_moderator.db' > backup-$(date +%F).db
+# como deploy
+docker exec atilas_client_backend sh -c 'cat /data/super_moderator.db' > backup-$(date +%F).db
 ```

@@ -118,6 +118,24 @@ class AuthAndApiTests(unittest.TestCase):
             "username": name.upper(), "email": "other@example.com", "password": "senha-forte-1"})
         self.assertEqual(status, 400)
 
+    def test_registration_can_be_locked_down(self):
+        name, _, _ = new_user("lockdown")  # created before the lock - must keep working
+        old = os.environ.get("SM_ALLOW_REGISTRATION")
+        os.environ["SM_ALLOW_REGISTRATION"] = "0"
+        try:
+            status, body = api("POST", "/auth/register", {
+                "username": "lockedout", "email": "lockedout@example.com", "password": "senha-forte-1"})
+            self.assertEqual(status, 403)
+            self.assertIn("desativado", body["detail"])
+            # login for accounts that already existed is unaffected
+            self.assertEqual(
+                api("POST", "/auth/login", {"username": name, "password": "senha-forte-1"})[0], 200)
+        finally:
+            if old is None:
+                os.environ.pop("SM_ALLOW_REGISTRATION", None)
+            else:
+                os.environ["SM_ALLOW_REGISTRATION"] = old
+
     def test_login_me_and_logout(self):
         name, _, _ = new_user("login")
         status, bad = api("POST", "/auth/login", {"username": name, "password": "errada"})

@@ -365,6 +365,8 @@ class RobotWatchRequest(BaseModel):
 # ─── Auth ────────────────────────────────────────────────────────────────────
 @app.post("/auth/register")
 def register(req: RegisterRequest, conn: sqlite3.Connection = Depends(get_db)):
+    if os.getenv("SM_ALLOW_REGISTRATION", "1") != "1":
+        raise HTTPException(403, "Cadastro de novas contas está temporariamente desativado.")
     existing = conn.execute(
         "SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)",
         (req.username, req.email),

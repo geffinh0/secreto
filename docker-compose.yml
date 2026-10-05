@@ -5,7 +5,13 @@ services:
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
+    container_name: atilas_client_backend
     restart: unless-stopped
+    environment:
+      # Only the accounts created so far (+ whatever's imported by hand) can
+      # log in; the public sign-up form is off for now. Set to "1" (or drop
+      # the line - "1" is the default) to open registration back up.
+      SM_ALLOW_REGISTRATION: "0"
     volumes:
       - backend_data:/data
     networks:
@@ -17,20 +23,28 @@ services:
     build:
       context: .
       dockerfile: deploy/web.Dockerfile
+    container_name: atilas_client_web
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      # Bound to localhost only: your existing reverse proxy on the VPS
-      # (the one fronting whatever else is already running) forwards your
-      # domain to 127.0.0.1:8088, so this never touches 80/443 directly or
-      # collides with the other service.
+      # Kept for local debugging on the VPS itself (`curl localhost:8088`).
+      # The real public path is through the existing reverse proxy below,
+      # which reaches this container by name over `proxy_shared`, not
+      # through this port.
       - "127.0.0.1:8088:80"
     networks:
       - internal
+      - proxy_shared
 
 networks:
   internal:
+  # Pre-existing external network (created once with `docker network create
+  # proxy_shared`) shared with whatever reverse proxy already runs on this
+  # VPS, so it can reach this container by name (atilas_client_web) without
+  # touching this project or needing a host port.
+  proxy_shared:
+    external: true
 
 volumes:
   # Named volume for the SQLite DB (robot token, portal accounts, rules...).
