@@ -12,6 +12,15 @@ services:
       # log in; the public sign-up form is off for now. Set to "1" (or drop
       # the line - "1" is the default) to open registration back up.
       SM_ALLOW_REGISTRATION: "0"
+      # SuperLive flags this VPS's own IP as a datacenter/VPN address on some
+      # endpoints (e.g. the public search behind "buscar por ID"). Routing
+      # through a SOCKS5 proxy that exits via a residential connection (see
+      # deploy/notebook-proxy/) avoids that false positive. Empty = connect
+      # directly, same as before this existed. 172.28.0.1 is this compose
+      # project's own "internal" network gateway (pinned below), reached by a
+      # tunnel that only this host's loopback can open (deploy/notebook-proxy/
+      # systemd unit) - never exposed outside the Docker bridge.
+      SUPERLIVE_PROXY_URL: "socks5h://172.28.0.1:1080"
     volumes:
       - backend_data:/data
     networks:
@@ -38,7 +47,13 @@ services:
       - proxy_shared
 
 networks:
+  # Pinned subnet so the gateway IP (172.28.0.1) is predictable - that's the
+  # address the SOCKS5 proxy (deploy/notebook-proxy/) binds to on the VPS
+  # host, and SUPERLIVE_PROXY_URL above points at it directly.
   internal:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
   # Pre-existing external network (created once with `docker network create
   # proxy_shared`) shared with whatever reverse proxy already runs on this
   # VPS, so it can reach this container by name (atilas_client_web) without

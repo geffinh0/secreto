@@ -111,3 +111,52 @@ menos que o domínio mude.
 # como deploy
 docker exec atilas_client_backend sh -c 'cat /data/super_moderator.db' > backup-$(date +%F).db
 ```
+
+## 8. Proxy residencial (notebook) para o SuperLive
+
+O SuperLive marca o IP desta VPS como "VPN" em alguns endpoints (ex: a busca
+por ID público da streamer), porque é um IP de datacenter. A correção é
+rotear as chamadas ao SuperLive por um túnel SSH reverso até o notebook do
+Gefferson, que sai pela internet residencial dele — ver scripts em
+`deploy/notebook-proxy/`.
+
+Como funciona (duas pernas de SSH):
+
+1. **Notebook → VPS**: o notebook abre `ssh -R 2222:127.0.0.1:22 deploy@VPS`
+   (script `tunnel.ps1`, rodando em segundo plano via Tarefa Agendada do
+   Windows, reconecta sozinho se cair). Isso faz a porta 2222 da VPS "ecoar"
+   pro sshd do notebook.
+2. **VPS → notebook**: um serviço systemd (`atila-notebook-proxy.service`) na
+   VPS roda `ssh -D 172.28.0.1:1080 -p 2222 deploy@localhost`, abrindo um
+   proxy SOCKS5 que sai pela internet do notebook. `172.28.0.1` é o gateway
+   fixo da rede `internal` deste compose (ver `docker-compose.yml`) — só os
+   containers desta stack alcançam, nunca a internet.
+3. O backend lê `SUPERLIVE_PROXY_URL=socks5h://172.28.0.1:1080` e passa TODAS
+   as chamadas HTTP e o WebSocket do SuperLive por ele (`backend/superlive.py`,
+   `backend/engine.py`).
+
+Cada ponta usa uma chave SSH dedicada, sem shell, só com permissão de abrir
+túnel (`restrict,permitlisten`/`restrict,port-forwarding`) — nenhuma delas dá
+acesso a mais nada além disso.
+
+**Importante**: com isso, o robô passa a depender do notebook estar ligado,
+conectado e logado. Se o notebook desligar, dormir ou perder internet, a
+moderação para até ele voltar. Vale desativar o modo de suspensão (pelo menos
+na tomada) pra não derrubar isso à toa:
+
+```powershell
+powercfg /change standby-timeout-ac 0
+```
+
+Instalação (uma vez só):
+
+```bash
+# no notebook, como Administrador (botão direito > Executar como administrador)
+# cole o conteudo de deploy/notebook-proxy/setup_elevated.ps1
+
+# na VPS, como root
+cp deploy/notebook-proxy/atila-notebook-proxy.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now atila-notebook-proxy
+systemctl status atila-notebook-proxy
+```

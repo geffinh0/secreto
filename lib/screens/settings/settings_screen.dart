@@ -73,16 +73,19 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      bot.isConnected
-                          ? 'Conectado como: ${bot.botProfile?.nickname ?? "Atila's Client"}'
-                          : 'Robô desconectado',
-                      style: TextStyle(
-                        color: bot.isConnected
-                            ? AppTheme.textPrimary
-                            : AppTheme.textMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        bot.isConnected
+                            ? 'Conectado como: ${bot.botProfile?.nickname ?? "Atila's Client"}'
+                            : 'Robô desconectado',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: bot.isConnected
+                              ? AppTheme.textPrimary
+                              : AppTheme.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],

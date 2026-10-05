@@ -260,15 +260,18 @@ class _MainShellState extends State<MainShell> {
           ],
           Icon(routeIcon, color: AppTheme.primary, size: 20),
           const SizedBox(width: 10),
-          Text(
-            routeTitle,
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+          Expanded(
+            child: Text(
+              routeTitle,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           if (!isWide)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

@@ -13,9 +13,9 @@ import asyncio
 import json
 import logging
 import os
-import urllib.error
-import urllib.request
 import uuid
+
+import requests
 
 # The app's Retrofit base is ".../api/v1/". Without that prefix the server answers
 # HTTP 400 {"error": {"code": 77, "message": "unknown urd"}} to every call.
@@ -25,6 +25,13 @@ USER_AGENT = os.getenv(
     "SUPERLIVE_USER_AGENT", "SuperLive/2.31.0 (samsung SM-G998B; Android 13; Scale/3.0)"
 )
 HTTP_TIMEOUT = float(os.getenv("SUPERLIVE_HTTP_TIMEOUT", "20"))
+
+# Routes every call to the SuperLive API through a SOCKS5 proxy (e.g.
+# "socks5h://172.28.0.1:1080") instead of connecting directly from this host.
+# Empty/unset = connect directly, same as before. See DEPLOY.md for why this
+# exists: datacenter IPs get flagged as "VPN" by SuperLive's own anti-fraud
+# check on some endpoints.
+PROXY_URL = os.getenv("SUPERLIVE_PROXY_URL", "").strip()
 
 log = logging.getLogger("super_moderator.superlive")
 
@@ -101,30 +108,33 @@ class SuperLiveClient:
         return headers
 
     def _post_sync(self, path: str, body: dict, auth: bool) -> dict:
-        data = json.dumps(body if body is not None else {}).encode("utf-8")
-        req = urllib.request.Request(
-            self.base_url + path.lstrip("/"), data=data, method="POST",
-            headers=self._headers(auth),
-        )
+        proxies = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else None
         try:
-            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
-                status, raw = resp.status, resp.read()
-        except urllib.error.HTTPError as exc:
-            raw = exc.read()
+            resp = requests.post(
+                self.base_url + path.lstrip("/"),
+                json=body if body is not None else {},
+                headers=self._headers(auth),
+                timeout=HTTP_TIMEOUT,
+                proxies=proxies,
+            )
+        except requests.exceptions.RequestException as exc:
+            raise SuperLiveError(f"Falha de rede: {exc}") from None
+
+        raw = resp.content
+        if resp.status_code >= 400:
             parsed = _parse_json(raw)
             # visible in the backend window; the request body (passwords) is never logged
-            log.warning("SuperLive %s -> HTTP %s: %s", path, exc.code,
+            log.warning("SuperLive %s -> HTTP %s: %s", path, resp.status_code,
                         raw.decode("utf-8", errors="replace")[:300])
             raise SuperLiveError(
-                _server_message(parsed) or f"HTTP {exc.code}", exc.code, parsed
-            ) from None
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise SuperLiveError(f"Falha de rede: {getattr(exc, 'reason', exc)}") from None
+                _server_message(parsed) or f"HTTP {resp.status_code}", resp.status_code, parsed
+            )
 
         parsed = _parse_json(raw)
         if isinstance(parsed, dict) and parsed.get("success") is False:
             raise SuperLiveError(
-                _server_message(parsed) or "Operação recusada pelo SuperLive", status, parsed
+                _server_message(parsed) or "Operação recusada pelo SuperLive",
+                resp.status_code, parsed,
             )
         return parsed if isinstance(parsed, dict) else {}
 

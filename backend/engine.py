@@ -16,15 +16,32 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlsplit
 
 import websockets
 from websockets.exceptions import InvalidStatus
 
 import db
 from superlive import (
-    USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
+    PROXY_URL, USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
     heartbeat_message, leave_message,
 )
+
+if PROXY_URL:
+    from python_socks.async_.asyncio import Proxy
+
+
+async def _ws_connect(url: str, **kwargs):
+    """Same as ``websockets.connect(url, **kwargs)``, but through ``PROXY_URL``
+    (SOCKS5) when one is set - see superlive.PROXY_URL for why. The WebSocket
+    handshake and TLS still happen in ``websockets`` itself; the proxy only
+    supplies the raw TCP connection to the SuperLive host."""
+    if not PROXY_URL:
+        return websockets.connect(url, **kwargs)
+    parts = urlsplit(url)
+    port = parts.port or (443 if parts.scheme == "wss" else 80)
+    sock = await Proxy.from_url(PROXY_URL).connect(dest_host=parts.hostname, dest_port=port)
+    return websockets.connect(url, sock=sock, server_hostname=parts.hostname, **kwargs)
 
 log = logging.getLogger("super_moderator.engine")
 
@@ -237,7 +254,7 @@ class BotSession:
             connected_at = time.monotonic()
             try:
                 self.ws_state = "connecting"
-                async with websockets.connect(
+                async with await _ws_connect(
                     self._ws_url, user_agent_header=USER_AGENT, open_timeout=15,
                     ping_interval=60, ping_timeout=30, close_timeout=3, max_size=2 ** 22,
                 ) as ws:

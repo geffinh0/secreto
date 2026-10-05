@@ -1,0 +1,38 @@
+# Mantem um proxy SOCKS5 em 172.28.0.1:1080 (o gateway da rede "internal" do
+# atilas-client) que sai pela internet do notebook do Gefferson, atravessando
+# o tunel reverso que o notebook abre em deploy@localhost:2222.
+#
+# So existe pra isso: o SuperLive marca o IP desta VPS como "VPN" em alguns
+# endpoints. Ver docker-compose.yml (SUPERLIVE_PROXY_URL) e deploy/DEPLOY.md.
+#
+# Instalar (como root):
+#   cp atila-notebook-proxy.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now atila-notebook-proxy
+
+[Unit]
+Description=Proxy SOCKS5 para o SuperLive via o notebook (tunel reverso)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+# -D liga o proxy SOCKS5; -p 2222 fala com o sshd do notebook atraves do
+# tunel reverso que o notebook mesmo abriu (ver tunnel.ps1); bind no gateway
+# da rede "internal" (nao em 0.0.0.0): so os containers desta stack alcancam,
+# nunca a internet publica.
+ExecStart=/usr/bin/ssh -N \
+    -D 172.28.0.1:1080 \
+    -p 2222 \
+    -i /home/deploy/.ssh/vps_to_notebook \
+    -o StrictHostKeyChecking=accept-new \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -o ExitOnForwardFailure=yes \
+    Gefferson@127.0.0.1
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -151,26 +151,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 24),
           const Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              _HeroStat(value: '${mod.rules.length}', label: 'regras ativas'),
-              _heroDivider(),
-              _HeroStat(value: '${msg.messages.length}', label: 'mensagens na fila'),
-              _heroDivider(),
-              _HeroStat(
-                value: '${bot.totalActionsOk}',
-                label: 'ações no total',
-                color: AppTheme.warning,
-              ),
-              if (live) ...[
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _HeroStat(value: '${mod.rules.length}', label: 'regras ativas'),
+                _heroDivider(),
+                _HeroStat(value: '${msg.messages.length}', label: 'mensagens na fila'),
                 _heroDivider(),
                 _HeroStat(
-                  value: '${bot.session.messagesSent}',
-                  label: 'enviadas nesta live',
-                  color: AppTheme.accent,
+                  value: '${bot.totalActionsOk}',
+                  label: 'ações no total',
+                  color: AppTheme.warning,
                 ),
+                if (live) ...[
+                  _heroDivider(),
+                  _HeroStat(
+                    value: '${bot.session.messagesSent}',
+                    label: 'enviadas nesta live',
+                    color: AppTheme.accent,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),
