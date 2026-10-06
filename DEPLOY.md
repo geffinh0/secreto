@@ -95,11 +95,18 @@ costuma sugerir "Adicionar à tela inicial" sozinho.
 cd /home/deploy/atilas-client
 git pull
 docker compose up -d --build
+
+# o container web (ou o backend) troca de IP na rede proxy_shared a cada
+# rebuild - o nginx do cata-pobre guarda o IP antigo em cache até recarregar,
+# e devolve 502 até isso acontecer. deploy já está no grupo docker, então dá
+# pra recarregar sem precisar de root:
+docker exec cata_pobre_nginx nginx -s reload
 ```
 
 Isso reconstrói e troca só os containers do Atila's Client — não toca no
-cata-pobre. O banco (`backend_data`) é um volume nomeado: sobrevive ao
-rebuild. Só `docker volume rm atilas-client_backend_data` apaga de verdade.
+cata-pobre (o `nginx -s reload` acima só recarrega a config, não derruba
+nada). O banco (`backend_data`) é um volume nomeado: sobrevive ao rebuild.
+Só `docker volume rm atilas-client_backend_data` apaga de verdade.
 
 Se um dia o `nginx/atila.conf` precisar mudar, é só repetir o passo 3a (copiar
 de novo) + 3d (rebuild só do nginx) — não precisa mexer no certbot de novo a
