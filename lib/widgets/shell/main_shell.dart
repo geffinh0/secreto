@@ -232,8 +232,13 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildTopBar(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 900;
-    final (routeIcon, routeTitle) = _getRouteTitleInfo(context);
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width > 900;
+    // Phones get the dot-only status pill (no "Robô online/offline" label) -
+    // between the logo box, the route icon+title and the pill, the label text
+    // was the one thing standing between a comfortable title and an ellipsis.
+    final isPhone = width < 480;
+    final (routeIcon, routeTitle) = _getRouteTitleInfo(context, isWide: isWide);
     final botProvider = context.watch<BotProvider>();
     return Container(
       height: 64,
@@ -274,7 +279,9 @@ class _MainShellState extends State<MainShell> {
           const SizedBox(width: 8),
           if (!isWide)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: isPhone
+                  ? const EdgeInsets.all(6)
+                  : const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: AppTheme.bgSurface,
                 borderRadius: BorderRadius.circular(16),
@@ -293,15 +300,17 @@ class _MainShellState extends State<MainShell> {
                           : AppTheme.error,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    botProvider.isConnected ? 'Robô online' : 'Robô offline',
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                  if (!isPhone) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      botProvider.isConnected ? 'Robô online' : 'Robô offline',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -310,13 +319,18 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  (IconData, String) _getRouteTitleInfo(BuildContext context) {
+  // Full titles have room to breathe on desktop; narrow screens get the short
+  // form so the top bar never has to ellipsize or push the status pill off
+  // the edge (see _buildTopBar, which also drops the pill's text there).
+  (IconData, String) _getRouteTitleInfo(BuildContext context, {required bool isWide}) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/moderation')) return (Icons.shield_rounded, 'Moderação');
     if (location.startsWith('/messages')) {
-      return (Icons.chat_bubble_rounded, 'Mensagens Automáticas');
+      return (Icons.chat_bubble_rounded, isWide ? 'Mensagens Automáticas' : 'Mensagens');
     }
-    if (location.startsWith('/bot')) return (Icons.smart_toy_rounded, 'Controle do Robô');
+    if (location.startsWith('/bot')) {
+      return (Icons.smart_toy_rounded, isWide ? 'Controle do Robô' : 'Robô');
+    }
     if (location.startsWith('/settings')) return (Icons.settings_rounded, 'Configurações');
     return (Icons.dashboard_rounded, 'Dashboard');
   }

@@ -151,29 +151,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 24),
           const Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 18),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stats = <Widget>[
                 _HeroStat(value: '${mod.rules.length}', label: 'regras ativas'),
-                _heroDivider(),
                 _HeroStat(value: '${msg.messages.length}', label: 'mensagens na fila'),
-                _heroDivider(),
                 _HeroStat(
                   value: '${bot.totalActionsOk}',
                   label: 'ações no total',
                   color: AppTheme.warning,
                 ),
-                if (live) ...[
-                  _heroDivider(),
+                if (live)
                   _HeroStat(
                     value: '${bot.session.messagesSent}',
                     label: 'enviadas nesta live',
                     color: AppTheme.accent,
                   ),
-                ],
-              ],
-            ),
+              ];
+
+              // Four stats plus three dividers never fit a phone's width
+              // without clipping or scrolling off-screen - a 2-column grid
+              // keeps every number fully visible instead.
+              if (constraints.maxWidth < 480) {
+                const gap = 20.0;
+                final itemWidth = (constraints.maxWidth - gap) / 2;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: 16,
+                  children: [
+                    for (final stat in stats) SizedBox(width: itemWidth, child: stat),
+                  ],
+                );
+              }
+
+              final children = <Widget>[];
+              for (var i = 0; i < stats.length; i++) {
+                if (i > 0) children.add(_heroDivider());
+                children.add(stats[i]);
+              }
+              return Row(children: children);
+            },
           ),
         ],
       ),

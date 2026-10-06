@@ -110,6 +110,36 @@
   </div>
 
   <script>
+    // Chrome/Edge/Android fire this instead of showing their own install UI
+    // when the page is installable; stash it so a button in Settings can
+    // trigger the native prompt on demand. iOS has no such event - Safari
+    // only offers "Adicionar à Tela de Início" from its own Share sheet, so
+    // that case is just static instructions on the Dart side (pwaIsIos()).
+    window.__pwaInstallEvent = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window.__pwaInstallEvent = e;
+    });
+    window.addEventListener('appinstalled', function() {
+      window.__pwaInstallEvent = null;
+    });
+    window.pwaCanPromptInstall = function() {
+      return window.__pwaInstallEvent !== null;
+    };
+    window.pwaTriggerInstall = function() {
+      var evt = window.__pwaInstallEvent;
+      if (!evt) return;
+      window.__pwaInstallEvent = null;
+      evt.prompt();
+    };
+    window.pwaIsStandalone = function() {
+      return window.matchMedia('(display-mode: standalone)').matches
+          || window.navigator.standalone === true;
+    };
+    window.pwaIsIos = function() {
+      return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    };
+
     window.addEventListener('flutter-first-frame', function() {
       var loadingIndicator = document.getElementById('loading-indicator');
       if (loadingIndicator) {

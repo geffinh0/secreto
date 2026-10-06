@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/models.dart';
 import '../../core/services/portal_api_service.dart';
+import '../../core/services/pwa_install_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
@@ -22,6 +23,9 @@ class SettingsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const _PwaInstallCard(),
+          const SizedBox(height: 24),
+
           // Profile section
           _SectionCard(
             title: 'Sua conta',
@@ -165,6 +169,89 @@ class _SectionCard extends StatelessWidget {
           ...children,
         ],
       ),
+    );
+  }
+}
+
+/// Installing as a PWA is what lets the dashboard behave like a real app
+/// (full-screen, its own icon) instead of a browser tab - but the browser
+/// APIs behind it are a dead end without a nudge: Chrome/Android never show
+/// their own install button unprompted, and iOS has no install prompt at
+/// all, only "Adicionar à Tela de Início" buried in Safari's Share sheet.
+/// Hides itself once already installed (standalone) or on a browser that
+/// offers neither path (desktop Chrome without the component, Firefox, …).
+class _PwaInstallCard extends StatefulWidget {
+  const _PwaInstallCard();
+
+  @override
+  State<_PwaInstallCard> createState() => _PwaInstallCardState();
+}
+
+class _PwaInstallCardState extends State<_PwaInstallCard> {
+  bool _installing = false;
+
+  Future<void> _install() async {
+    setState(() => _installing = true);
+    PwaInstallService.triggerInstall();
+    // The browser's own prompt is modal-ish but not awaitable from here;
+    // give it a moment, then re-check - canPromptInstall flips false once
+    // the user accepts (or the event is spent either way).
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _installing = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (PwaInstallService.isStandalone) return const SizedBox.shrink();
+
+    final isIos = PwaInstallService.isIos;
+    final canPrompt = PwaInstallService.canPromptInstall;
+    if (!isIos && !canPrompt) return const SizedBox.shrink();
+
+    return _SectionCard(
+      title: 'Instalar como app',
+      accent: AppTheme.accent,
+      children: [
+        if (isIos) ...[
+          const Text(
+            'No Safari: toque no ícone de compartilhar e depois em '
+            '"Adicionar à Tela de Início".',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Icon(Icons.ios_share_rounded, color: AppTheme.accent, size: 20),
+              SizedBox(width: 8),
+              Icon(Icons.arrow_forward_rounded, color: AppTheme.textMuted, size: 16),
+              SizedBox(width: 8),
+              Icon(Icons.add_box_outlined, color: AppTheme.accent, size: 20),
+            ],
+          ),
+        ] else ...[
+          const Text(
+            'Instale o Atila\'s Client como um app: abre em tela cheia, '
+            'com ícone próprio, sem a barra de endereço do navegador.',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          GradientButton(
+            id: 'install_pwa_button',
+            onPressed: _installing ? null : _install,
+            isLoading: _installing,
+            label: 'Instalar app',
+            icon: Icons.install_mobile_rounded,
+          ),
+        ],
+      ],
     );
   }
 }

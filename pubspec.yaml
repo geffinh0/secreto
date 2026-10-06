@@ -45,6 +45,7 @@ dependencies:
 
   # Web specific
   url_launcher: ^6.2.5
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:
