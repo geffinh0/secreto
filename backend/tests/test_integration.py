@@ -1045,6 +1045,30 @@ class MessagesFlowTests(RobotTestBase):
         self.start_live()
         self.assertTrue(self.status()["session"]["running"])
 
+    def test_auto_message_failure_on_dead_live_triggers_transition_to_new_live(self):
+        old_poll = engine.LIVE_POLL_INTERVAL_SECONDS
+        engine.LIVE_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.connect_robot()
+            self.start_live()
+            # Configure auto message
+            api("POST", "/messages", {"user_id": self.uid, "content": "Olá!", "sort_order": 0}, self.token)
+            sql("UPDATE bot_settings SET auto_messages_enabled = 1, message_interval_seconds = 1 WHERE user_id = ?",
+                (self.uid,))
+
+            # Streamer starts live2, and sending to live1 fails with "livestream not found"
+            mock.start_new_live(STREAMER_ID, "live2")
+            mock.fail["livestream/chat/send_text_message"] = (400, {"message": "livestream not found"})
+
+            # The session should detect the failure, check streamer's status, and switch to live2!
+            wait_for(lambda: self.status()["session"]["livestream_id"] == "live2",
+                     8, "did not switch to live2 after auto message failed on dead live")
+            self.assertEqual(self.status()["session"]["state"], "running")
+        finally:
+            engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+            mock.fail.clear()
+
+
 
 class ActivityLogTests(RobotTestBase):
     """Account-level activity trail: login, rule/message/settings/robot changes."""

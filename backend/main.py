@@ -787,8 +787,8 @@ async def robot_connect_phone_verify(
 async def robot_disconnect(current_user: dict = Depends(get_current_user),
                            conn: sqlite3.Connection = Depends(get_db)):
     user_id = current_user["id"]
-    await sessions.stop(user_id)
     await watchers.stop(user_id)
+    await sessions.stop(user_id)
     _pending_phone_logins.pop(user_id, None)
     robot = db.get_robot(conn, user_id)
     # Only end the SuperLive session if we created it (password/phone login). A pasted
@@ -841,12 +841,22 @@ async def robot_watch_set(req: RobotWatchRequest, current_user: dict = Depends(g
     if req.active:
         watchers.start(user_id)
         session = sessions.get(user_id)
-        if (session is None or not session.is_active) and found.get("live") and found.get("livestream_id"):
-            try:
-                await sessions.start(user_id, client, robot["sl_user_id"], str(found["livestream_id"]),
-                                     ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None)
-            except (RuntimeError, SuperLiveError):
-                pass  # the background watcher will retry
+        if found.get("live") and found.get("livestream_id"):
+            found_live_id = str(found["livestream_id"])
+            if session is None or not session.is_active:
+                try:
+                    await sessions.start(user_id, client, robot["sl_user_id"], found_live_id,
+                                         ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None)
+                    conn.execute("UPDATE robot_accounts SET last_livestream_id = ? WHERE user_id = ?",
+                                 (found_live_id, user_id))
+                    conn.commit()
+                except (RuntimeError, SuperLiveError):
+                    pass  # the background watcher will retry
+            elif session.livestream_id != found_live_id:
+                try:
+                    await session.switch_livestream(found_live_id)
+                except Exception:
+                    pass
     else:
         await watchers.stop(user_id)
 

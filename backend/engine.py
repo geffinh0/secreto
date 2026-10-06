@@ -135,6 +135,10 @@ class BotSession:
         self.last_error = None           # moderation / message / auth problems
         self.ws_error = None             # transient connection problems (cleared on reconnect)
         self.streamer_id: Optional[str] = None
+        self.streamer_shared_id: Optional[str] = None
+        self.watch_shared_id: Optional[str] = None
+        self._last_ended_livestream_id: Optional[str] = None
+        self._live_found_event = asyncio.Event()
 
         self.messages_sent = 0
         self.chat_seen = 0
@@ -172,6 +176,15 @@ class BotSession:
         streamer = details.get("user") if isinstance(details.get("user"), dict) else {}
         streamer_id = streamer.get("id") or streamer.get("user_id")
         self.streamer_id = str(streamer_id) if streamer_id else None
+        self.streamer_shared_id = str(streamer.get("shared_id")) if streamer.get("shared_id") else None
+
+        conn = db.connect()
+        try:
+            watch = db.get_watch(conn, self.user_id)
+            if watch and watch.get("shared_id"):
+                self.watch_shared_id = str(watch["shared_id"])
+        finally:
+            conn.close()
 
         if self.ws_url_override:
             base_url = self.ws_url_override
@@ -191,6 +204,7 @@ class BotSession:
             asyncio.create_task(self._ws_loop(), name=f"ws-{self.user_id}"),
             asyncio.create_task(self._action_worker(), name=f"actions-{self.user_id}"),
             asyncio.create_task(self._auto_message_loop(), name=f"auto-{self.user_id}"),
+            asyncio.create_task(self._live_monitor_loop(), name=f"monitor-{self.user_id}"),
         ]
 
     async def stop(self, reason: str = "Parado pelo usuário",
@@ -199,16 +213,23 @@ class BotSession:
             if self._finalized:
                 return
             self.state = "stopping"
-            if self._ws is not None:
+            ws = self._ws
+            self._ws = None
+            if ws is not None:
                 try:
-                    await asyncio.wait_for(self._ws.send(leave_message(self.livestream_id)), 3)
+                    await asyncio.wait_for(ws.send(leave_message(self.livestream_id)), 3)
+                except Exception:  # noqa: BLE001
+                    pass
+                try:
+                    await ws.close()
                 except Exception:  # noqa: BLE001
                     pass
             current = asyncio.current_task()
-            tasks = [t for t in self._tasks if t is not current]
-            for task in tasks:
+            all_tasks = [t for t in (list(self._tasks) + list(self._bg)) if t is not current]
+            for task in all_tasks:
                 task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*all_tasks, return_exceptions=True)
+            self._bg.clear()
             self.ws_state = "disconnected"
             self.state = final_state
             self.stop_reason = reason
@@ -289,6 +310,23 @@ class BotSession:
                 return
             if self.livestream_id is None:
                 continue  # the live ended again (or ended mid-connect); go back to waiting
+
+            # Check if live ended or switched to a new ID before blindly reconnecting to the old one
+            try:
+                status_live = await self._check_live_status()
+                if isinstance(status_live, str) and status_live != self.livestream_id:
+                    log.info("session %s: live changed during reconnect to %s", self.user_id, status_live)
+                    await self.switch_livestream(status_live)
+                    failures, backoff = 0, 1
+                    continue
+                elif status_live is False:
+                    log.info("session %s: live %s ended during disconnect, waiting for next",
+                             self.user_id, self.livestream_id)
+                    await self.on_live_ended()
+                    continue
+            except Exception:
+                pass
+
             failures = 0 if time.monotonic() - connected_at > 30 else failures + 1
             if failures >= MAX_WS_FAILURES:
                 self._fail("Não foi possível manter a conexão em tempo real com o SuperLive.")
@@ -296,42 +334,294 @@ class BotSession:
             await asyncio.sleep(backoff)
             backoff = 1 if failures == 0 else min(backoff * 2, 30)
 
-    async def _wait_for_next_live(self) -> bool:
-        """Polls SuperLive for the streamer's next broadcast while the moderator
-        stays "on" with nothing to connect to. Returns False if the session was
-        stopped (or the robot's token failed) while waiting."""
-        self.state = "waiting_for_live"
-        self.ws_state = "disconnected"
-        self.stop_reason = None
-        log.info("session %s: live %s ended, watching for the next one",
-                  self.user_id, self.livestream_id or "?")
-        while self.is_active and self.livestream_id is None:
+    async def _check_live_status(self):
+        """Checks if the current livestream is still live or if a new one started.
+        Returns:
+            str: new livestream_id if the streamer is live on another broadcast
+            True: if the current live is still active
+            False: if the live has ended
+            None: if the status could not be verified
+        """
+        target_shared = None
+        try:
+            conn = db.connect()
+            try:
+                w = db.get_watch(conn, self.user_id)
+                if w and w.get("shared_id"):
+                    target_shared = str(w["shared_id"])
+            finally:
+                conn.close()
+        except Exception:
+            pass
+        target_shared = target_shared or self.watch_shared_id or self.streamer_shared_id
+
+        if target_shared:
+            try:
+                res = await self.client.find_live_by_shared_id(target_shared)
+                if res is not None:
+                    if res.get("live") and res.get("livestream_id"):
+                        lid = str(res["livestream_id"])
+                        return lid if lid != self.livestream_id else True
+                    else:
+                        return False
+            except Exception:
+                pass
+
+        if self.streamer_id:
+            try:
+                res = await self.client.find_live_by_user_id(self.streamer_id)
+                if res is not None:
+                    if res.get("live") and res.get("livestream_id"):
+                        lid = str(res["livestream_id"])
+                        return lid if lid != self.livestream_id else True
+                    else:
+                        return False
+            except Exception:
+                pass
+
+        if self.livestream_id:
+            try:
+                details = await self.client.retrieve_livestream(self.livestream_id)
+                if details and isinstance(details.get("user"), dict):
+                    streamer = details["user"]
+                    s_id = streamer.get("id") or streamer.get("user_id")
+                    if s_id and not self.streamer_id:
+                        self.streamer_id = str(s_id)
+                    return True
+            except SuperLiveError as exc:
+                if exc.status == 404 or any(w in (exc.message or "").lower() for w in ("not found", "ended", "encerrad", "closed", "live")):
+                    return False
+            except Exception:
+                pass
+
+        return None
+
+    async def _handle_live_error_or_change(self, exc: Optional[SuperLiveError] = None) -> None:
+        """When an action or message fails against the current livestream, verify if
+        the live has changed to a new broadcast or ended."""
+        if not self.is_active or self.state in ("stopping", "stopped", "error", "waiting_for_live"):
+            return
+        try:
+            status = await self._check_live_status()
+            if isinstance(status, str) and status != self.livestream_id:
+                log.info("session %s: detected live switched to %s", self.user_id, status)
+                await self.switch_livestream(status)
+                self.last_error = None
+            elif status is False:
+                log.info("session %s: detected live ended", self.user_id)
+                await self.on_live_ended()
+            elif status is None and exc is not None:
+                msg_lower = (exc.message or "").lower()
+                if any(w in msg_lower for w in ("live", "not found", "ended", "closed", "encerrad", "inexistente", "inativ")) or exc.status == 404:
+                    log.info("session %s: error '%s' indicates live %s ended", self.user_id, exc.message, self.livestream_id)
+                    await self.on_live_ended()
+        except Exception:
+            log.exception("session %s: error during live status verification", self.user_id)
+
+    async def _live_monitor_loop(self) -> None:
+        """Periodically checks if the current live ended or changed, in case the WebSocket
+        channel did not push a livestream_ended frame."""
+        while True:
+            await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
+            if not self.is_active or self.state != "running" or not self.livestream_id:
+                continue
+            try:
+                status = await self._check_live_status()
+                if isinstance(status, str) and status != self.livestream_id:
+                    log.info("session %s: monitor detected live switched to %s", self.user_id, status)
+                    await self.switch_livestream(status)
+                elif status is False:
+                    log.info("session %s: monitor detected live ended", self.user_id)
+                    await self.on_live_ended()
+            except Exception:
+                pass
+
+    async def _find_next_live(self) -> Optional[str]:
+        target_shared = None
+        try:
+            conn = db.connect()
+            try:
+                w = db.get_watch(conn, self.user_id)
+                if w and w.get("shared_id"):
+                    target_shared = str(w["shared_id"])
+            finally:
+                conn.close()
+        except Exception:
+            pass
+        target_shared = target_shared or self.watch_shared_id or self.streamer_shared_id
+
+        result = None
+        if target_shared:
+            try:
+                result = await self.client.find_live_by_shared_id(target_shared)
+            except SuperLiveError as exc:
+                if exc.is_auth_error:
+                    raise
+                result = None
+
+        if (not result or not result.get("live")) and self.streamer_id:
             try:
                 result = await self.client.find_live_by_user_id(self.streamer_id)
             except SuperLiveError as exc:
                 if exc.is_auth_error:
+                    raise
+                result = None
+
+        if result and result.get("live") and result.get("livestream_id"):
+            found_id = str(result["livestream_id"])
+            # Never re-accept the broadcast that just ended (protect against API caching)
+            if self._last_ended_livestream_id and found_id == str(self._last_ended_livestream_id):
+                log.debug("session %s: found live %s but it is the one that just ended, ignoring",
+                          self.user_id, found_id)
+                return None
+            return found_id
+        return None
+
+    async def _wait_for_next_live(self) -> bool:
+        """Polls SuperLive for the streamer's next broadcast while the moderator
+        stays 'on' with nothing to connect to. Returns False if the session was
+        stopped (or the robot's token failed) while waiting."""
+        self.state = "waiting_for_live"
+        self.ws_state = "disconnected"
+        self.stop_reason = None
+        self._live_found_event.clear()
+        log.info("session %s: waiting for the streamer's next live", self.user_id)
+        while self.is_active and self.livestream_id is None:
+            try:
+                found_id = await self._find_next_live()
+            except SuperLiveError as exc:
+                if exc.is_auth_error:
                     self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
                     return False
-                result = None
-            if result and result.get("live") and result.get("livestream_id"):
-                self.livestream_id = str(result["livestream_id"])
-                self._diamonds.clear()  # diamond immunity is per-live, not cumulative
-                log.info("session %s: streamer is live again on %s",
-                         self.user_id, self.livestream_id)
+                found_id = None
+            if found_id:
+                await self.switch_livestream(found_id)
+                break
             else:
-                await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
+                try:
+                    await asyncio.wait_for(
+                        self._live_found_event.wait(), timeout=LIVE_POLL_INTERVAL_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    pass
         if not self.is_active:
             return False
         self.state = "running"
         self.last_error = None
         return True
 
+    async def switch_livestream(self, new_livestream_id: str) -> None:
+        """Switch moderation cleanly to a new livestream_id."""
+        async with self._stop_lock:
+            if self._finalized or not self.is_active or self.state in ("stopping", "stopped", "error"):
+                return
+            new_livestream_id = str(new_livestream_id)
+            if self.livestream_id == new_livestream_id and self.state == "running" and self.ws_state == "connected":
+                return
+
+            old_livestream_id = self.livestream_id
+            log.info("session %s: switching livestream from %s to %s",
+                     self.user_id, old_livestream_id or "?", new_livestream_id)
+
+            self._last_ended_livestream_id = old_livestream_id
+            self.livestream_id = new_livestream_id
+            self.state = "running"
+            self.last_error = None
+            self._diamonds.clear()
+            self._acted.clear()
+            self._live_found_event.set()
+
+            try:
+                conn = db.connect()
+                try:
+                    conn.execute(
+                        "UPDATE robot_accounts SET last_livestream_id = ? WHERE user_id = ?",
+                        (new_livestream_id, self.user_id),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            except Exception:
+                log.exception("could not update last_livestream_id in database")
+
+            try:
+                db.log_activity(
+                    self.user_id, "session_switched_live",
+                    f"live {new_livestream_id}" + (f" (anterior: {old_livestream_id})" if old_livestream_id else ""),
+                )
+            except Exception:
+                pass
+
+            ws = self._ws
+            self._ws = None
+            if ws is not None:
+                if old_livestream_id:
+                    try:
+                        await ws.send(leave_message(old_livestream_id))
+                    except Exception:
+                        pass
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+
+    async def on_live_ended(self) -> None:
+        """Handles the current livestream ending, entering waiting_for_live state."""
+        async with self._stop_lock:
+            if self._finalized or not self.is_active or self.state in ("stopping", "stopped", "error", "waiting_for_live"):
+                return
+
+            has_target = bool(self.streamer_id or self.streamer_shared_id or self.watch_shared_id)
+            if not has_target:
+                try:
+                    conn = db.connect()
+                    try:
+                        watch = db.get_watch(conn, self.user_id)
+                        has_target = bool(watch and watch.get("shared_id"))
+                    finally:
+                        conn.close()
+                except Exception:
+                    pass
+
+            if not has_target:
+                self._spawn(self.stop(reason="A live foi encerrada"))
+                return
+
+            old_live = self.livestream_id
+            self._last_ended_livestream_id = old_live
+            self.livestream_id = None
+            self.state = "waiting_for_live"
+            self.last_error = None
+            self.ws_state = "disconnected"
+            self._live_found_event.clear()
+            log.info("session %s: live %s ended, watching for the next one",
+                     self.user_id, old_live or "?")
+            try:
+                db.log_activity(self.user_id, "live_ended", f"live {old_live}" if old_live else "live encerrada")
+            except Exception:
+                pass
+            ws = self._ws
+            self._ws = None
+            if ws is not None:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+
+    _on_live_ended = on_live_ended  # backwards compatibility
+
     async def _heartbeat(self, ws) -> None:
         while True:
-            await ws.send(heartbeat_message(self.livestream_id))
+            if self.livestream_id:
+                try:
+                    await ws.send(heartbeat_message(self.livestream_id))
+                except Exception:
+                    break
             await asyncio.sleep(self._heartbeat_seconds)
 
     async def _on_frame(self, raw) -> None:
+        if self._finalized or not self.is_active:
+            return
         try:
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8", errors="replace")
@@ -348,23 +638,9 @@ class BotSession:
             elif kind == "livestream_gift_sent":
                 self._on_gift(data)
             elif kind == "livestream_ended":
-                await self._on_live_ended()
+                await self.on_live_ended()
         except Exception:  # noqa: BLE001 - one bad frame must not kill the loop
             log.exception("could not handle frame")
-
-    async def _on_live_ended(self) -> None:
-        if not self.streamer_id:
-            # We don't know who the streamer is (e.g. the session was started
-            # straight from a livestream_id, not resolved from her profile), so
-            # there's nothing to poll for. Fall back to the old behaviour.
-            self._spawn(self.stop(reason="A live foi encerrada"))
-            return
-        self.livestream_id = None  # makes _ws_loop switch into "wait for the next live"
-        if self._ws is not None:
-            try:
-                await self._ws.close()
-            except Exception:  # noqa: BLE001
-                pass
 
     # ---- chat handling -----------------------------------------------------
     def _on_chat(self, data: dict) -> None:
@@ -459,6 +735,8 @@ class BotSession:
                 self.last_error = (
                     "O SuperLive recusou a ação (403). O robô precisa ser moderador desta live."
                 )
+            else:
+                self._spawn(self._handle_live_error_or_change(exc))
         except Exception as exc:  # noqa: BLE001 - never let the worker die silently
             log.exception("unexpected error while moderating")
             ok, detail = False, str(exc)
@@ -489,6 +767,7 @@ class BotSession:
                 index += 1
                 await self.client.send_text(self.livestream_id, text)
                 self.messages_sent += 1
+                self.last_error = None
             except asyncio.CancelledError:
                 raise
             except SuperLiveError as exc:
@@ -496,6 +775,7 @@ class BotSession:
                     self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
                     return
                 self.last_error = f"Mensagem automática não enviada: {exc.message}"
+                await self._handle_live_error_or_change(exc)
             except Exception:  # noqa: BLE001
                 log.exception("auto message loop error")
                 await asyncio.sleep(MIN_INTERVAL_SECONDS)
@@ -623,25 +903,59 @@ class WatchManager:
                 self._tasks.pop(user_id, None)
                 return
 
+            client = SuperLiveClient(robot["token"], robot["device_id"])
+            try:
+                result = await client.find_live_by_shared_id(watch["shared_id"])
+            except SuperLiveError:
+                result = None
+
             session = self._sessions.get(user_id)
-            if session is None or not session.is_active:
-                client = SuperLiveClient(robot["token"], robot["device_id"])
-                try:
-                    result = await client.find_live_by_shared_id(watch["shared_id"])
-                except SuperLiveError:
-                    result = None
-                if result and result.get("live") and result.get("livestream_id"):
-                    try:
-                        await self._sessions.start(
-                            user_id, client, robot["sl_user_id"], str(result["livestream_id"]),
-                            ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None,
-                        )
-                        log.info("session %s: auto-started on the favourited streamer's live %s",
-                                 user_id, result["livestream_id"])
-                        db.log_activity(
-                            user_id, "session_auto_started",
-                            f'live {result["livestream_id"]} ({watch.get("nickname") or watch["shared_id"]})',
-                        )
-                    except (RuntimeError, SuperLiveError):
-                        pass  # lost a race with a manual start, or a transient error; retry next cycle
+            is_live = bool(result and result.get("live") and result.get("livestream_id"))
+            current_live_id = str(result["livestream_id"]) if is_live else None
+
+            if is_live and current_live_id:
+                if session is None or not session.is_active:
+                    # If the session was stopped on this specific live, wait for a new live before auto-starting
+                    if session is not None and session.state == "stopped" and session.livestream_id == current_live_id:
+                        pass
+                    else:
+                        try:
+                            await self._sessions.start(
+                                user_id, client, robot["sl_user_id"], current_live_id,
+                                ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None,
+                            )
+                            try:
+                                conn = db.connect()
+                                try:
+                                    conn.execute(
+                                        "UPDATE robot_accounts SET last_livestream_id = ? WHERE user_id = ?",
+                                        (current_live_id, user_id),
+                                    )
+                                    conn.commit()
+                                finally:
+                                    conn.close()
+                            except Exception:
+                                pass
+                            log.info("session %s: auto-started on the favourited streamer's live %s",
+                                     user_id, current_live_id)
+                            db.log_activity(
+                                user_id, "session_auto_started",
+                                f'live {current_live_id} ({watch.get("nickname") or watch["shared_id"]})',
+                            )
+                        except (RuntimeError, SuperLiveError):
+                            pass  # lost a race with a manual start, or a transient error; retry next cycle
+                elif session.state == "waiting_for_live":
+                    if current_live_id != session._last_ended_livestream_id:
+                        log.info("session %s: watch found streamer live %s, switching", user_id, current_live_id)
+                        await session.switch_livestream(current_live_id)
+                elif session.state == "running":
+                    if session.livestream_id != current_live_id:
+                        log.info("session %s: watch detected streamer switched to new live %s (was %s)",
+                                 user_id, current_live_id, session.livestream_id)
+                        await session.switch_livestream(current_live_id)
+            else:
+                if result is not None and session is not None and session.state == "running":
+                    log.info("session %s: watch detected streamer is offline, live ended", user_id)
+                    await session.on_live_ended()
+
             await asyncio.sleep(WATCH_POLL_INTERVAL_SECONDS)

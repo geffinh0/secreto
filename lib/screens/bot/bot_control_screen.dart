@@ -645,8 +645,14 @@ class _LiveControlCardState extends State<_LiveControlCard> {
     // own (the streamer ended one live and started another) - keep the field
     // in sync so it always shows what the robot is actually moderating.
     final liveId = widget.bot.session.livestreamId;
-    if (widget.bot.session.running &&
+    final isWaiting = widget.bot.session.state == 'waiting_for_live';
+    if (isWaiting) {
+      if (widget.streamIdController.text.isNotEmpty) {
+        widget.streamIdController.clear();
+      }
+    } else if (widget.bot.session.running &&
         liveId != null &&
+        liveId.isNotEmpty &&
         liveId != widget.streamIdController.text) {
       widget.streamIdController.text = liveId;
     }
@@ -918,12 +924,18 @@ class _LiveControlCardState extends State<_LiveControlCard> {
 
           TextField(
             controller: widget.streamIdController,
-            enabled: !running && !bot.isBusy,
-            decoration: const InputDecoration(
-              labelText: 'ID da Live (livestream_id)',
-              prefixIcon: Icon(Icons.tag_rounded),
-              helperText: 'Opcional se favoritada; necessário para início manual avulso',
-              helperStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+            enabled: !running && !bot.isBusy && session.state != 'waiting_for_live',
+            decoration: InputDecoration(
+              labelText: session.state == 'waiting_for_live'
+                  ? 'Aguardando próxima live...'
+                  : 'ID da Live (livestream_id)',
+              prefixIcon: Icon(session.state == 'waiting_for_live'
+                  ? Icons.hourglass_top_rounded
+                  : Icons.tag_rounded),
+              helperText: session.state == 'waiting_for_live'
+                  ? 'A live anterior encerrou. O ID será preenchido automaticamente assim que a streamer abrir uma nova transmissão.'
+                  : 'Opcional se favoritada; necessário para início manual avulso',
+              helperStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
             ),
           ),
           const SizedBox(height: 16),
@@ -1098,21 +1110,23 @@ class _FavoriteStreamerCard extends StatelessWidget {
     final Color badgeColor;
     final IconData badgeIcon;
 
+    final isWaiting = sessionState == 'waiting_for_live';
+
     if (!watch.active) {
       badgeLabel = 'Desativada';
       statusDescription = 'A moderação automática está pausada para esta streamer.';
       badgeColor = AppTheme.textMuted;
       badgeIcon = Icons.pause_circle_outline_rounded;
+    } else if (isWaiting) {
+      badgeLabel = 'Aguardando live';
+      statusDescription = 'A transmissão anterior encerrou. O robô continua vigilante para a próxima live.';
+      badgeColor = AppTheme.warning;
+      badgeIcon = Icons.hourglass_top_rounded;
     } else if (running) {
       badgeLabel = 'Moderando ao vivo';
       statusDescription = 'Conectado à transmissão agora. Aplicando regras de moderação em tempo real.';
       badgeColor = AppTheme.success;
       badgeIcon = Icons.shield_rounded;
-    } else if (sessionState == 'waiting_for_live') {
-      badgeLabel = 'Aguardando live';
-      statusDescription = 'A transmissão anterior encerrou. O robô continua vigilante para a próxima live.';
-      badgeColor = AppTheme.warning;
-      badgeIcon = Icons.hourglass_top_rounded;
     } else {
       badgeLabel = 'Sentinela armada';
       statusDescription = 'Moderação pré-ativada. O robô monitora o perfil e começará a moderar sozinho assim que ela iniciar a live.';
@@ -1127,9 +1141,11 @@ class _FavoriteStreamerCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: watch.active
-              ? (running
-                  ? AppTheme.success.withValues(alpha: 0.45)
-                  : AppTheme.primary.withValues(alpha: 0.35))
+              ? (isWaiting
+                  ? AppTheme.warning.withValues(alpha: 0.45)
+                  : running
+                      ? AppTheme.success.withValues(alpha: 0.45)
+                      : AppTheme.primary.withValues(alpha: 0.35))
               : AppTheme.border,
         ),
       ),
