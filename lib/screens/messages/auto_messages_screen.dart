@@ -241,7 +241,10 @@ class _SettingsCardState extends State<_SettingsCard> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     SizedBox(
                       width: 120,
@@ -273,17 +276,13 @@ class _SettingsCardState extends State<_SettingsCard> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
                     // Quick presets
                     ...[30, 60, 120, 300].map(
-                      (v) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _PresetChip(
-                          label: v >= 60 ? '${v ~/ 60}min' : '${v}s',
-                          isSelected: _intervalController.text == v.toString(),
-                          onTap: () => setState(
-                              () => _intervalController.text = v.toString()),
-                        ),
+                      (v) => _PresetChip(
+                        label: v >= 60 ? '${v ~/ 60}min' : '${v}s',
+                        isSelected: _intervalController.text == v.toString(),
+                        onTap: () => setState(
+                            () => _intervalController.text = v.toString()),
                       ),
                     ),
                   ],
