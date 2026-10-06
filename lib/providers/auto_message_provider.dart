@@ -112,8 +112,13 @@ class AutoMessageProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> saveSettings(BotSettings settings) async {
-    final result = await _api.put('/settings/${settings.userId}', settings.toJson());
+  /// Sends only the fields in [changes] (e.g. `{'diamond_immunity_enabled': true}`)
+  /// - never the whole settings object. Two of these firing close together (flip a
+  /// switch, then immediately edit a field it reveals) must not let the slower one
+  /// clobber the other's field with a stale snapshot; the backend already applies
+  /// each request as a partial patch, so the fix is to actually send partial bodies.
+  Future<bool> saveSettings(int userId, Map<String, dynamic> changes) async {
+    final result = await _api.put('/settings/$userId', changes);
     if (result['success'] == true) {
       _settings = BotSettings.fromJson(result['data']);
       notifyListeners();
@@ -126,9 +131,7 @@ class AutoMessageProvider extends ChangeNotifier {
 
   Future<bool> toggleAutoMessages(int userId) async {
     final current = _settings ?? BotSettings(userId: userId);
-    return saveSettings(
-      current.copyWith(autoMessagesEnabled: !current.autoMessagesEnabled),
-    );
+    return saveSettings(userId, {'auto_messages_enabled': !current.autoMessagesEnabled});
   }
 
   void _reorderAfterDelete() {

@@ -524,13 +524,11 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
     super.dispose();
   }
 
-  Future<void> _save(
-      BuildContext context, BotSettings Function(BotSettings) change) async {
+  Future<void> _save(BuildContext context, Map<String, dynamic> changes) async {
     final user = context.read<AuthProvider>().user;
     final provider = context.read<AutoMessageProvider>();
     if (user == null) return;
-    final current = provider.settings ?? BotSettings(userId: user.id);
-    final ok = await provider.saveSettings(change(current));
+    final ok = await provider.saveSettings(user.id, changes);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -549,7 +547,7 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
     _thresholdController.text = '$value';
     if (value == _lastKnownThreshold) return;
     _lastKnownThreshold = value;
-    _save(context, (s) => s.copyWith(diamondImmunityThreshold: value));
+    _save(context, {'diamond_immunity_threshold': value});
   }
 
   @override
@@ -576,8 +574,7 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
         children: [
           SwitchListTile(
             value: enabled,
-            onChanged: (v) =>
-                _save(context, (s) => s.copyWith(moderationEnabled: v)),
+            onChanged: (v) => _save(context, {'moderation_enabled': v}),
             title: const Text('Moderação automática',
                 style: TextStyle(
                     color: AppTheme.textPrimary,
@@ -590,8 +587,7 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
           ),
           SwitchListTile(
             value: permanent,
-            onChanged: (v) =>
-                _save(context, (s) => s.copyWith(kickPermanent: v)),
+            onChanged: (v) => _save(context, {'kick_permanent': v}),
             title: const Text('Banimento permanente',
                 style: TextStyle(
                     color: AppTheme.textPrimary,
@@ -605,8 +601,7 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
           ),
           SwitchListTile(
             value: diamondImmunity,
-            onChanged: (v) =>
-                _save(context, (s) => s.copyWith(diamondImmunityEnabled: v)),
+            onChanged: (v) => _save(context, {'diamond_immunity_enabled': v}),
             title: const Text('Imunidade por diamantes',
                 style: TextStyle(
                     color: AppTheme.textPrimary,

@@ -170,15 +170,10 @@ class _SettingsCardState extends State<_SettingsCard> {
 
     setState(() => _isSaving = true);
     final provider = context.read<AutoMessageProvider>();
-    final settings = BotSettings(
-      id: widget.settings?.id,
-      userId: widget.userId,
-      autoMessagesEnabled: _autoEnabled,
-      messageIntervalSeconds: interval,
-      moderationEnabled: widget.settings?.moderationEnabled ?? true,
-      kickPermanent: widget.settings?.kickPermanent ?? false,
-    );
-    final ok = await provider.saveSettings(settings);
+    final ok = await provider.saveSettings(widget.userId, {
+      'auto_messages_enabled': _autoEnabled,
+      'message_interval_seconds': interval,
+    });
     if (!mounted) return;
     setState(() => _isSaving = false);
 
