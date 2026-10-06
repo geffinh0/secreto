@@ -277,6 +277,14 @@ class BotSettingsUpdate(BaseModel):
     diamond_immunity_enabled: Optional[bool] = None
     diamond_immunity_threshold: Optional[int] = Field(
         default=None, ge=db.MIN_DIAMOND_IMMUNITY_THRESHOLD, le=1_000_000)
+    ai_name_filter_mode: Optional[str] = None
+
+    @field_validator("ai_name_filter_mode")
+    @classmethod
+    def _ai_name_filter_mode(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in db.AI_NAME_FILTER_MODES:
+            raise ValueError(f"deve ser um de: {', '.join(db.AI_NAME_FILTER_MODES)}")
+        return v
 
 
 class RobotConnectRequest(BaseModel):
@@ -613,6 +621,9 @@ def update_settings(user_id: int, req: BotSettingsUpdate,
     if sent.get("diamond_immunity_threshold") is not None:
         updates.append("diamond_immunity_threshold = ?")
         values.append(sent["diamond_immunity_threshold"])
+    if sent.get("ai_name_filter_mode") is not None:
+        updates.append("ai_name_filter_mode = ?")
+        values.append(sent["ai_name_filter_mode"])
     if updates:
         values.append(user_id)
         conn.execute(f"UPDATE bot_settings SET {', '.join(updates)} WHERE user_id = ?", values)

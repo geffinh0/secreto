@@ -556,6 +556,7 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
     final enabled = settings?.moderationEnabled ?? true;
     final permanent = settings?.kickPermanent ?? false;
     final diamondImmunity = settings?.diamondImmunityEnabled ?? false;
+    final aiNameFilterMode = settings?.aiNameFilterMode ?? 'off';
     final threshold =
         settings?.diamondImmunityThreshold ?? BotSettings.minDiamondImmunityThreshold;
     if (threshold != _lastKnownThreshold && !_thresholdFocus.hasFocus) {
@@ -647,6 +648,68 @@ class _ModerationOptionsCardState extends State<_ModerationOptionsCard> {
                 ],
               ),
             ),
+          const Divider(color: AppTheme.border, height: 1),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.smart_toy_outlined, color: AppTheme.accent, size: 18),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Filtro de nomes por IA',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Ao entrar na live, a IA avalia o nome de cada espectadora e age '
+              'sobre quem parecer ter nome feminino - e sempre sobre quem usar '
+              'só a letra "w" como nome, sem precisar da IA. Comece por '
+              '"Silenciar" pra calibrar antes de banir.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4),
+            ),
+          ),
+          SwitchListTile(
+            value: aiNameFilterMode == 'mute',
+            onChanged: (v) => _save(
+              context,
+              {'ai_name_filter_mode': v ? 'mute' : 'off'},
+            ),
+            title: const Text('Silenciar nomes femininos',
+                style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+              'Punição leve - bom pra testar se o filtro está acertando antes de banir.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          ),
+          SwitchListTile(
+            value: aiNameFilterMode == 'ban',
+            onChanged: (v) => _save(
+              context,
+              {'ai_name_filter_mode': v ? 'ban' : 'off'},
+            ),
+            title: const Text('Banir nomes femininos',
+                style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+              'Remove direto, sem passar por silenciar primeiro.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          ),
         ],
       ),
     );
