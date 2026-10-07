@@ -267,7 +267,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildStatsLink(BuildContext context) {
     return InkWell(
-      onTap: () => context.push('/stats'),
+      // go(), not push(): /stats is declared as a sibling route inside the
+      // same ShellRoute as Dashboard - pushing it stacks a second instance
+      // of the whole shell (sidebar/top bar) on top of the first instead of
+      // swapping the child route in place, leaving both screens' content
+      // visibly overlapping. go() replaces the match cleanly; the back
+      // arrow in the top bar falls back to go('/dashboard') for the same
+      // reason (see MainShell._buildTopBar).
+      onTap: () => context.go('/stats'),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(18),
