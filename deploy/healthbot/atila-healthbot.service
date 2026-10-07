@@ -1,0 +1,23 @@
+# Bot do Telegram que avisa quando algo da stack cai (containers, tunel do
+# notebook, proxy SOCKS5, os dois dominios) e responde /status sob demanda.
+#
+# Instalar (como root):
+#   cp atila-healthbot.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now atila-healthbot
+
+[Unit]
+Description=Bot do Telegram com o status do Atila's Client
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+EnvironmentFile=/home/deploy/.healthbot.env
+ExecStart=/home/deploy/healthbot-venv/bin/python /home/deploy/atilas-client/deploy/healthbot/healthbot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

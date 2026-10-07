@@ -169,3 +169,45 @@ systemctl daemon-reload
 systemctl enable --now atila-notebook-proxy
 systemctl status atila-notebook-proxy
 ```
+
+## 9. Bot do Telegram com o status de tudo
+
+Fica de olho nos containers, no túnel do notebook, no proxy SOCKS5 e nos dois
+domínios — avisa sozinho quando algo muda de estado (só quando muda, pra não
+virar spam) e responde `/status` na hora quando perguntado. Script em
+`deploy/healthbot/healthbot.py`.
+
+Token e chat_id ficam só num arquivo de ambiente na VPS, fora do git -
+nenhum dos dois precisa (nem deve) ser colado no chat.
+
+```bash
+# 1. no Telegram: fala com @BotFather, /newbot, guarda o token
+# 2. manda qualquer mensagem pro bot que acabou de criar
+
+# 3. como deploy, na VPS - cria o venv e instala a única dependência
+python3 -m venv ~/healthbot-venv
+~/healthbot-venv/bin/pip install --quiet requests
+
+# 4. cola o token recebido do BotFather (só ele por enquanto)
+cat > ~/.healthbot.env <<'EOF'
+TELEGRAM_BOT_TOKEN=COLE_O_TOKEN_AQUI
+TELEGRAM_CHAT_ID=
+EOF
+
+# 5. descobre o chat_id a partir da mensagem que você mandou no passo 2
+set -a; source ~/.healthbot.env; set +a
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" | python3 -m json.tool
+# procura "chat": {"id": ...} no resultado e completa TELEGRAM_CHAT_ID em ~/.healthbot.env
+```
+
+Depois, como root, instala o serviço:
+
+```bash
+cp /home/deploy/atilas-client/deploy/healthbot/atila-healthbot.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now atila-healthbot
+systemctl status atila-healthbot
+```
+
+Manda `/status` pro bot no Telegram pra testar - deve responder na hora com
+a lista de tudo. Se algo cair depois, ele avisa sozinho.
