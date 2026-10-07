@@ -339,8 +339,11 @@ class BotSession:
                     )
                     return
                 self.ws_error = f"WebSocket recusado (HTTP {status})"
+                log.warning("session %s: ws rejected (HTTP %s)", self.user_id, status)
             except Exception as exc:  # noqa: BLE001
                 self.ws_error = f"WebSocket: {exc}"
+                log.warning("session %s: ws dropped after %.1fs - %s: %s", self.user_id,
+                            time.monotonic() - connected_at, type(exc).__name__, exc)
             finally:
                 self._ws = None
                 self.ws_state = "disconnected"
