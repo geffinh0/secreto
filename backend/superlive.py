@@ -26,12 +26,18 @@ USER_AGENT = os.getenv(
 )
 HTTP_TIMEOUT = float(os.getenv("SUPERLIVE_HTTP_TIMEOUT", "20"))
 
-# Routes every call to the SuperLive API through a SOCKS5 proxy (e.g.
-# "socks5h://172.28.0.1:1080") instead of connecting directly from this host.
-# Empty/unset = connect directly, same as before. See DEPLOY.md for why this
-# exists: datacenter IPs get flagged as "VPN" by SuperLive's own anti-fraud
-# check on some endpoints.
-PROXY_URL = os.getenv("SUPERLIVE_PROXY_URL", "").strip()
+def get_proxy_url() -> str:
+    """Return the proxy URL configured via SUPERLIVE_PROXY_URL or environment variables."""
+    return (
+        os.getenv("SUPERLIVE_PROXY_URL")
+        or os.getenv("HTTPS_PROXY")
+        or os.getenv("HTTP_PROXY")
+        or os.getenv("ALL_PROXY")
+        or ""
+    ).strip()
+
+
+PROXY_URL = get_proxy_url()
 
 log = logging.getLogger("super_moderator.superlive")
 
@@ -108,7 +114,8 @@ class SuperLiveClient:
         return headers
 
     def _post_sync(self, path: str, body: dict, auth: bool) -> dict:
-        proxies = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else None
+        proxy = get_proxy_url()
+        proxies = {"http": proxy, "https": proxy} if proxy else None
         try:
             resp = requests.post(
                 self.base_url + path.lstrip("/"),

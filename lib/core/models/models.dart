@@ -551,6 +551,11 @@ class ActivityEntry {
         'robot_disconnected' => 'Robô desconectado',
         'session_started' => 'Moderação iniciada',
         'session_stopped' => 'Moderação parada',
+        'session_auto_started' => 'Moderação iniciada automaticamente',
+        'favorite_live_connected' => 'Streamer ao vivo & Robô conectado',
+        'live_summary' => 'Resumo da Transmissão',
+        'live_ended' => 'Live encerrada',
+        'session_switched_live' => 'Live alterada',
         _ => action,
       };
 }

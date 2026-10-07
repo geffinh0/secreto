@@ -23,40 +23,53 @@ from websockets.exceptions import InvalidStatus
 
 import db
 from superlive import (
-    PROXY_URL, USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
-    heartbeat_message, leave_message,
+    USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
+    get_proxy_url, heartbeat_message, leave_message,
 )
-
-if PROXY_URL:
-    from python_socks import ProxyType
-    from python_socks.async_.asyncio import Proxy
-
-    _proxy_parts = urlsplit(PROXY_URL)
 
 
 async def _ws_connect(url: str, **kwargs):
-    """Same as ``websockets.connect(url, **kwargs)``, but through ``PROXY_URL``
-    (SOCKS5) when one is set - see superlive.PROXY_URL for why. The WebSocket
-    handshake and TLS still happen in ``websockets`` itself; the proxy only
-    supplies the raw TCP connection to the SuperLive host.
-
-    Built via ``Proxy.create(...)`` rather than ``Proxy.from_url(PROXY_URL)``:
-    python_socks's ``from_url`` rejects the ``socks5h://`` scheme outright
-    (``ValueError: Invalid scheme component``), even though that's the exact
-    URL ``requests``/PySocks expect on the HTTP side (superlive.py) for the
-    same proxy - the "h" there just means "resolve DNS through the proxy",
-    which ``rdns=True`` below asks for directly instead.
+    """Same as ``websockets.connect(url, **kwargs)``, but through proxy
+    (SOCKS5, SOCKS4 or HTTP) when configured - see superlive.get_proxy_url.
+    Handles TLS/HTTPS properly for wss:// endpoints.
     """
-    if not PROXY_URL:
+    proxy_url = get_proxy_url()
+    if not proxy_url:
         return websockets.connect(url, **kwargs)
+
+    try:
+        from python_socks import ProxyType
+        from python_socks.async_.asyncio import Proxy
+    except ImportError:
+        log.warning("python_socks not installed, connecting directly to WebSocket")
+        return websockets.connect(url, **kwargs)
+
+    proxy_parts = urlsplit(proxy_url)
+    scheme = (proxy_parts.scheme or "").lower()
+    if scheme in ("http", "https"):
+        ptype = ProxyType.HTTP
+    elif scheme in ("socks4", "socks4a"):
+        ptype = ProxyType.SOCKS4
+    else:
+        ptype = ProxyType.SOCKS5
+
+    default_port = 8080 if ptype == ProxyType.HTTP else 1080
+    proxy_port = proxy_parts.port or default_port
+
     parts = urlsplit(url)
-    port = parts.port or (443 if parts.scheme == "wss" else 80)
+    dest_port = parts.port or (443 if parts.scheme == "wss" else 80)
+
     proxy = Proxy.create(
-        proxy_type=ProxyType.SOCKS5, host=_proxy_parts.hostname, port=_proxy_parts.port,
+        proxy_type=ptype,
+        host=proxy_parts.hostname,
+        port=proxy_port,
+        username=proxy_parts.username,
+        password=proxy_parts.password,
         rdns=True,
     )
-    sock = await proxy.connect(dest_host=parts.hostname, dest_port=port)
+    sock = await proxy.connect(dest_host=parts.hostname, dest_port=dest_port)
     return websockets.connect(url, sock=sock, server_hostname=parts.hostname, **kwargs)
+
 
 log = logging.getLogger("super_moderator.engine")
 
@@ -73,7 +86,17 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-# ─── Keyword matching ──────────────────────────────────────────────────────────
+def is_banned_username(name: str) -> bool:
+    """Return True if the username is strictly 'w' (case-insensitive,
+    ignoring spaces, zero-width spaces and invisible characters).
+    """
+    if not name:
+        return False
+    clean = re.sub(r"[\s\u200b-\u200d\ufeff]+", "", str(name)).casefold()
+    return clean == "w"
+
+
+# ─── Keyword matching with anti-evasion ───────────────────────────────────────
 def normalize(text: str) -> str:
     """Lowercase, strip accents, collapse whitespace ("Zap  ZÁP" -> "zap zap")."""
     text = unicodedata.normalize("NFKD", text or "")
@@ -82,31 +105,66 @@ def normalize(text: str) -> str:
 
 
 class RuleMatcher:
-    """Whole-word / whole-phrase matching on normalized text.
+    """Whole-word / whole-phrase matching on normalized text with anti-evasion.
 
-    A trailing ``*`` turns a keyword into a prefix match (``puta*`` also catches
-    ``putaria``). Kick rules win over mute rules when both match.
+    Detects common evasion patterns:
+      - Connected words without spaces (e.g. 'passazap' for rule 'passa zap');
+      - Connected words with separators ('passa_zap', 'passa-zap', 'passa.zap');
+      - Intra-word punctuation / separators ('z.a.p', 'z_a_p', 'p.u.t.a');
+      - Trailing '*' turns a keyword into a prefix match ('puta*' catches 'putaria').
+    Kick rules win over mute rules when both match.
     """
 
     def __init__(self, rules):
         compiled = []
         for rule in rules:
-            keyword = normalize(rule["keyword"])
+            raw_keyword = rule["keyword"]
+            keyword = normalize(raw_keyword)
             prefix = keyword.endswith("*")
             keyword = keyword.rstrip("*").strip()
             if not keyword:
                 continue
-            pattern = r"(?<!\w)" + re.escape(keyword) + ("" if prefix else r"(?!\w)")
-            compiled.append((rule["action"], rule["keyword"], re.compile(pattern)))
+
+            words = keyword.split()
+            word_patterns = []
+            for w in words:
+                if len(w) >= 3:
+                    # Allow non-alphanumeric separators between letters (e.g. z.a.p, z_a_p)
+                    wp = r"[\W_]*".join(re.escape(c) for c in w)
+                else:
+                    wp = re.escape(w)
+                word_patterns.append(wp)
+
+            # Between words: allow any whitespace/punctuation OR zero characters (connected words)
+            body = r"[\s\W_]*".join(word_patterns)
+            # Boundary on boundaries: must not be adjacent to standard letters or digits
+            pattern_str = r"(?<![a-zA-Z0-9])" + body + ("" if prefix else r"(?![a-zA-Z0-9])")
+            regex = re.compile(pattern_str)
+
+            condensed = re.sub(r"[\s\W_]+", "", keyword)
+            compiled.append((rule["action"], rule["keyword"], regex, condensed, prefix, " " in keyword))
+
         compiled.sort(key=lambda item: -ACTION_LEVEL.get(item[0], 0))
         self._rules = compiled
 
     def match(self, text: str):
         """Return ``(action, keyword)`` of the strongest matching rule, or None."""
         haystack = normalize(text)
-        for action, keyword, pattern in self._rules:
+        condensed_haystack = re.sub(r"[\s\W_]+", "", haystack)
+
+        for action, keyword, pattern, condensed_kw, prefix, is_multiword in self._rules:
+            # 1. Regex check (handles connected words and symbols between letters)
             if pattern.search(haystack):
                 return action, keyword
+            # 2. Condensed anti-evasion fallback for multiword expressions or long keywords
+            if is_multiword and len(condensed_kw) >= 4 and len(condensed_haystack) >= len(condensed_kw):
+                if prefix:
+                    if condensed_haystack.find(condensed_kw) >= 0:
+                        return action, keyword
+                else:
+                    if condensed_kw in condensed_haystack:
+                        return action, keyword
+
         return None
 
 
@@ -152,7 +210,10 @@ class BotSession:
         self.streamer_id: Optional[str] = None
         self.streamer_shared_id: Optional[str] = None
         self.watch_shared_id: Optional[str] = None
+        self.watch_nickname: Optional[str] = None
+        self.is_favorite_streamer: bool = False
         self._last_ended_livestream_id: Optional[str] = None
+        self._connected_livestream_id: Optional[str] = None
         self._live_found_event = asyncio.Event()
 
         self.messages_sent = 0
@@ -161,6 +222,14 @@ class BotSession:
         self.actions_failed = 0
         self.recent_chat = deque(maxlen=60)
         self.recent_actions = deque(maxlen=60)
+        self.alerts = deque(maxlen=30)
+        self.last_live_summary: Optional[dict] = None
+
+        self._live_start_time: float = time.monotonic()
+        self._live_chat_seen: int = 0
+        self._live_messages_sent: int = 0
+        self._live_mutes_count: int = 0
+        self._live_kicks_count: int = 0
 
         self._ws = None
         self._ws_url = None
@@ -196,8 +265,12 @@ class BotSession:
         conn = db.connect()
         try:
             watch = db.get_watch(conn, self.user_id)
-            if watch and watch.get("shared_id"):
+            if watch and watch.get("active") and watch.get("shared_id"):
                 self.watch_shared_id = str(watch["shared_id"])
+                self.watch_nickname = watch.get("nickname") or watch["shared_id"]
+                if (self.streamer_shared_id and str(self.streamer_shared_id) == str(watch["shared_id"])) or \
+                   (self.watch_shared_id == str(watch["shared_id"])):
+                    self.is_favorite_streamer = True
         finally:
             conn.close()
 
@@ -222,11 +295,74 @@ class BotSession:
             asyncio.create_task(self._live_monitor_loop(), name=f"monitor-{self.user_id}"),
         ]
 
+    def _emit_live_summary(self, ended_live_id: str) -> Optional[dict]:
+        """Emit live broadcast summary when a livestream ends."""
+        if not ended_live_id:
+            return None
+
+        duration_secs = int(max(0, time.monotonic() - (self._live_start_time or time.monotonic())))
+        mins, secs = divmod(duration_secs, 60)
+        hours, mins = divmod(mins, 60)
+        if hours > 0:
+            dur_str = f"{hours}h {mins:02d}m {secs:02d}s"
+        elif mins > 0:
+            dur_str = f"{mins}m {secs:02d}s"
+        else:
+            dur_str = f"{secs}s"
+
+        total_diamonds = sum(self._diamonds.values()) if hasattr(self, "_diamonds") else 0
+        mutes = self._live_mutes_count
+        kicks = self._live_kicks_count
+        total_actions = mutes + kicks
+        chat_count = self._live_chat_seen
+        msgs_sent = self._live_messages_sent
+
+        summary_text = (
+            f"Resumo da Live {ended_live_id}: Duração: {dur_str} | "
+            f"Chat monitorado: {chat_count} msgs | "
+            f"Moderações: {total_actions} ({mutes} silenciamentos, {kicks} expulsões) | "
+            f"Mensagens automáticas: {msgs_sent} | "
+            f"Diamantes arrecadados: {total_diamonds}"
+        )
+
+        summary_data = {
+            "livestream_id": ended_live_id,
+            "duration_seconds": duration_secs,
+            "duration_formatted": dur_str,
+            "chat_seen": chat_count,
+            "mutes": mutes,
+            "kicks": kicks,
+            "actions_ok": total_actions,
+            "actions_failed": self.actions_failed,
+            "messages_sent": msgs_sent,
+            "diamonds": total_diamonds,
+            "summary_text": summary_text,
+            "ts": now_iso(),
+        }
+
+        self.last_live_summary = summary_data
+        self.alerts.append({
+            "type": "live_summary",
+            "message": summary_text,
+            "data": summary_data,
+            "ts": now_iso(),
+        })
+
+        log.info("session %s: [RESUMO DE LIVE] %s", self.user_id, summary_text)
+        try:
+            db.log_activity(self.user_id, "live_summary", summary_text)
+        except Exception:
+            pass
+
+        return summary_data
+
     async def stop(self, reason: str = "Parado pelo usuário",
                    final_state: str = "stopped") -> None:
         async with self._stop_lock:
             if self._finalized:
                 return
+            if self.livestream_id and self.state in ("running", "starting"):
+                self._emit_live_summary(self.livestream_id)
             self.state = "stopping"
             ws = self._ws
             self._ws = None
@@ -297,6 +433,33 @@ class BotSession:
                     self._ws = ws
                     self.ws_state = "connected"
                     self.ws_error = None
+
+                    if self._connected_livestream_id != self.livestream_id:
+                        self._connected_livestream_id = self.livestream_id
+                        self._live_start_time = time.monotonic()
+                        self._live_chat_seen = 0
+                        self._live_messages_sent = 0
+                        self._live_mutes_count = 0
+                        self._live_kicks_count = 0
+
+                        if self.is_favorite_streamer:
+                            fav_name = self.watch_nickname or self.watch_shared_id or "Streamer favorita"
+                            alert_msg = (
+                                f"A streamer favorita {fav_name} entrou ao vivo e o robô "
+                                f"conectou com sucesso na live {self.livestream_id}!"
+                            )
+                            log.info("session %s: [ALERTA] %s", self.user_id, alert_msg)
+                            try:
+                                db.log_activity(self.user_id, "favorite_live_connected", alert_msg)
+                            except Exception:
+                                pass
+                            self.alerts.append({
+                                "type": "favorite_live_connected",
+                                "message": alert_msg,
+                                "livestream_id": self.livestream_id,
+                                "ts": now_iso(),
+                            })
+
                     await ws.send(enter_message(self.livestream_id))
                     heartbeat = asyncio.create_task(self._heartbeat(ws))
                     try:
@@ -541,6 +704,9 @@ class BotSession:
             log.info("session %s: switching livestream from %s to %s",
                      self.user_id, old_livestream_id or "?", new_livestream_id)
 
+            if old_livestream_id:
+                self._emit_live_summary(old_livestream_id)
+
             self._last_ended_livestream_id = old_livestream_id
             self.livestream_id = new_livestream_id
             self.state = "running"
@@ -606,6 +772,8 @@ class BotSession:
                 return
 
             old_live = self.livestream_id
+            if old_live:
+                self._emit_live_summary(old_live)
             self._last_ended_livestream_id = old_live
             self.livestream_id = None
             self.state = "waiting_for_live"
@@ -655,6 +823,27 @@ class BotSession:
                 self._on_chat(data)
             elif kind == "livestream_gift_sent":
                 self._on_gift(data)
+            elif kind in ("livestream_user_joined", "livestream_joined", "user_joined", "livestream_user_enter"):
+                u_id = str(data.get("user_id") or data.get("id") or "")
+                u_name = str(data.get("name") or data.get("nickname") or u_id)
+                if u_id and u_id not in (self.robot_sl_id, self.streamer_id) and is_banned_username(u_name):
+                    cfg = self._config()
+                    if cfg["settings"].get("moderation_enabled", True):
+                        if self._acted.get(u_id, 0) < ACTION_LEVEL["kick"] and (u_id, "kick") not in self._pending:
+                            dummy_entry = ChatEntry(
+                                id=str(uuid.uuid4()),
+                                user_id=u_id,
+                                name=u_name,
+                                text="[Entrou na live]",
+                                ts=now_iso(),
+                            )
+                            try:
+                                self._queue.put_nowait((dummy_entry, "kick", "Nome de usuário proibido ('w')"))
+                                self._pending.add((u_id, "kick"))
+                                log.info("session %s: usuário com nome 'w' (%s) entrou na live e foi enfileirado para expulsão",
+                                         self.user_id, u_id)
+                            except asyncio.QueueFull:
+                                pass
             elif kind == "livestream_ended":
                 await self.on_live_ended()
         except Exception:  # noqa: BLE001 - one bad frame must not kill the loop
@@ -663,17 +852,19 @@ class BotSession:
     # ---- chat handling -----------------------------------------------------
     def _on_chat(self, data: dict) -> None:
         user_id = str(data.get("user_id") or "")
+        name = str(data.get("name") or user_id)
         text = data.get("text") or ""
         if not user_id or not text:
             return
         entry = ChatEntry(
             id=str(data.get("message_id") or uuid.uuid4()),
             user_id=user_id,
-            name=str(data.get("name") or user_id),
+            name=name,
             text=text,
             ts=now_iso(),
         )
         self.chat_seen += 1
+        self._live_chat_seen += 1
         self.recent_chat.append(entry)
 
         if user_id in (self.robot_sl_id, self.streamer_id):
@@ -681,6 +872,20 @@ class BotSession:
         cfg = self._config()
         if not cfg["settings"].get("moderation_enabled", True):
             return
+
+        # Regra de expulsão: usuários cujo nome seja apenas 'w'
+        if is_banned_username(entry.name):
+            if self._acted.get(user_id, 0) < ACTION_LEVEL["kick"] and (user_id, "kick") not in self._pending:
+                try:
+                    self._queue.put_nowait((entry, "kick", "Nome de usuário proibido ('w')"))
+                    self._pending.add((user_id, "kick"))
+                    entry.action = "kick"
+                    log.info("session %s: usuário com nome 'w' (%s) enfileirado para expulsão",
+                             self.user_id, user_id)
+                except asyncio.QueueFull:
+                    log.warning("action queue full - dropping kick on %s", user_id)
+            return
+
         if cfg["settings"].get("diamond_immunity_enabled") and self._is_diamond_immune(user_id, cfg):
             return
         hit = cfg["matcher"].match(text)
@@ -743,6 +948,10 @@ class BotSession:
                 await self.client.kick(self.livestream_id, entry.user_id, permanent)
             self._acted[entry.user_id] = max(self._acted.get(entry.user_id, 0), ACTION_LEVEL[action])
             self.actions_ok += 1
+            if action == "mute":
+                self._live_mutes_count += 1
+            else:
+                self._live_kicks_count += 1
         except SuperLiveError as exc:
             ok, detail = False, exc.message
             self.actions_failed += 1
@@ -785,6 +994,7 @@ class BotSession:
                 index += 1
                 await self.client.send_text(self.livestream_id, text)
                 self.messages_sent += 1
+                self._live_messages_sent += 1
                 self.last_error = None
             except asyncio.CancelledError:
                 raise
@@ -822,6 +1032,8 @@ class BotSession:
                 "actions_ok": self.actions_ok,
                 "actions_failed": self.actions_failed,
             },
+            "alerts": list(self.alerts),
+            "last_live_summary": self.last_live_summary,
             "recent_chat": [asdict(c) for c in self.recent_chat],
             "recent_actions": [asdict(a) for a in self.recent_actions],
         }
@@ -831,6 +1043,7 @@ IDLE_SNAPSHOT = {
     "running": False, "state": "idle", "ws_state": "disconnected", "livestream_id": None,
     "started_at": None, "stop_reason": None, "last_error": None,
     "counters": {"messages_sent": 0, "chat_seen": 0, "actions_ok": 0, "actions_failed": 0},
+    "alerts": [], "last_live_summary": None,
     "recent_chat": [], "recent_actions": [],
 }
 
@@ -938,10 +1151,12 @@ class WatchManager:
                         pass
                     else:
                         try:
-                            await self._sessions.start(
+                            new_sess = await self._sessions.start(
                                 user_id, client, robot["sl_user_id"], current_live_id,
                                 ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None,
                             )
+                            new_sess.is_favorite_streamer = True
+                            new_sess.watch_nickname = watch.get("nickname") or watch["shared_id"]
                             try:
                                 conn = db.connect()
                                 try:
@@ -964,10 +1179,14 @@ class WatchManager:
                             pass  # lost a race with a manual start, or a transient error; retry next cycle
                 elif session.state == "waiting_for_live":
                     if current_live_id != session._last_ended_livestream_id:
+                        session.is_favorite_streamer = True
+                        session.watch_nickname = watch.get("nickname") or watch["shared_id"]
                         log.info("session %s: watch found streamer live %s, switching", user_id, current_live_id)
                         await session.switch_livestream(current_live_id)
                 elif session.state == "running":
                     if session.livestream_id != current_live_id:
+                        session.is_favorite_streamer = True
+                        session.watch_nickname = watch.get("nickname") or watch["shared_id"]
                         log.info("session %s: watch detected streamer switched to new live %s (was %s)",
                                  user_id, current_live_id, session.livestream_id)
                         await session.switch_livestream(current_live_id)
