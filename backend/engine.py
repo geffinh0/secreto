@@ -29,19 +29,34 @@ from superlive import (
 )
 
 if PROXY_URL:
+    from python_socks import ProxyType
     from python_socks.async_.asyncio import Proxy
+
+    _proxy_parts = urlsplit(PROXY_URL)
 
 
 async def _ws_connect(url: str, **kwargs):
     """Same as ``websockets.connect(url, **kwargs)``, but through ``PROXY_URL``
     (SOCKS5) when one is set - see superlive.PROXY_URL for why. The WebSocket
     handshake and TLS still happen in ``websockets`` itself; the proxy only
-    supplies the raw TCP connection to the SuperLive host."""
+    supplies the raw TCP connection to the SuperLive host.
+
+    Built via ``Proxy.create(...)`` rather than ``Proxy.from_url(PROXY_URL)``:
+    python_socks's ``from_url`` rejects the ``socks5h://`` scheme outright
+    (``ValueError: Invalid scheme component``), even though that's the exact
+    URL ``requests``/PySocks expect on the HTTP side (superlive.py) for the
+    same proxy - the "h" there just means "resolve DNS through the proxy",
+    which ``rdns=True`` below asks for directly instead.
+    """
     if not PROXY_URL:
         return websockets.connect(url, **kwargs)
     parts = urlsplit(url)
     port = parts.port or (443 if parts.scheme == "wss" else 80)
-    sock = await Proxy.from_url(PROXY_URL).connect(dest_host=parts.hostname, dest_port=port)
+    proxy = Proxy.create(
+        proxy_type=ProxyType.SOCKS5, host=_proxy_parts.hostname, port=_proxy_parts.port,
+        rdns=True,
+    )
+    sock = await proxy.connect(dest_host=parts.hostname, dest_port=port)
     return websockets.connect(url, sock=sock, server_hostname=parts.hostname, **kwargs)
 
 log = logging.getLogger("super_moderator.engine")
