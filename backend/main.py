@@ -869,6 +869,16 @@ def robot_status(current_user: dict = Depends(get_current_user),
     return _robot_payload(conn, current_user["id"])
 
 
+@app.get("/robot/live_status")
+def robot_live_status(conn: sqlite3.Connection = Depends(get_db)):
+    """Summary of the active stream session and recent activity for monitoring bots."""
+    watches = db.all_active_watches(conn)
+    user_id = watches[0]["user_id"] if watches else 1
+    payload = _robot_payload(conn, user_id)
+    payload["recent_activities"] = db.list_activity(conn, user_id, limit=8)
+    return payload
+
+
 @app.post("/robot/lookup_streamer")
 async def robot_lookup_streamer(
     req: RobotLookupStreamerRequest, current_user: dict = Depends(get_current_user),
