@@ -240,6 +240,11 @@ class _MainShellState extends State<MainShell> {
     final isPhone = width < 480;
     final (routeIcon, routeTitle) = _getRouteTitleInfo(context, isWide: isWide);
     final botProvider = context.watch<BotProvider>();
+    // Pages reached by pushing on top of a tab (e.g. Estatísticas from the
+    // Dashboard card) aren't one of the 5 bottom-nav destinations, so there's
+    // no tab to tap back to - show a back arrow instead of the logo there.
+    final location = GoRouterState.of(context).matchedLocation;
+    final isSubRoute = !_navItems.any((item) => location.startsWith(item.path));
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -249,7 +254,15 @@ class _MainShellState extends State<MainShell> {
       ),
       child: Row(
         children: [
-          if (!isWide) ...[
+          if (isSubRoute)
+            IconButton(
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/dashboard'),
+              icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textPrimary),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            )
+          else if (!isWide) ...[
             Container(
               width: 36,
               height: 36,
@@ -261,8 +274,8 @@ class _MainShellState extends State<MainShell> {
               padding: const EdgeInsets.all(3),
               child: const FoxIcon(size: 30, borderRadius: 7),
             ),
-            const SizedBox(width: 12),
           ],
+          if (isSubRoute || !isWide) const SizedBox(width: 12),
           Icon(routeIcon, color: AppTheme.primary, size: 20),
           const SizedBox(width: 10),
           Expanded(
@@ -332,6 +345,7 @@ class _MainShellState extends State<MainShell> {
       return (Icons.smart_toy_rounded, isWide ? 'Controle do Robô' : 'Robô');
     }
     if (location.startsWith('/settings')) return (Icons.settings_rounded, 'Configurações');
+    if (location.startsWith('/stats')) return (Icons.bar_chart_rounded, 'Estatísticas');
     return (Icons.dashboard_rounded, 'Dashboard');
   }
 

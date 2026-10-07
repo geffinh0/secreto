@@ -937,6 +937,14 @@ def list_activity(limit: int = 50, current_user: dict = Depends(get_current_user
     return db.list_activity(conn, current_user["id"], limit=max(1, min(limit, 200)))
 
 
+# ─── Stats (moderation history, aggregated from moderation_log) ─────────────
+@app.get("/stats")
+def get_stats(user_id: int, days: int = 30, current_user: dict = Depends(get_current_user),
+              conn: sqlite3.Connection = Depends(get_db)):
+    require_owner(current_user, user_id)
+    return db.get_stats(conn, user_id, days=max(1, min(days, 365)))
+
+
 # ─── Health check ────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():

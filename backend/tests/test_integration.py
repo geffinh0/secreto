@@ -814,6 +814,67 @@ class ModerationFlowTests(RobotTestBase):
             engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
 
 
+class StatsTests(RobotTestBase):
+    """GET /stats aggregates moderation_log - no separate tracking to get wrong,
+    just the SQL doing what the screen needs."""
+
+    def stats(self, days=30):
+        status, body = api("GET", f"/stats?user_id={self.uid}&days={days}", token=self.token)
+        self.assertEqual(status, 200, body)
+        return body
+
+    def test_empty_history_reports_zeroes_not_errors(self):
+        body = self.stats()
+        self.assertEqual(body["total_actions"], 0)
+        self.assertIsNone(body["success_rate"])
+        self.assertEqual(body["top_keywords"], [])
+        self.assertEqual(body["recent_lives"], [])
+
+    def test_actions_are_aggregated_by_keyword_and_live(self):
+        self.add_rule("feia", "kick")
+        self.add_rule("passa zap", "mute")
+        self.connect_robot()
+        self.start_live()
+
+        mock.chat(2, "Bia", "passa zap")
+        mock.chat(3, "Caio", "você é feia")
+        mock.chat(4, "Dani", "feia tambem")
+        wait_for(lambda: len(mock.calls_to("livestream/kick")) >= 2, 6, "kicks not sent")
+        self.settle()
+
+        body = self.stats()
+        self.assertEqual(body["total_actions"], 3)
+        self.assertEqual(body["mutes"], 1)
+        self.assertEqual(body["kicks"], 2)
+        self.assertEqual(body["success_rate"], 1.0)
+        keywords = {k["keyword"]: k["n"] for k in body["top_keywords"]}
+        self.assertEqual(keywords, {"feia": 2, "passa zap": 1})
+        self.assertEqual(len(body["recent_lives"]), 1)
+        self.assertEqual(body["recent_lives"][0]["livestream_id"], "live1")
+        self.assertEqual(body["recent_lives"][0]["n"], 3)
+        self.assertEqual(len(body["by_day"]), 1)  # all just happened "today"
+
+    def test_days_window_excludes_older_entries(self):
+        self.add_rule("feia", "kick")
+        self.connect_robot()
+        self.start_live()
+        mock.chat(3, "Caio", "feia")
+        wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
+        self.settle()
+
+        # backdate the one log row past the window instead of waiting real days
+        sql("UPDATE moderation_log SET created_at = datetime('now', '-10 days') WHERE user_id = ?",
+            (self.uid,))
+
+        self.assertEqual(self.stats(days=5)["total_actions"], 0)
+        self.assertEqual(self.stats(days=30)["total_actions"], 1)
+
+    def test_cannot_read_another_users_stats(self):
+        other_token = new_user("other")[1]
+        status, _ = api("GET", f"/stats?user_id={self.uid}", token=other_token)
+        self.assertEqual(status, 403)
+
+
 class StreamerWatchTests(RobotTestBase):
     """Favouriting a streamer (`PUT /robot/watch`) so the robot auto-joins her
     live by itself, with no manual "Iniciar moderação" click."""

@@ -554,3 +554,84 @@ class ActivityEntry {
         _ => action,
       };
 }
+
+// =====================================================
+// MODERATION STATS (aggregated server-side from moderation_log)
+// =====================================================
+class KeywordCount {
+  final String keyword;
+  final int count;
+
+  KeywordCount({required this.keyword, required this.count});
+
+  factory KeywordCount.fromJson(Map<String, dynamic> json) =>
+      KeywordCount(keyword: json['keyword'] ?? '', count: asInt(json['n']));
+}
+
+class DayCount {
+  final DateTime day;
+  final int count;
+
+  DayCount({required this.day, required this.count});
+
+  factory DayCount.fromJson(Map<String, dynamic> json) =>
+      DayCount(day: parseDate(json['day']) ?? DateTime.now(), count: asInt(json['n']));
+}
+
+class LiveStats {
+  final String livestreamId;
+  final int count;
+  final DateTime? firstAt;
+  final DateTime? lastAt;
+
+  LiveStats({
+    required this.livestreamId,
+    required this.count,
+    this.firstAt,
+    this.lastAt,
+  });
+
+  factory LiveStats.fromJson(Map<String, dynamic> json) => LiveStats(
+        livestreamId: json['livestream_id']?.toString() ?? '',
+        count: asInt(json['n']),
+        firstAt: parseDate(json['first_at']),
+        lastAt: parseDate(json['last_at']),
+      );
+}
+
+class ModerationStats {
+  final int days;
+  final int totalActions;
+  final int mutes;
+  final int kicks;
+  final double? successRate;
+  final List<KeywordCount> topKeywords;
+  final List<DayCount> byDay;
+  final List<LiveStats> recentLives;
+
+  ModerationStats({
+    required this.days,
+    required this.totalActions,
+    required this.mutes,
+    required this.kicks,
+    this.successRate,
+    this.topKeywords = const [],
+    this.byDay = const [],
+    this.recentLives = const [],
+  });
+
+  factory ModerationStats.fromJson(Map<String, dynamic> json) => ModerationStats(
+        days: asInt(json['days'], 30),
+        totalActions: asInt(json['total_actions']),
+        mutes: asInt(json['mutes']),
+        kicks: asInt(json['kicks']),
+        successRate: (json['success_rate'] as num?)?.toDouble(),
+        topKeywords: (json['top_keywords'] as List? ?? [])
+            .map((e) => KeywordCount.fromJson(e))
+            .toList(),
+        byDay: (json['by_day'] as List? ?? []).map((e) => DayCount.fromJson(e)).toList(),
+        recentLives: (json['recent_lives'] as List? ?? [])
+            .map((e) => LiveStats.fromJson(e))
+            .toList(),
+      );
+}

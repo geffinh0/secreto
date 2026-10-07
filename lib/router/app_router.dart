@@ -9,6 +9,7 @@ import '../screens/moderation/moderation_screen.dart';
 import '../screens/messages/auto_messages_screen.dart';
 import '../screens/bot/bot_control_screen.dart';
 import '../screens/settings/settings_screen.dart';
+import '../screens/stats/stats_screen.dart';
 import '../widgets/shell/main_shell.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
@@ -82,6 +83,10 @@ GoRouter createRouter(AuthProvider authProvider) {
           GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: '/stats',
+            builder: (context, state) => const StatsScreen(),
           ),
         ],
       ),

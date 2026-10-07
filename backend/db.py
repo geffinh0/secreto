@@ -341,3 +341,52 @@ def action_totals(conn, user_id: int) -> dict:
         (user_id,),
     ).fetchone()
     return {"actions_ok": row["ok_count"], "actions_failed": row["failed_count"]}
+
+
+def get_stats(conn, user_id: int, days: int) -> dict:
+    """Moderation history for the stats screen: everything comes from
+    moderation_log, which already has one row per mute/kick with the live,
+    keyword and outcome - nothing new to track, just aggregate what's there.
+    """
+    since = f"-{max(1, days)} days"
+
+    totals = conn.execute(
+        "SELECT COUNT(*) AS total, "
+        "COALESCE(SUM(action = 'mute'), 0) AS mutes, "
+        "COALESCE(SUM(action = 'kick'), 0) AS kicks, "
+        "COALESCE(SUM(ok = 1), 0) AS ok_count "
+        "FROM moderation_log WHERE user_id = ? AND created_at >= datetime('now', ?)",
+        (user_id, since),
+    ).fetchone()
+
+    top_keywords = conn.execute(
+        "SELECT keyword, COUNT(*) AS n FROM moderation_log "
+        "WHERE user_id = ? AND created_at >= datetime('now', ?) AND keyword IS NOT NULL AND keyword != '' "
+        "GROUP BY keyword ORDER BY n DESC LIMIT 8",
+        (user_id, since),
+    ).fetchall()
+
+    by_day = conn.execute(
+        "SELECT date(created_at) AS day, COUNT(*) AS n FROM moderation_log "
+        "WHERE user_id = ? AND created_at >= datetime('now', ?) "
+        "GROUP BY day ORDER BY day",
+        (user_id, since),
+    ).fetchall()
+
+    recent_lives = conn.execute(
+        "SELECT livestream_id, COUNT(*) AS n, MIN(created_at) AS first_at, MAX(created_at) AS last_at "
+        "FROM moderation_log WHERE user_id = ? AND created_at >= datetime('now', ?) AND livestream_id IS NOT NULL "
+        "GROUP BY livestream_id ORDER BY first_at DESC LIMIT 10",
+        (user_id, since),
+    ).fetchall()
+
+    return {
+        "days": days,
+        "total_actions": totals["total"],
+        "mutes": totals["mutes"],
+        "kicks": totals["kicks"],
+        "success_rate": round(totals["ok_count"] / totals["total"], 4) if totals["total"] else None,
+        "top_keywords": [dict(r) for r in top_keywords],
+        "by_day": [dict(r) for r in by_day],
+        "recent_lives": [dict(r) for r in recent_lives],
+    }
