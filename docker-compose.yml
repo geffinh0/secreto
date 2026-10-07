@@ -21,19 +21,10 @@ services:
       # tunnel that only this host's loopback can open (deploy/notebook-proxy/
       # systemd unit) - never exposed outside the Docker bridge.
       SUPERLIVE_PROXY_URL: "socks5h://172.28.0.1:1080"
-      # Local LLM shared with the other project on this VPS (llama.cpp,
-      # "cata_pobre_ia" - see DEPLOY.md), used only to guess whether a
-      # viewer's display name reads as feminine for the opt-in name filter.
-      # Empty/unset leaves the filter off regardless of a user's setting.
-      AI_NAME_FILTER_URL: "http://cata_pobre_ia:8080"
     volumes:
       - backend_data:/data
     networks:
       - internal
-      # Needed to reach cata_pobre_ia for AI_NAME_FILTER_URL above - the web
-      # container is already on this network for the same reverse-proxy
-      # reason, so this doesn't add any new exposure to this container.
-      - proxy_shared
     # No ports published: only the web container (on the same internal
     # network) can reach it. Never expose this directly to the internet.
 

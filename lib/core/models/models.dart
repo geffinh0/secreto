@@ -205,9 +205,6 @@ class BotSettings {
   final bool kickPermanent;
   final bool diamondImmunityEnabled;
   final int diamondImmunityThreshold;
-  // 'off' | 'mute' | 'ban' - screens viewers as they enter the live: the
-  // literal name "w" is always flagged, anything else goes through the IA.
-  final String aiNameFilterMode;
 
   BotSettings({
     this.id,
@@ -218,7 +215,6 @@ class BotSettings {
     this.kickPermanent = false,
     this.diamondImmunityEnabled = false,
     this.diamondImmunityThreshold = minDiamondImmunityThreshold,
-    this.aiNameFilterMode = 'off',
   });
 
   factory BotSettings.fromJson(Map<String, dynamic> json) {
@@ -232,7 +228,6 @@ class BotSettings {
       diamondImmunityEnabled: asBool(json['diamond_immunity_enabled']),
       diamondImmunityThreshold:
           asInt(json['diamond_immunity_threshold'], minDiamondImmunityThreshold),
-      aiNameFilterMode: (json['ai_name_filter_mode'] as String?) ?? 'off',
     );
   }
 
@@ -244,7 +239,6 @@ class BotSettings {
         'kick_permanent': kickPermanent,
         'diamond_immunity_enabled': diamondImmunityEnabled,
         'diamond_immunity_threshold': diamondImmunityThreshold,
-        'ai_name_filter_mode': aiNameFilterMode,
       };
 
   BotSettings copyWith({
@@ -256,7 +250,6 @@ class BotSettings {
     bool? kickPermanent,
     bool? diamondImmunityEnabled,
     int? diamondImmunityThreshold,
-    String? aiNameFilterMode,
   }) {
     return BotSettings(
       id: id ?? this.id,
@@ -270,7 +263,6 @@ class BotSettings {
           diamondImmunityEnabled ?? this.diamondImmunityEnabled,
       diamondImmunityThreshold:
           diamondImmunityThreshold ?? this.diamondImmunityThreshold,
-      aiNameFilterMode: aiNameFilterMode ?? this.aiNameFilterMode,
     );
   }
 }

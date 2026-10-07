@@ -16,11 +16,9 @@ DEFAULT_SETTINGS = {
     "kick_permanent": False,
     "diamond_immunity_enabled": False,
     "diamond_immunity_threshold": 50,
-    "ai_name_filter_mode": "off",
 }
 
 MIN_DIAMOND_IMMUNITY_THRESHOLD = 50
-AI_NAME_FILTER_MODES = ("off", "mute", "ban")
 
 _BOOL_KEYS = (
     "is_active", "is_admin", "auto_messages_enabled",
@@ -28,11 +26,11 @@ _BOOL_KEYS = (
 )
 
 # bot_settings columns exposed via the API. end_message_enabled/end_message_template
-# still exist in older databases (discontinued; see init_db) but are never read back.
+# still exist in older databases (discontinued; see init_db) but are never read back -
+# same deal with ai_name_filter_mode now (discontinued AI name filter feature).
 _SETTINGS_COLUMNS = (
     "id, user_id, auto_messages_enabled, message_interval_seconds, "
-    "moderation_enabled, kick_permanent, diamond_immunity_enabled, diamond_immunity_threshold, "
-    "ai_name_filter_mode"
+    "moderation_enabled, kick_permanent, diamond_immunity_enabled, diamond_immunity_threshold"
 )
 
 
@@ -208,10 +206,6 @@ def init_db():
             c.execute(
                 "ALTER TABLE bot_settings ADD COLUMN diamond_immunity_threshold "
                 f"INTEGER DEFAULT {MIN_DIAMOND_IMMUNITY_THRESHOLD}"
-            )
-        if "ai_name_filter_mode" not in _columns(conn, "bot_settings"):
-            c.execute(
-                "ALTER TABLE bot_settings ADD COLUMN ai_name_filter_mode TEXT DEFAULT 'off'"
             )
         if "last_livestream_id" not in _columns(conn, "robot_accounts"):
             c.execute("ALTER TABLE robot_accounts ADD COLUMN last_livestream_id TEXT")

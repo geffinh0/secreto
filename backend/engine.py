@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlsplit
 
-import requests
 import websockets
 from websockets.exceptions import InvalidStatus
 
@@ -60,44 +59,6 @@ async def _ws_connect(url: str, **kwargs):
     return websockets.connect(url, sock=sock, server_hostname=parts.hostname, **kwargs)
 
 log = logging.getLogger("super_moderator.engine")
-
-# Local LLM (llama.cpp's OpenAI-compatible server, shared with the other
-# project on this VPS - see DEPLOY.md) used only to guess whether a viewer's
-# display name reads as feminine. Never for chat/moderation text. Empty/unset
-# = the AI name filter is simply off, same as before this existed.
-AI_NAME_FILTER_URL = os.getenv("AI_NAME_FILTER_URL", "").strip()
-AI_NAME_FILTER_TIMEOUT = float(os.getenv("AI_NAME_FILTER_TIMEOUT", "8"))
-
-
-def _classify_feminine_name_sync(name: str) -> bool:
-    if not AI_NAME_FILTER_URL:
-        return False
-    prompt = (
-        'Responda só com SIM ou NAO (maiúsculo, sem acento, nada mais). '
-        f'O nome ou apelido "{name}" parece pertencer a uma pessoa do gênero feminino? '
-        'Considere nomes próprios em português e inglês, apelidos e emojis. '
-        'Se o nome for ambíguo, neutro, só números/símbolos, ou você não tiver certeza, responda NAO.'
-    )
-    try:
-        resp = requests.post(
-            f"{AI_NAME_FILTER_URL}/v1/chat/completions",
-            json={
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "max_tokens": 4,
-            },
-            timeout=AI_NAME_FILTER_TIMEOUT,
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        return content.strip().upper().startswith("SIM")
-    except Exception:  # noqa: BLE001 - a flaky classifier must never block the live
-        log.exception("falha ao classificar nome via IA: %r", name)
-        return False
-
-
-async def classify_feminine_name(name: str) -> bool:
-    return await asyncio.to_thread(_classify_feminine_name_sync, name)
 
 MIN_INTERVAL_SECONDS = 10      # never spam the chat faster than this
 ACTION_SPACING_SECONDS = 0.5   # pause between moderation calls (API courtesy)
@@ -694,8 +655,6 @@ class BotSession:
                 self._on_chat(data)
             elif kind == "livestream_gift_sent":
                 self._on_gift(data)
-            elif kind == "livestream_arrival_message":
-                self._spawn(self._on_arrival(data))
             elif kind == "livestream_ended":
                 await self.on_live_ended()
         except Exception:  # noqa: BLE001 - one bad frame must not kill the loop
@@ -764,46 +723,6 @@ class BotSession:
         except (TypeError, ValueError):
             multiplier = 1
         self._diamonds[user_id] = self._diamonds.get(user_id, 0) + int(cost) * max(1, multiplier)
-
-    # ---- AI name filter -----------------------------------------------------
-    async def _on_arrival(self, data: dict) -> None:
-        """Screens each viewer as she enters the live: the literal name "w" is
-        always flagged outright (no AI needed), anything else goes through the
-        local classifier. ``ai_name_filter_mode`` decides what happens to a
-        flagged viewer - same mute/kick plumbing as a chat rule hit, so it gets
-        the same rate limiting, dedup and action log."""
-        user_id = str(data.get("user_id") or "")
-        name = str(data.get("name") or "").strip()
-        if not user_id or not name:
-            return
-        if user_id in (self.robot_sl_id, self.streamer_id):
-            return
-
-        cfg = self._config()
-        mode = cfg["settings"].get("ai_name_filter_mode") or "off"
-        if mode not in ("mute", "ban"):
-            return
-        action = "mute" if mode == "mute" else "kick"
-        if self._acted.get(user_id, 0) >= ACTION_LEVEL[action] or (user_id, action) in self._pending:
-            return
-
-        if name.lower() == "w":
-            reason = 'nome é só a letra "w"'
-        elif await classify_feminine_name(name):
-            reason = "nome de aparência feminina (IA)"
-        else:
-            return
-
-        entry = ChatEntry(
-            id=str(uuid.uuid4()), user_id=user_id, name=name,
-            text=f'Entrou na live como "{name}"', ts=now_iso(),
-        )
-        try:
-            self._queue.put_nowait((entry, action, reason))
-        except asyncio.QueueFull:
-            log.warning("action queue full - dropping name-filter %s on %s", action, user_id)
-            return
-        self._pending.add((user_id, action))
 
     async def _action_worker(self) -> None:
         while True:
