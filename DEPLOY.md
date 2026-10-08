@@ -174,11 +174,13 @@ systemctl status atila-notebook-proxy
 
 Fica de olho nos containers, no túnel do notebook, no proxy SOCKS5 e nos dois
 domínios — avisa sozinho quando algo muda de estado (só quando muda, pra não
-virar spam) e responde `/status` na hora quando perguntado. Script em
+virar spam) e responde a comandos na hora: `/status` (infra), `/live`
+(status da transmissão agora) e `/resumo` (última live encerrada). Script em
 `deploy/healthbot/healthbot.py`.
 
-Token e chat_id ficam só num arquivo de ambiente na VPS, fora do git -
-nenhum dos dois precisa (nem deve) ser colado no chat.
+Token, chat_id e a chave do `/live`/`/resumo` ficam só em arquivos de
+ambiente na VPS, fora do git - nenhum dos três precisa (nem deve) ser colado
+no chat.
 
 ```bash
 # 1. no Telegram: fala com @BotFather, /newbot, guarda o token
@@ -188,13 +190,24 @@ nenhum dos dois precisa (nem deve) ser colado no chat.
 python3 -m venv ~/healthbot-venv
 ~/healthbot-venv/bin/pip install --quiet requests
 
-# 4. cola o token recebido do BotFather (só ele por enquanto)
-cat > ~/.healthbot.env <<'EOF'
+# 4. gera a chave que protege /robot/live_status (esse endpoint não tem
+#    login de portal, então usa um segredo compartilhado em vez disso)
+HEALTHBOT_KEY=$(openssl rand -hex 32)
+
+# 5. cola o token recebido do BotFather e a chave gerada acima
+cat > ~/.healthbot.env <<EOF
 TELEGRAM_BOT_TOKEN=COLE_O_TOKEN_AQUI
 TELEGRAM_CHAT_ID=
+HEALTHBOT_API_KEY=$HEALTHBOT_KEY
 EOF
 
-# 5. descobre o chat_id a partir da mensagem que você mandou no passo 2
+# 6. a MESMA chave precisa estar no .env do docker-compose (raiz do repo,
+#    fora do git), pro backend aceitar - sem isso /live e /resumo voltam
+#    "não foi possível obter o status"
+echo "HEALTHBOT_API_KEY=$HEALTHBOT_KEY" >> ~/atilas-client/.env
+cd ~/atilas-client && docker compose up -d --build backend
+
+# 7. descobre o chat_id a partir da mensagem que você mandou no passo 2
 set -a; source ~/.healthbot.env; set +a
 curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" | python3 -m json.tool
 # procura "chat": {"id": ...} no resultado e completa TELEGRAM_CHAT_ID em ~/.healthbot.env
@@ -210,4 +223,5 @@ systemctl status atila-healthbot
 ```
 
 Manda `/status` pro bot no Telegram pra testar - deve responder na hora com
-a lista de tudo. Se algo cair depois, ele avisa sozinho.
+a lista de tudo. `/live` e `/resumo` só têm o que mostrar depois da próxima
+live. Se algo cair depois, o bot avisa sozinho.

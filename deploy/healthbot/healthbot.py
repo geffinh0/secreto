@@ -16,6 +16,10 @@ STATE_FILE = os.environ.get("HEALTHBOT_STATE_FILE", "/home/deploy/.healthbot_sta
 CHECK_INTERVAL_SECONDS = int(os.environ.get("HEALTHBOT_CHECK_INTERVAL", "300"))
 LIVE_CHECK_INTERVAL_SECONDS = int(os.environ.get("HEALTHBOT_LIVE_CHECK_INTERVAL", "10"))
 ATILA_API_URL = os.environ.get("ATILA_API_URL", "http://127.0.0.1:8088/api").rstrip("/")
+# /robot/live_status has no portal login to authenticate with, so it checks
+# this shared secret instead (see main.py) - without it the backend refuses
+# the request outright, it never falls open.
+HEALTHBOT_API_KEY = os.environ.get("HEALTHBOT_API_KEY", "")
 
 OK_VALUES = {"up", "active", "ouvindo", 200}
 
@@ -69,9 +73,10 @@ def format_status(checks: dict) -> str:
 
 
 def get_live_status() -> dict:
+    headers = {"X-Healthbot-Key": HEALTHBOT_API_KEY} if HEALTHBOT_API_KEY else {}
     for base in (ATILA_API_URL, "https://atilaclient.tech/api"):
         try:
-            r = requests.get(f"{base}/robot/live_status", timeout=6)
+            r = requests.get(f"{base}/robot/live_status", headers=headers, timeout=6)
             if r.status_code == 200:
                 return r.json()
         except Exception:  # noqa: BLE001

@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -869,9 +869,18 @@ def robot_status(current_user: dict = Depends(get_current_user),
     return _robot_payload(conn, current_user["id"])
 
 
+HEALTHBOT_API_KEY = os.getenv("HEALTHBOT_API_KEY", "").strip()
+
+
 @app.get("/robot/live_status")
-def robot_live_status(conn: sqlite3.Connection = Depends(get_db)):
-    """Summary of the active stream session and recent activity for monitoring bots."""
+def robot_live_status(x_healthbot_key: str = Header(default=""),
+                      conn: sqlite3.Connection = Depends(get_db)):
+    """Summary of the active stream session and recent activity, for the
+    Telegram bot's /live and /resumo commands - not a portal user, so it
+    authenticates with a shared secret instead of a login token. Without
+    HEALTHBOT_API_KEY set, this stays closed (never falls open)."""
+    if not HEALTHBOT_API_KEY or x_healthbot_key != HEALTHBOT_API_KEY:
+        raise HTTPException(403, "Acesso negado")
     watches = db.all_active_watches(conn)
     user_id = watches[0]["user_id"] if watches else 1
     payload = _robot_payload(conn, user_id)

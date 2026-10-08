@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Docker Compose secrets (HEALTHBOT_API_KEY etc.) - lives only on the VPS
+.env
+
 # Backend (Python/FastAPI)
 backend/__pycache__/
 backend/tests/__pycache__/

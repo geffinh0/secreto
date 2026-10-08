@@ -1152,9 +1152,10 @@ class ActivityLogTests(RobotTestBase):
         self.start_live()
         api("POST", "/robot/stop", token=self.token)
         api("POST", "/robot/disconnect", token=self.token)
-        actions = [e["action"] for e in self.activity()[:4]]
+        actions = [e["action"] for e in self.activity()[:5]]
         self.assertEqual(
-            actions, ["robot_disconnected", "session_stopped", "session_started", "robot_connected"]
+            actions,
+            ["robot_disconnected", "session_stopped", "live_summary", "session_started", "robot_connected"],
         )
 
     def test_message_reordering_alone_is_not_logged(self):

@@ -21,6 +21,11 @@ services:
       # tunnel that only this host's loopback can open (deploy/notebook-proxy/
       # systemd unit) - never exposed outside the Docker bridge.
       SUPERLIVE_PROXY_URL: "socks5h://172.28.0.1:1080"
+      # Shared secret the Telegram healthbot sends to read /robot/live_status
+      # (no portal login of its own - see main.py). Comes from a .env file
+      # next to this compose file, never committed; see DEPLOY.md. Empty =
+      # the endpoint refuses every request, it never falls open.
+      HEALTHBOT_API_KEY: "${HEALTHBOT_API_KEY:-}"
     volumes:
       - backend_data:/data
     networks:
