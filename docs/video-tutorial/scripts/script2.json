@@ -1,0 +1,64 @@
+[
+ {"id":"intro","lines":[
+  ["E aí, tudo bem? Hoje eu vou te mostrar, passo a passo, como usar o Átila's Cláient.", "E aí, tudo bem? Hoje eu vou te mostrar, passo a passo, como usar o Atila's Client."],
+  ["É um robô que modera as suas lives no SuperLive sozinho, enquanto você foca na transmissão.", "É um robô que modera as suas lives no SuperLive sozinho, enquanto você foca na transmissão."]]},
+ {"id":"como","lines":[
+  ["A ideia é bem simples.", "A ideia é bem simples."],
+  ["Você entra no site, cadastra as palavras proibidas e conecta uma conta robô.", "Você entra no site, cadastra as palavras proibidas e conecta uma conta robô."],
+  ["Aí o robô entra na sua live, fica de olho no chat, e silencia ou expulsa quem passar dos limites. E ainda manda mensagens automáticas por você.", "Aí o robô entra na sua live, fica de olho no chat e silencia ou expulsa quem passar dos limites. E ainda manda mensagens automáticas por você."],
+  ["E o melhor: ele roda no servidor. Pode fechar o navegador tranquilo, que a moderação continua.", "E o melhor: ele roda no servidor. Pode fechar o navegador tranquilo, que a moderação continua."]]},
+ {"id":"acessar","lines":[
+  ["Pra começar, você não precisa instalar nada.", "Pra começar, você não precisa instalar nada."],
+  ["É só abrir o navegador e entrar em átila cláient ponto téc.", "É só abrir o navegador e entrar em atilaclient.tech"],
+  ["Funciona no computador e no celular. E, se quiser, dá até pra instalar como aplicativo, lá na aba Configurações.", "Funciona no computador e no celular. E, se quiser, dá até pra instalar como aplicativo, lá na aba Configurações."]]},
+ {"id":"conta","lines":[
+  ["Na primeira vez, clica em Criar agora.", "Na primeira vez, clica em “Criar agora”."],
+  ["Coloca o seu nome, um usuário e o seu e-mail.", "Coloca o seu nome, um usuário e o seu e-mail."],
+  ["Escolhe uma senha de pelo menos oito caracteres, repete ela, e clica em Criar conta.", "Escolhe uma senha de pelo menos 8 caracteres, repete ela e clica em “Criar conta”."]]},
+ {"id":"dash","lines":[
+  ["Prontinho, você já tá dentro!", "Prontinho, você já tá dentro!"],
+  ["Aqui no Déshbord você vê tudo de uma vez: se o robô tá ligado, quantas regras você tem, as mensagens na fila, e quantas vezes ele já agiu.", "Aqui no Dashboard você vê tudo de uma vez: se o robô tá ligado, quantas regras você tem, as mensagens na fila e quantas vezes ele já agiu."],
+  ["E aqui do lado ficam as abas: Moderação, Mensagens, Robô e Configurações.", "E aqui do lado ficam as abas: Moderação, Mensagens, Robô e Configurações."]]},
+ {"id":"silenciar","lines":[
+  ["Agora vamos montar as regras. Clica em Moderação.", "Agora vamos montar as regras. Clica em “Moderação”."],
+  ["Na aba Silenciar, digita a palavra e clica em Adicionar.", "Na aba “Silenciar”, digita a palavra e clica em “Adicionar”."],
+  ["Quem mandar essa palavra no chat fica mudo na live.", "Quem mandar essa palavra no chat fica mudo na live."],
+  ["Dá pra colocar frases também, tipo: passa zap.", "Dá pra colocar frases também, tipo “passa zap”."]]},
+ {"id":"regras","lines":[
+  ["Ah, e uma dica: o robô compara a palavra inteira.", "Ah, e uma dica: o robô compara a palavra inteira."],
+  ["Não adianta o espertinho escrever em maiúscula, com acento ou cheio de espaço, que ele pega do mesmo jeito.", "Não adianta o espertinho escrever em maiúscula, com acento ou cheio de espaço: ele pega do mesmo jeito."],
+  ["E se você colocar um asterisco no final, vale tudo que começa com aquilo. Divulg, asterisco, pega divulguem, divulgação, e por aí vai.", "E com um asterisco no final, vale tudo que começa com aquilo: divulg* pega “divulguem”, “divulgação” e por aí vai."]]},
+ {"id":"banir","lines":[
+  ["Já na aba Banir, a pessoa não fica só muda: ela é expulsa da live.", "Já na aba “Banir”, a pessoa não fica só muda: ela é expulsa da live."],
+  ["Vou colocar golpe, e divulg com asterisco.", "Vou colocar “golpe” e “divulg*”."],
+  ["Aqui em cima tem três chaves: a moderação automática, o banimento permanente, e a imunidade por diamantes, que livra quem já mandou presente na live.", "Aqui em cima tem três chaves: moderação automática, banimento permanente e imunidade por diamantes, que livra quem já mandou presente na live."]]},
+ {"id":"mensagens","lines":[
+  ["Agora, as mensagens automáticas. Clica em Mensagens.", "Agora, as mensagens automáticas. Clica em “Mensagens”."],
+  ["Escreve o recado e clica em Adicionar à fila. Pode colocar quantas quiser, que elas vão saindo na ordem, uma atrás da outra.", "Escreve o recado e clica em “Adicionar à fila”. Pode colocar quantas quiser: elas vão saindo na ordem, uma atrás da outra."],
+  ["Escolhe de quanto em quanto tempo, liga o envio automático, e clica em Salvar.", "Escolhe de quanto em quanto tempo, liga o envio automático e clica em “Salvar”."]]},
+ {"id":"robo","lines":[
+  ["Agora é hora de conectar o robô. O ideal é criar uma conta no SuperLive só pra ele.", "Agora é hora de conectar o robô. O ideal é criar uma conta no SuperLive só pra ele."],
+  ["Na aba Robô, você escolhe como entrar: com e-mail e senha, pelo celular com código por SMS, ou colando o tôken.", "Na aba “Robô”, você escolhe como entrar: e-mail e senha, celular com código por SMS, ou colando o token."],
+  ["Eu vou de e-mail e senha, e clico em Conectar Robô.", "Eu vou de e-mail e senha e clico em “Conectar Robô”."],
+  ["Pronto, robô conectado!", "Pronto, robô conectado!"]]},
+ {"id":"moderador","lines":[
+  ["Agora, presta atenção nessa parte, que é a mais importante!", "Agora, presta atenção nessa parte, que é a mais importante!"],
+  ["A dona da live precisa colocar a conta do robô como moderadora. Se não fizer isso, o SuperLive não deixa ele silenciar nem banir ninguém.", "A dona da live precisa colocar a conta do robô como moderadora. Sem isso, o SuperLive não deixa ele silenciar nem banir ninguém."]]},
+ {"id":"favoritar","lines":[
+  ["Agora é só falar pro robô qual live ele vai moderar.", "Agora é só falar pro robô qual live ele vai moderar."],
+  ["Digita o aidí que aparece no perfil da estrímer, e clica na lupa.", "Digita o ID que aparece no perfil da streamer e clica na lupa."],
+  ["Se ela estiver ao vivo, o aidí da live aparece sozinho.", "Se ela estiver ao vivo, o ID da live aparece sozinho."],
+  ["Aí clica em Favoritar. Com isso, toda vez que ela abrir uma live, o robô entra sozinho, mesmo com o site fechado.", "Aí clica em “Favoritar”. Toda vez que ela abrir uma live, o robô entra sozinho, mesmo com o site fechado."]]},
+ {"id":"aovivo","lines":[
+  ["E olha ele trabalhando! O chat da live aparece aqui, ao vivo.", "E olha ele trabalhando! O chat da live aparece aqui, ao vivo."],
+  ["Pediu o zap? Ficou mudo. Falou em golpe? Tchau, foi expulso.", "Pediu o zap? Ficou mudo. Falou em golpe? Tchau, foi expulso."],
+  ["E tudo fica anotado aqui embaixo, com a palavra que fez o robô agir.", "E tudo fica anotado aqui embaixo, com a palavra que fez o robô agir."]]},
+ {"id":"painel","lines":[
+  ["Voltando pro Déshbord, os números já foram atualizados.", "Voltando pro Dashboard, os números já foram atualizados."],
+  ["Em Estatísticas, você vê o histórico, as palavras que mais apareceram e as últimas lives.", "Em “Estatísticas”, você vê o histórico, as palavras que mais apareceram e as últimas lives."],
+  ["E em Configurações ficam os dados da sua conta, e tudo o que aconteceu nela.", "E em “Configurações” ficam os dados da sua conta e tudo o que aconteceu nela."]]},
+ {"id":"final","lines":[
+  ["Quando quiser parar, é só clicar em Parar, na aba Robô.", "Quando quiser parar, é só clicar em “Parar”, na aba “Robô”."],
+  ["Resumindo: cria a conta, cadastra as palavras, monta as mensagens, conecta o robô, coloca ele de moderador, e favorita a estrímer.", "Resumindo: cria a conta, cadastra as palavras, monta as mensagens, conecta o robô, coloca ele de moderador e favorita a streamer."],
+  ["Pronto! Agora suas lives estão protegidas no piloto automático. Valeu, e até a próxima!", "Pronto! Agora suas lives estão protegidas no piloto automático. Valeu, e até a próxima!"]]}
+]

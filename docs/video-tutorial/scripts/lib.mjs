@@ -16,7 +16,7 @@ export async function dump(p){
   for (const n of await nodes(p)) console.log(`${n.tag}|${n.role}|${n.label}|${Math.round(n.x)},${Math.round(n.y)} ${Math.round(n.w)}x${Math.round(n.h)}${n.checked?' chk='+n.checked:''}`);
 }
 export async function find(p, label, {role, exact=false, nth=0, tag}={}){
-  for (let i=0;i<40;i++){
+  for (let i=0;i<16;i++){
     const ns = (await nodes(p)).filter(n => (exact? n.label===label : n.label.includes(label)) && (!role||n.role===role) && (!tag||n.tag===tag));
     if (ns.length>nth) return ns[nth];
     await p.waitForTimeout(250);
