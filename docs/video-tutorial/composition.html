@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, height=1080" />
+<title>Atila's Client — Tutorial completo</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+@font-face { font-family: "Nunito"; src: url("assets/fonts/nunito-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Nunito"; src: url("assets/fonts/nunito-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: "Nunito"; src: url("assets/fonts/nunito-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+@font-face { font-family: "Nunito"; src: url("assets/fonts/nunito-latin-800-normal.woff2") format("woff2"); font-weight: 800; }
+@font-face { font-family: "Nunito"; src: url("assets/fonts/nunito-latin-900-normal.woff2") format("woff2"); font-weight: 900; }
+@font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+:root {
+  --bg: #1B140F; --card: #241B15; --surface: #2C2119; --elev: #362820;
+  --orange: #E07B39; --rust: #A24A32; --gold: #D9A441; --cream: #F7EEE3;
+  --text2: #CBB8A4; --muted: #8C7968; --border: #3A2D22; --ok: #6E9B5E; --err: #C2543A;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Nunito", sans-serif; color: var(--cream); background: var(--bg); }
+.layer { position: absolute; inset: 0; }
+#bg { background: radial-gradient(1200px 700px at 15% 0%, #3a2416 0%, transparent 60%), radial-gradient(900px 600px at 100% 100%, #2e1a12 0%, transparent 60%), var(--bg); }
+.glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .35; }
+#glow1 { width: 620px; height: 620px; left: -120px; top: -160px; background: #E07B39; opacity: .16; }
+#glow2 { width: 560px; height: 560px; right: -140px; bottom: -180px; background: #A24A32; opacity: .2; }
+#progress { position: absolute; left: 0; top: 0; height: 6px; width: 1920px; background: linear-gradient(90deg, var(--rust), var(--orange), var(--gold)); transform-origin: 0 50%; }
+
+/* chapter */
+.chapter { position: absolute; left: 269px; top: 26px; width: 1382px; height: 56px; }
+.ch-in { display: flex; align-items: center; gap: 16px; height: 56px; }
+.ch-tag { background: var(--orange); color: #1B140F; font-weight: 900; font-size: 22px; padding: 7px 16px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.ch-title { font-size: 32px; font-weight: 800; color: var(--cream); }
+
+/* browser window */
+#win { position: absolute; left: 269px; top: 96px; width: 1382px; height: 816px; border-radius: 16px; overflow: hidden; background: #120d0a; border: 1px solid #4A3A2C; box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03); }
+#bar { position: absolute; left: 0; top: 0; width: 1382px; height: 38px; background: #2a1f18; display: flex; align-items: center; padding: 0 16px; gap: 8px; border-bottom: 1px solid #3A2D22; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: block; }
+#url { margin-left: 18px; height: 24px; width: 560px; border-radius: 8px; background: #1B140F; color: var(--text2); font-family: "JetBrains Mono", monospace; font-size: 14px; display: flex; align-items: center; padding: 0 12px; }
+#viewport { position: absolute; left: 0; top: 38px; width: 1382px; height: 778px; overflow: hidden; }
+#stage { position: absolute; left: 0; top: 0; width: 1536px; height: 864px; transform: scale(0.8997); transform-origin: 0 0; }
+#cam { position: absolute; left: 0; top: 0; width: 1536px; height: 864px; transform-origin: 0 0; }
+#screen { position: absolute; left: 0; top: 0; width: 1536px; height: 864px; }
+#poster { position: absolute; left: 0; top: 0; width: 1536px; height: 864px; }
+#dim { position: absolute; left: 269px; top: 96px; width: 1382px; height: 816px; border-radius: 16px; background: rgba(18,12,9,.78); opacity: 0; }
+
+/* captions */
+.cap { position: absolute; left: 160px; top: 936px; width: 1600px; height: 120px; display: flex; justify-content: center; align-items: flex-start; }
+.cap-in { display: block; max-width: 1560px; text-align: center; font-size: 34px; line-height: 1.3; font-weight: 700; color: #fff; background: rgba(15,10,7,.82); border: 1px solid rgba(224,123,57,.35); padding: 10px 26px; border-radius: 14px; }
+
+/* intro */
+#intro { position: absolute; inset: 0; }
+#intro-fox { position: absolute; left: 660px; top: 120px; width: 600px; height: 400px; object-fit: contain; }
+#intro-title { position: absolute; left: 0; top: 520px; width: 1920px; text-align: center; font-size: 120px; font-weight: 900; letter-spacing: -2px; }
+#intro-title span { color: var(--orange); }
+#intro-sub { position: absolute; left: 0; top: 680px; width: 1920px; text-align: center; font-size: 40px; font-weight: 600; color: var(--text2); }
+#intro-pill { position: absolute; left: 660px; top: 770px; width: 600px; height: 58px; border-radius: 999px; border: 2px solid var(--orange); color: var(--orange); font-size: 26px; font-weight: 800; display: flex; align-items: center; justify-content: center; letter-spacing: .08em; }
+
+/* diagram */
+#como { position: absolute; inset: 0; }
+.node { position: absolute; top: 250px; width: 440px; height: 300px; border-radius: 24px; background: var(--card); border: 2px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.node .ic { width: 110px; height: 110px; border-radius: 28px; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+.node h3 { font-size: 40px; font-weight: 900; }
+.node p { font-size: 24px; color: var(--text2); text-align: center; width: 380px; }
+#n1 { left: 140px; } #n2 { left: 740px; } #n3 { left: 1340px; }
+.arrow { position: absolute; top: 385px; height: 8px; width: 140px; border-radius: 4px; background: linear-gradient(90deg, var(--rust), var(--orange)); transform-origin: 0 50%; }
+#a1 { left: 590px; } #a2 { left: 1190px; }
+.chips { position: absolute; left: 0; top: 620px; width: 1920px; display: flex; justify-content: center; gap: 26px; }
+.chip { display: block; font-size: 30px; font-weight: 800; padding: 16px 30px; border-radius: 16px; background: var(--surface); border: 2px solid var(--border); }
+.chip b { color: var(--orange); }
+#close-tab { position: absolute; left: 560px; top: 760px; width: 800px; height: 80px; border-radius: 18px; background: rgba(110,155,94,.16); border: 2px solid var(--ok); color: #cfe7c4; font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 14px; }
+
+/* terminal */
+#iniciar { position: absolute; inset: 0; }
+#term { position: absolute; left: 260px; top: 150px; width: 1400px; height: 640px; border-radius: 18px; background: #0f0b08; border: 1px solid #4A3A2C; box-shadow: 0 30px 80px rgba(0,0,0,.5); overflow: hidden; }
+#term-bar { height: 46px; background: #2a1f18; display: flex; align-items: center; gap: 8px; padding: 0 18px; color: var(--muted); font-size: 18px; font-weight: 700; }
+#term-body { padding: 30px 40px; font-family: "JetBrains Mono", monospace; font-size: 30px; line-height: 1.75; color: #e9dccd; }
+.ln { display: block; height: 52px; white-space: nowrap; }
+.ty { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: top; width: 0; }
+.pr { color: var(--orange); }
+.cm { color: var(--muted); }
+.okc { color: #9fd08a; }
+.bat { position: absolute; left: 1180px; top: 210px; width: 360px; height: 150px; border-radius: 18px; background: var(--card); border: 2px solid var(--orange); display: flex; align-items: center; gap: 20px; padding: 0 26px; }
+.bat .file { width: 70px; height: 86px; border-radius: 8px; background: #3b2a1f; border: 2px solid #6b4a33; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; font-family: "JetBrains Mono", monospace; font-size: 16px; color: var(--gold); font-weight: 600; }
+.bat .nm { font-family: "JetBrains Mono", monospace; font-size: 24px; font-weight: 600; }
+.bat .hint { font-size: 20px; color: var(--text2); }
+
+/* overlay cards */
+.ovl { position: absolute; inset: 0; }
+.card { position: absolute; border-radius: 26px; background: var(--card); border: 2px solid var(--border); box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+#rg-card { left: 360px; top: 170px; width: 1200px; height: 660px; padding: 46px 56px; }
+#rg-card h2 { font-size: 46px; font-weight: 900; margin-bottom: 26px; }
+.rule { display: flex; align-items: center; gap: 22px; height: 76px; margin-bottom: 14px; padding: 0 24px; border-radius: 16px; background: var(--surface); font-size: 30px; font-weight: 700; }
+.kw { font-family: "JetBrains Mono", monospace; color: var(--gold); background: #1B140F; padding: 4px 14px; border-radius: 10px; font-size: 28px; }
+.res { margin-left: auto; font-weight: 900; font-size: 28px; padding: 4px 16px; border-radius: 10px; }
+.yes { color: #cfe7c4; background: rgba(110,155,94,.25); }
+.no { color: #f3c2b5; background: rgba(194,84,58,.25); }
+.sep { height: 2px; background: var(--border); margin: 22px 0 22px; }
+#md-card { left: 410px; top: 230px; width: 1100px; height: 520px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; border-color: var(--gold); text-align: center; padding: 0 70px; }
+#md-card h2 { font-size: 54px; font-weight: 900; color: var(--gold); }
+#md-card p { font-size: 34px; font-weight: 700; color: var(--cream); line-height: 1.35; }
+#rc-card { left: 410px; top: 130px; width: 1100px; height: 760px; padding: 44px 60px; }
+#rc-card h2 { font-size: 48px; font-weight: 900; margin-bottom: 24px; }
+.step { display: flex; align-items: center; gap: 24px; height: 88px; margin-bottom: 10px; padding: 0 26px; border-radius: 18px; background: var(--surface); font-size: 34px; font-weight: 800; }
+.num { width: 52px; height: 52px; border-radius: 50%; background: var(--orange); color: #1B140F; font-weight: 900; font-size: 28px; display: flex; align-items: center; justify-content: center; }
+.tick { margin-left: auto; width: 46px; height: 46px; border-radius: 50%; background: var(--ok); display: flex; align-items: center; justify-content: center; }
+#outro { position: absolute; inset: 0; background: var(--bg); z-index: 50; }
+.cap { z-index: 70; }
+#progress { z-index: 60; }
+#outro-fox { position: absolute; left: 760px; top: 170px; width: 400px; height: 400px; object-fit: contain; }
+#outro-title { position: absolute; left: 0; top: 590px; width: 1920px; text-align: center; font-size: 96px; font-weight: 900; }
+#outro-title span { color: var(--orange); }
+#outro-sub { position: absolute; left: 0; top: 730px; width: 1920px; text-align: center; font-size: 38px; font-weight: 700; color: var(--text2); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="250.872" data-width="1920" data-height="1080">
+  <div id="bg" class="layer"><div id="glow1" class="glow"></div><div id="glow2" class="glow"></div></div>
+
+  <!-- INTRO -->
+  <div id="intro" class="clip" data-start="0" data-duration="11.400" data-track-index="1">
+    <img id="intro-fox" src="assets/img/fox_hero.webp" alt="" />
+    <div id="intro-title">Atila's <span>Client</span></div>
+    <div id="intro-sub">Moderação automática para as suas lives no SuperLive</div>
+    <div id="intro-pill">TUTORIAL COMPLETO · DO ZERO</div>
+  </div>
+
+  <!-- COMO FUNCIONA -->
+  <div id="como" class="clip" data-start="11.400" data-duration="21.900" data-track-index="1">
+    <div id="n1" class="node"><div class="ic"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#E07B39" stroke-width="2"><rect x="2" y="4" width="20" height="15" rx="2"/><path d="M2 8h20"/></svg></div><h3>Portal</h3><p>Você configura tudo no navegador</p></div>
+    <div id="a1" class="arrow"></div>
+    <div id="n2" class="node"><div class="ic"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#D9A441" stroke-width="2"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></div><h3>Servidor</h3><p>Guarda as regras e controla o robô</p></div>
+    <div id="a2" class="arrow"></div>
+    <div id="n3" class="node"><div class="ic"><img src="assets/img/fox_avatar.png" alt="" style="width:92px;height:92px;object-fit:contain" /></div><h3>Robô na live</h3><p>Lê o chat em tempo real no SuperLive</p></div>
+    <div class="chips">
+      <span id="c1" class="chip"><b>Silencia</b> quem xinga</span>
+      <span id="c2" class="chip"><b>Bane</b> golpistas</span>
+      <span id="c3" class="chip"><b>Envia</b> mensagens</span>
+    </div>
+    <div id="close-tab">Pode fechar a aba: a moderação continua</div>
+  </div>
+
+  <!-- INICIAR -->
+  <div id="iniciar" class="clip" data-start="33.300" data-duration="19.400" data-track-index="1">
+    <div id="term">
+      <div id="term-bar"><span class="dot" style="background:#C2543A"></span><span class="dot" style="background:#D9A441"></span><span class="dot" style="background:#6E9B5E"></span><span style="margin-left:14px">Terminal</span></div>
+      <div id="term-body">
+        <span class="ln cm"><span id="t0" class="ty"># Windows: dois cliques em</span></span>
+        <span class="ln"><span class="pr">&gt; </span><span id="t1" class="ty">start_server.bat</span></span>
+        <span class="ln cm"><span id="t2" class="ty"># ou, manualmente:</span></span>
+        <span class="ln"><span class="pr">$ </span><span id="t3" class="ty">cd backend &amp;&amp; pip install -r requirements.txt</span></span>
+        <span class="ln"><span class="pr">$ </span><span id="t4" class="ty">python main.py</span><span id="t4b" class="okc" style="opacity:0">   API em :8000</span></span>
+        <span class="ln"><span class="pr">$ </span><span id="t5" class="ty">flutter run -d web-server --web-port 3000</span></span>
+        <span class="ln okc"><span id="t6" class="ty">Portal em http://localhost:3000</span></span>
+      </div>
+    </div>
+    <div id="batcard" class="bat"><div class="file">.BAT</div><div><div class="nm">start_server.bat</div><div class="hint">duplo clique</div></div></div>
+  </div>
+
+  <!-- BROWSER WINDOW (recording) -->
+  <div id="winwrap" class="layer">
+    <div id="win">
+      <div id="bar"><span class="dot" style="background:#C2543A"></span><span class="dot" style="background:#D9A441"></span><span class="dot" style="background:#6E9B5E"></span><div id="url"><span id="urltxt" class="ty">localhost:3000</span></div></div>
+      <div id="viewport"><div id="stage"><div id="cam">
+        <img id="poster" src="assets/img/login.jpg" alt="" />
+        <video id="screen" src="assets/rec/screen.mp4" muted playsinline data-start="52.700" data-duration="198.172" data-track-index="0"></video>
+      </div></div></div>
+    </div>
+    <div id="dim"></div>
+  </div>
+
+  <!-- REGRAS overlay -->
+  <div id="regras" class="clip ovl" data-start="99.154" data-duration="16.171" data-track-index="2">
+    <div id="rg-card" class="card">
+      <h2>Como as palavras são comparadas</h2>
+      <div id="r1" class="rule"><span class="kw">passa zap</span><span>“Me PASSA &nbsp; o ZÁP?”</span><span class="res no">não pega</span></div>
+      <div id="r2" class="rule"><span class="kw">passa zap</span><span>“me PASSA   ZÁP”</span><span class="res yes">pega</span></div>
+      <div id="r3" class="rule"><span class="kw">zap</span><span>“zapzap”</span><span class="res no">palavra inteira</span></div>
+      <div class="sep"></div>
+      <div id="r4" class="rule"><span class="kw">divulg*</span><span>“divulguem” · “divulgação”</span><span class="res yes">prefixo</span></div>
+    </div>
+  </div>
+
+  <!-- MODERADOR overlay -->
+  <div id="moderador" class="clip ovl" data-start="174.504" data-duration="9.478" data-track-index="2">
+    <div id="md-card" class="card">
+      <svg width="110" height="110" viewBox="0 0 24 24" fill="none" stroke="#D9A441" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M12 8v5M12 16h.01"/></svg>
+      <h2>Adicione o robô como moderador</h2>
+      <p>A streamer precisa tornar a conta do robô moderadora da live. Sem isso, o SuperLive recusa silenciar e banir.</p>
+    </div>
+  </div>
+
+  <!-- RECAP -->
+  <div id="recap" class="clip ovl" data-start="236.672" data-duration="14.200" data-track-index="2">
+    <div id="rc-card" class="card">
+      <h2>Checklist</h2>
+      <div id="st0" class="step"><span class="num">1</span><span>Crie sua conta</span><span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st1" class="step"><span class="num">2</span><span>Cadastre as palavras (silenciar / banir)</span><span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st2" class="step"><span class="num">3</span><span>Monte as mensagens automáticas</span><span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st3" class="step"><span class="num">4</span><span>Conecte o robô</span><span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st4" class="step"><span class="num">5</span><span>Peça para virar moderador</span><span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st5" class="step"><span class="num">6</span><span>Favorite a streamer</span><span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div>
+    </div>
+  </div>
+
+  <div id="outro" class="clip" data-start="245.156" data-duration="5.716" data-track-index="2">
+    <img id="outro-fox" src="assets/img/fox_avatar.png" alt="" />
+    <div id="outro-title">Atila's <span>Client</span></div>
+    <div id="outro-sub">Suas lives moderadas no piloto automático</div>
+  </div>
+
+  <div id="ch-como" class="clip chapter" data-start="11.400" data-duration="21.900" data-track-index="3"><div class="ch-in"><span class="ch-tag">Visão geral</span><span class="ch-title">Como funciona</span></div></div><div id="ch-iniciar" class="clip chapter" data-start="33.300" data-duration="19.400" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 1</span><span class="ch-title">Ligar o sistema</span></div></div><div id="ch-conta" class="clip chapter" data-start="52.700" data-duration="14.673" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 2</span><span class="ch-title">Criar sua conta</span></div></div><div id="ch-dash" class="clip chapter" data-start="67.373" data-duration="16.369" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 3</span><span class="ch-title">Conhecer o painel</span></div></div><div id="ch-silenciar" class="clip chapter" data-start="83.742" data-duration="15.112" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 4</span><span class="ch-title">Palavras para silenciar</span></div></div><div id="ch-regras" class="clip chapter" data-start="98.854" data-duration="16.671" data-track-index="3"><div class="ch-in"><span class="ch-tag">Dica</span><span class="ch-title">Como as palavras são comparadas</span></div></div><div id="ch-banir" class="clip chapter" data-start="115.525" data-duration="20.061" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 5</span><span class="ch-title">Palavras para banir</span></div></div><div id="ch-mensagens" class="clip chapter" data-start="135.586" data-duration="20.239" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 6</span><span class="ch-title">Mensagens automáticas</span></div></div><div id="ch-robo" class="clip chapter" data-start="155.825" data-duration="18.379" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 7</span><span class="ch-title">Conectar o robô</span></div></div><div id="ch-moderador" class="clip chapter" data-start="174.204" data-duration="10.078" data-track-index="3"><div class="ch-in"><span class="ch-tag">Importante</span><span class="ch-title">O robô precisa ser moderador</span></div></div><div id="ch-favoritar" class="clip chapter" data-start="184.282" data-duration="18.717" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 8</span><span class="ch-title">Escolher e favoritar a live</span></div></div><div id="ch-aovivo" class="clip chapter" data-start="202.999" data-duration="14.364" data-track-index="3"><div class="ch-in"><span class="ch-tag">Ao vivo</span><span class="ch-title">O robô em ação</span></div></div><div id="ch-painel" class="clip chapter" data-start="217.363" data-duration="15.109" data-track-index="3"><div class="ch-in"><span class="ch-tag">Passo 9</span><span class="ch-title">Estatísticas e conta</span></div></div><div id="ch-final" class="clip chapter" data-start="232.472" data-duration="18.400" data-track-index="3"><div class="ch-in"><span class="ch-tag">Resumo</span><span class="ch-title">Recapitulando</span></div></div>
+  <div id="cap0" class="clip cap" data-start="0.500" data-duration="4.453" data-track-index="4"><span class="cap-in">Olá! Neste tutorial você vai aprender, do zero, a usar o Atila&#x27;s Client.</span></div><div id="cap1" class="clip cap" data-start="5.003" data-duration="5.306" data-track-index="4"><span class="cap-in">É o portal que coloca um robô para moderar as suas lives no SuperLive, de forma automática.</span></div><div id="cap2" class="clip cap" data-start="11.900" data-duration="3.834" data-track-index="4"><span class="cap-in">Funciona assim: você configura tudo pelo portal, no navegador.</span></div><div id="cap3" class="clip cap" data-start="15.784" data-duration="3.685" data-track-index="4"><span class="cap-in">O servidor guarda as suas regras e controla uma conta robô.</span></div><div id="cap4" class="clip cap" data-start="19.519" data-duration="8.015" data-track-index="4"><span class="cap-in">O robô entra na live, lê o chat em tempo real, silencia ou bane quem usa palavras proibidas, e ainda envia mensagens automáticas.</span></div><div id="cap5" class="clip cap" data-start="27.584" data-duration="4.730" data-track-index="4"><span class="cap-in">Como ele roda no servidor, você pode até fechar a aba, que a moderação continua.</span></div><div id="cap6" class="clip cap" data-start="33.800" data-duration="1.871" data-track-index="4"><span class="cap-in">Primeiro, ligue o sistema.</span></div><div id="cap7" class="clip cap" data-start="35.721" data-duration="4.133" data-track-index="4"><span class="cap-in">No Windows, basta dar dois cliques no arquivo start_server.bat.</span></div><div id="cap8" class="clip cap" data-start="39.904" data-duration="5.754" data-track-index="4"><span class="cap-in">Se preferir fazer na mão, instale as dependências do servidor e rode python main.py.</span></div><div id="cap9" class="clip cap" data-start="45.708" data-duration="5.306" data-track-index="4"><span class="cap-in">Depois, suba o portal com o Flutter e abra localhost:3000 no navegador.</span></div><div id="cap10" class="clip cap" data-start="53.200" data-duration="2.511" data-track-index="4"><span class="cap-in">Na primeira vez, clique em “Criar agora”.</span></div><div id="cap11" class="clip cap" data-start="55.761" data-duration="3.536" data-track-index="4"><span class="cap-in">Preencha o nome de exibição, um nome de usuário e o seu e-mail.</span></div><div id="cap12" class="clip cap" data-start="59.347" data-duration="4.964" data-track-index="4"><span class="cap-in">Escolha uma senha com pelo menos oito caracteres, confirme e clique em “Criar conta”.</span></div><div id="cap13" class="clip cap" data-start="67.873" data-duration="2.127" data-track-index="4"><span class="cap-in">Pronto, você já está no painel!</span></div><div id="cap14" class="clip cap" data-start="70.050" data-duration="7.866" data-track-index="4"><span class="cap-in">O Dashboard mostra o resumo de tudo: o status do robô, as regras ativas, as mensagens na fila e o total de ações de moderação.</span></div><div id="cap15" class="clip cap" data-start="77.966" data-duration="4.922" data-track-index="4"><span class="cap-in">No menu lateral ficam as áreas: Moderação, Mensagens, Robô e Configurações.</span></div><div id="cap16" class="clip cap" data-start="84.242" data-duration="2.490" data-track-index="4"><span class="cap-in">Vamos criar as regras. Abra “Moderação”.</span></div><div id="cap17" class="clip cap" data-start="86.782" data-duration="3.791" data-track-index="4"><span class="cap-in">Na aba “Silenciar”, digite uma palavra e clique em “Adicionar”.</span></div><div id="cap18" class="clip cap" data-start="90.623" data-duration="3.386" data-track-index="4"><span class="cap-in">Quem escrever essa palavra no chat fica silenciado.</span></div><div id="cap19" class="clip cap" data-start="94.059" data-duration="3.941" data-track-index="4"><span class="cap-in">Você também pode cadastrar frases inteiras, como “passa zap”.</span></div><div id="cap20" class="clip cap" data-start="99.354" data-duration="3.941" data-track-index="4"><span class="cap-in">Dica importante: a comparação é feita por palavra inteira.</span></div><div id="cap21" class="clip cap" data-start="103.345" data-duration="4.602" data-track-index="4"><span class="cap-in">Não importa se a pessoa escreve com maiúsculas, acentos ou espaços a mais.</span></div><div id="cap22" class="clip cap" data-start="107.997" data-duration="6.671" data-track-index="4"><span class="cap-in">E com um asterisco no final, a regra vira prefixo: divulg* pega “divulguem” e “divulgação”.</span></div><div id="cap23" class="clip cap" data-start="116.025" data-duration="5.541" data-track-index="4"><span class="cap-in">Na aba “Banir”, o processo é o mesmo, mas a punição é mais pesada: a pessoa é expulsa da live.</span></div><div id="cap24" class="clip cap" data-start="121.616" data-duration="3.002" data-track-index="4"><span class="cap-in">Vou adicionar “golpe” e “divulg*”.</span></div><div id="cap25" class="clip cap" data-start="124.668" data-duration="10.063" data-track-index="4"><span class="cap-in">Logo acima, você controla a moderação automática, o banimento permanente e a imunidade por diamantes, que protege quem já enviou presentes naquela live.</span></div><div id="cap26" class="clip cap" data-start="136.086" data-duration="3.535" data-track-index="4"><span class="cap-in">Agora, as mensagens automáticas. Abra “Mensagens”.</span></div><div id="cap27" class="clip cap" data-start="139.671" data-duration="7.418" data-track-index="4"><span class="cap-in">Escreva o texto e clique em “Adicionar à fila”. Monte quantas quiser: elas são enviadas em ordem, em loop.</span></div><div id="cap28" class="clip cap" data-start="147.139" data-duration="6.245" data-track-index="4"><span class="cap-in">Escolha o intervalo (mínimo de 10 segundos), ligue o envio automático e clique em “Salvar configurações”.</span></div><div id="cap29" class="clip cap" data-start="156.325" data-duration="4.431" data-track-index="4"><span class="cap-in">Hora de conectar o robô. Use uma conta do SuperLive separada, só para ele.</span></div><div id="cap30" class="clip cap" data-start="160.806" data-duration="6.970" data-track-index="4"><span class="cap-in">Na aba “Robô”, escolha como entrar: e-mail e senha, celular com código por SMS, ou colando o token da sessão.</span></div><div id="cap31" class="clip cap" data-start="167.826" data-duration="3.365" data-track-index="4"><span class="cap-in">Aqui eu uso e-mail e senha e clico em “Conectar Robô”.</span></div><div id="cap32" class="clip cap" data-start="171.241" data-duration="2.106" data-track-index="4"><span class="cap-in">Pronto: o robô está conectado.</span></div><div id="cap33" class="clip cap" data-start="174.704" data-duration="4.794" data-track-index="4"><span class="cap-in">Atenção! A streamer precisa adicionar a conta do robô como moderadora da live.</span></div><div id="cap34" class="clip cap" data-start="179.548" data-duration="3.877" data-track-index="4"><span class="cap-in">Sem isso, o SuperLive recusa os silenciamentos e banimentos.</span></div><div id="cap35" class="clip cap" data-start="184.782" data-duration="2.575" data-track-index="4"><span class="cap-in">Agora, diga ao robô qual live moderar.</span></div><div id="cap36" class="clip cap" data-start="187.407" data-duration="4.453" data-track-index="4"><span class="cap-in">Digite o ID público que aparece no perfil da streamer e clique na lupa.</span></div><div id="cap37" class="clip cap" data-start="191.910" data-duration="3.578" data-track-index="4"><span class="cap-in">Se ela estiver ao vivo, o ID da live é preenchido sozinho.</span></div><div id="cap38" class="clip cap" data-start="195.538" data-duration="6.607" data-track-index="4"><span class="cap-in">Clique em “Favoritar”: o robô entra e modera sozinho sempre que ela abrir uma live, mesmo com o portal fechado.</span></div><div id="cap39" class="clip cap" data-start="203.499" data-duration="3.578" data-track-index="4"><span class="cap-in">Olha o robô em ação! O chat aparece aqui, em tempo real.</span></div><div id="cap40" class="clip cap" data-start="207.127" data-duration="4.730" data-track-index="4"><span class="cap-in">Quem pede o zap é silenciado na hora, e quem fala em golpe é banido da live.</span></div><div id="cap41" class="clip cap" data-start="211.907" data-duration="4.602" data-track-index="4"><span class="cap-in">Cada ação fica registrada logo abaixo, com a palavra que disparou a regra.</span></div><div id="cap42" class="clip cap" data-start="217.863" data-duration="3.407" data-track-index="4"><span class="cap-in">De volta ao Dashboard, os números já estão atualizados.</span></div><div id="cap43" class="clip cap" data-start="221.320" data-duration="5.520" data-track-index="4"><span class="cap-in">Em “Estatísticas”, você vê o histórico, as palavras mais acionadas e as lives recentes.</span></div><div id="cap44" class="clip cap" data-start="226.890" data-duration="4.730" data-track-index="4"><span class="cap-in">E em “Configurações” ficam os dados da sua conta e o registro de atividades.</span></div><div id="cap45" class="clip cap" data-start="232.972" data-duration="3.791" data-track-index="4"><span class="cap-in">Para encerrar uma moderação, é só clicar em “Parar”, na aba “Robô”.</span></div><div id="cap46" class="clip cap" data-start="236.813" data-duration="8.293" data-track-index="4"><span class="cap-in">Recapitulando: crie sua conta, cadastre as palavras, monte as mensagens, conecte o robô, peça para ele virar moderador e favorite a streamer.</span></div><div id="cap47" class="clip cap" data-start="245.156" data-duration="4.069" data-track-index="4"><span class="cap-in">Pronto! Suas lives moderadas no piloto automático. Até a próxima!</span></div>
+  <div id="progress"></div>
+  <audio id="vo-intro" src="assets/vo/intro.wav" data-start="0.500" data-duration="9.859" data-track-index="5" data-volume="1"></audio><audio id="vo-como" src="assets/vo/como.wav" data-start="11.900" data-duration="20.464" data-track-index="5" data-volume="1"></audio><audio id="vo-iniciar" src="assets/vo/iniciar.wav" data-start="33.800" data-duration="17.264" data-track-index="5" data-volume="1"></audio><audio id="vo-conta" src="assets/vo/conta.wav" data-start="53.200" data-duration="11.161" data-track-index="5" data-volume="1"></audio><audio id="vo-dash" src="assets/vo/dash.wav" data-start="67.873" data-duration="15.065" data-track-index="5" data-volume="1"></audio><audio id="vo-silenciar" src="assets/vo/silenciar.wav" data-start="84.242" data-duration="13.808" data-track-index="5" data-volume="1"></audio><audio id="vo-regras" src="assets/vo/regras.wav" data-start="99.354" data-duration="15.364" data-track-index="5" data-volume="1"></audio><audio id="vo-banir" src="assets/vo/banir.wav" data-start="116.025" data-duration="18.756" data-track-index="5" data-volume="1"></audio><audio id="vo-mensagens" src="assets/vo/mensagens.wav" data-start="136.086" data-duration="17.348" data-track-index="5" data-volume="1"></audio><audio id="vo-robo" src="assets/vo/robo.wav" data-start="156.325" data-duration="17.072" data-track-index="5" data-volume="1"></audio><audio id="vo-moderador" src="assets/vo/moderador.wav" data-start="174.704" data-duration="8.771" data-track-index="5" data-volume="1"></audio><audio id="vo-favoritar" src="assets/vo/favoritar.wav" data-start="184.782" data-duration="17.413" data-track-index="5" data-volume="1"></audio><audio id="vo-aovivo" src="assets/vo/aovivo.wav" data-start="203.499" data-duration="13.060" data-track-index="5" data-volume="1"></audio><audio id="vo-painel" src="assets/vo/painel.wav" data-start="217.863" data-duration="13.807" data-track-index="5" data-volume="1"></audio><audio id="vo-final" src="assets/vo/final.wav" data-start="232.972" data-duration="16.303" data-track-index="5" data-volume="1"></audio><audio id="bgm" src="assets/bgm.mp3" data-start="0" data-duration="250.872" data-track-index="6" data-volume="0.13"></audio>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+const TOTAL = 250.872;
+tl.fromTo("#progress", { scaleX: 0 }, { scaleX: 1, duration: TOTAL, ease: "none" }, 0);
+tl.fromTo("#glow1", { x: 0, y: 0 }, { x: 260, y: 120, duration: TOTAL, ease: "sine.inOut" }, 0);
+tl.fromTo("#glow2", { x: 0, y: 0 }, { x: -240, y: -90, duration: TOTAL, ease: "sine.inOut" }, 0);
+
+// intro
+tl.fromTo("#intro-fox", { y: 60, opacity: 0, scale: .9 }, { y: 0, opacity: 1, scale: 1, duration: 1, ease: "back.out(1.6)" }, 0.2);
+tl.fromTo("#intro-title", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .8, ease: "power3.out" }, 0.7);
+tl.fromTo("#intro-sub", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .7, ease: "power3.out" }, 1.2);
+tl.fromTo("#intro-pill", { scale: .8, opacity: 0 }, { scale: 1, opacity: 1, duration: .6, ease: "back.out(2)" }, 1.7);
+tl.to("#intro-fox", { y: -14, duration: 2.2, ease: "sine.inOut", yoyo: true, repeat: 3 }, 1.3);
+tl.to(["#intro-fox", "#intro-title", "#intro-sub", "#intro-pill"], { opacity: 0, y: -30, duration: .5, stagger: .05, ease: "power2.in" }, 10.700);
+
+// como funciona
+const C = 11.400, cc = [0.5, 4.384, 8.119, 16.183999999999997];
+tl.fromTo("#n1", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: "power3.out" }, C + 0.4);
+tl.fromTo("#a1", { scaleX: 0 }, { scaleX: 1, duration: .5, ease: "power2.out" }, C + cc[1]);
+tl.fromTo("#n2", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: "power3.out" }, C + cc[1] + 0.3);
+tl.fromTo("#a2", { scaleX: 0 }, { scaleX: 1, duration: .5, ease: "power2.out" }, C + cc[2]);
+tl.fromTo("#n3", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: "power3.out" }, C + cc[2] + 0.3);
+tl.fromTo("#c1", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .45, ease: "back.out(2)" }, C + cc[2] + 3.0);
+tl.fromTo("#c2", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .45, ease: "back.out(2)" }, C + cc[2] + 3.6);
+tl.fromTo("#c3", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .45, ease: "back.out(2)" }, C + cc[2] + 5.4);
+tl.fromTo("#close-tab", { scale: .9, opacity: 0 }, { scale: 1, opacity: 1, duration: .5, ease: "back.out(2)" }, C + cc[3] + 1.0);
+tl.to("#n3 .ic", { scale: 1.08, duration: .6, yoyo: true, repeat: 5, ease: "sine.inOut" }, C + cc[2] + 1);
+tl.to("#como .node, #como .arrow, #como .chips, #close-tab", { opacity: 0, duration: .5 }, C + 21.300);
+
+// iniciar (terminal)
+const I = 33.300, ic = [0.5, 2.4210000000000003, 6.604, 12.408];
+const typeIt = (sel, n, at, dur) => tl.fromTo(sel, { width: 0 }, { width: n + "ch", duration: dur, ease: "steps(" + n + ")" }, at);
+tl.fromTo("#term", { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: "power3.out" }, I + 0.2);
+typeIt("#t0", 26, I + ic[1], .8);
+typeIt("#t1", 16, I + ic[1] + 1.0, .9);
+tl.fromTo("#batcard", { x: 60, opacity: 0, scale: .9 }, { x: 0, opacity: 1, scale: 1, duration: .5, ease: "back.out(2)" }, I + ic[1] + 1.4);
+tl.to("#batcard", { scale: 1.06, duration: .18, yoyo: true, repeat: 3 }, I + ic[1] + 2.4);
+tl.to("#batcard", { opacity: 0, x: 60, duration: .4 }, I + ic[2] - 0.2);
+typeIt("#t2", 18, I + ic[2], .6);
+typeIt("#t3", 46, I + ic[2] + 0.8, 1.6);
+typeIt("#t4", 14, I + ic[2] + 3.2, .7);
+tl.fromTo("#t4b", { opacity: 0 }, { opacity: 1, duration: .3 }, I + ic[2] + 4.2);
+typeIt("#t5", 41, I + ic[3], 1.5);
+typeIt("#t6", 33, I + ic[3] + 2.0, .9);
+tl.to("#term", { y: -40, opacity: 0, scale: .96, duration: .6, ease: "power2.in" }, I + ic[3] + 3.4);
+
+// browser window
+const W0 = I + ic[3] + 3.6;
+tl.fromTo("#win", { y: 80, opacity: 0, scale: .96 }, { y: 0, opacity: 1, scale: 1, duration: .8, ease: "power3.out" }, W0);
+tl.fromTo("#urltxt", { width: 0 }, { width: "14ch", duration: .8, ease: "steps(14)" }, W0 + 0.6);
+
+// regras / moderador / recap dimming
+const dimIn = (a, b) => { tl.to("#dim", { opacity: 1, duration: .4 }, a); tl.to("#dim", { opacity: 0, duration: .4 }, b); };
+dimIn(99.154, 115.025);
+dimIn(174.504, 183.682);
+tl.to("#dim", { opacity: 1, duration: .4 }, 236.672);
+
+const R = 98.854, rc = [0.5, 4.491, 9.143];
+tl.fromTo("#rg-card", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .5, ease: "power3.out" }, R + 0.4);
+tl.fromTo("#r1", { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: .4 }, R + rc[0] + 1.0);
+tl.fromTo("#r2", { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: .4 }, R + rc[1] + 0.4);
+tl.fromTo("#r3", { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: .4 }, R + rc[1] + 2.2);
+tl.fromTo("#r4", { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: .4 }, R + rc[2] + 1.6);
+tl.to("#rg-card", { opacity: 0, y: -20, duration: .4 }, R + 15.771);
+
+const M = 174.204;
+tl.fromTo("#md-card", { scale: .9, opacity: 0 }, { scale: 1, opacity: 1, duration: .5, ease: "back.out(1.8)" }, M + 0.4);
+tl.to("#md-card svg", { rotation: 8, duration: .12, yoyo: true, repeat: 5 }, M + 1.0);
+tl.to("#md-card", { opacity: 0, duration: .4 }, M + 9.078);
+
+const F = 232.472, fc = [0.5, 4.341, 12.684];
+tl.fromTo("#rc-card", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .5, ease: "power3.out" }, F + 4.3);
+const stepT = [0.2, 1.3, 2.9, 4.4, 5.6, 7.0];
+stepT.forEach((d, i) => {
+  tl.fromTo("#st" + i, { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: .35, ease: "power2.out" }, F + fc[1] + d);
+  tl.fromTo("#st" + i + " .tick", { scale: 0 }, { scale: 1, duration: .35, ease: "back.out(3)" }, F + fc[1] + d + 0.5);
+});
+tl.fromTo("#outro-fox", { scale: .6, opacity: 0 }, { scale: 1, opacity: 1, duration: .8, ease: "back.out(1.7)" }, F + fc[2] + 0.1);
+tl.fromTo("#outro-title", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: "power3.out" }, F + fc[2] + 0.5);
+tl.fromTo("#outro-sub", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: "power3.out" }, F + fc[2] + 0.9);
+
+// camera, chapters, captions
+tl.fromTo("#cap0 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},0.500);
+tl.fromTo("#cap1 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},5.003);
+tl.fromTo("#cap2 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},11.900);
+tl.fromTo("#cap3 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},15.784);
+tl.fromTo("#cap4 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},19.519);
+tl.fromTo("#cap5 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},27.584);
+tl.fromTo("#cap6 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},33.800);
+tl.fromTo("#cap7 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},35.721);
+tl.fromTo("#cap8 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},39.904);
+tl.fromTo("#cap9 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},45.708);
+tl.fromTo("#cap10 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},53.200);
+tl.fromTo("#cap11 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},55.761);
+tl.fromTo("#cap12 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},59.347);
+tl.fromTo("#cap13 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},67.873);
+tl.fromTo("#cap14 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},70.050);
+tl.fromTo("#cap15 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},77.966);
+tl.fromTo("#cap16 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},84.242);
+tl.fromTo("#cap17 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},86.782);
+tl.fromTo("#cap18 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},90.623);
+tl.fromTo("#cap19 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},94.059);
+tl.fromTo("#cap20 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},99.354);
+tl.fromTo("#cap21 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},103.345);
+tl.fromTo("#cap22 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},107.997);
+tl.fromTo("#cap23 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},116.025);
+tl.fromTo("#cap24 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},121.616);
+tl.fromTo("#cap25 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},124.668);
+tl.fromTo("#cap26 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},136.086);
+tl.fromTo("#cap27 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},139.671);
+tl.fromTo("#cap28 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},147.139);
+tl.fromTo("#cap29 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},156.325);
+tl.fromTo("#cap30 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},160.806);
+tl.fromTo("#cap31 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},167.826);
+tl.fromTo("#cap32 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},171.241);
+tl.fromTo("#cap33 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},174.704);
+tl.fromTo("#cap34 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},179.548);
+tl.fromTo("#cap35 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},184.782);
+tl.fromTo("#cap36 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},187.407);
+tl.fromTo("#cap37 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},191.910);
+tl.fromTo("#cap38 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},195.538);
+tl.fromTo("#cap39 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},203.499);
+tl.fromTo("#cap40 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},207.127);
+tl.fromTo("#cap41 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},211.907);
+tl.fromTo("#cap42 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},217.863);
+tl.fromTo("#cap43 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},221.320);
+tl.fromTo("#cap44 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},226.890);
+tl.fromTo("#cap45 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},232.972);
+tl.fromTo("#cap46 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},236.813);
+tl.fromTo("#cap47 .cap-in",{y:14,opacity:0},{y:0,opacity:1,duration:.28,ease:"power2.out"},245.156);
+tl.fromTo("#ch-como .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},11.500);
+tl.fromTo("#ch-iniciar .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},33.400);
+tl.fromTo("#ch-conta .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},52.800);
+tl.fromTo("#ch-dash .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},67.473);
+tl.fromTo("#ch-silenciar .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},83.842);
+tl.fromTo("#ch-regras .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},98.954);
+tl.fromTo("#ch-banir .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},115.625);
+tl.fromTo("#ch-mensagens .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},135.686);
+tl.fromTo("#ch-robo .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},155.925);
+tl.fromTo("#ch-moderador .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},174.304);
+tl.fromTo("#ch-favoritar .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},184.382);
+tl.fromTo("#ch-aovivo .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},203.099);
+tl.fromTo("#ch-painel .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},217.463);
+tl.fromTo("#ch-final .ch-in",{x:-30,opacity:0},{x:0,opacity:1,duration:.5,ease:"power3.out"},232.572);
+tl.to("#cam",{x:-245.8,y:-134.4,scale:1.32,duration:.9,ease:"power2.inOut"},55.900);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},65.400);
+tl.to("#cam",{x:-198.0,y:-136.4,scale:1.22,duration:.9,ease:"power2.inOut"},87.942);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},97.242);
+tl.to("#cam",{x:-198.0,y:-140.8,scale:1.22,duration:.9,ease:"power2.inOut"},121.925);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},126.225);
+tl.to("#cam",{x:-210.0,y:-99.0,scale:1.3,duration:.9,ease:"power2.inOut"},127.125);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},134.025);
+tl.to("#cam",{x:-180.0,y:-112.0,scale:1.2,duration:.9,ease:"power2.inOut"},140.186);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},147.886);
+tl.to("#cam",{x:-182.0,y:-80.5,scale:1.35,duration:.9,ease:"power2.inOut"},161.425);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},167.325);
+tl.to("#cam",{x:-193.6,y:-123.2,scale:1.22,duration:.9,ease:"power2.inOut"},187.282);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},200.982);
+tl.to("#cam",{x:-220.0,y:-172.5,scale:1.25,duration:.9,ease:"power2.inOut"},205.599);
+tl.to("#cam",{x:0,y:0,scale:1,duration:.9,ease:"power2.inOut"},211.299);
+
+window.__timelines["main"] = tl;
+</script>
+</body>
+</html>
