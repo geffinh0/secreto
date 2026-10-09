@@ -19,7 +19,7 @@ for i, k in enumerate(ks):
     print(k, round(act, 2), '->', round(slot, 2), f'x{f:.2f}')
 with open(f'/tmp/claude-0/demo/seg/{M}.txt', 'w') as o:
     for s in segs: o.write(f"file '{s}'\n")
-dst = f'/tmp/claude-0/hf/{M}/assets/rec/screen.mp4'
+dst = f'/tmp/claude-0/hf/{"cine" if M=="cine" else M}/assets/rec/screen.mp4'
 subprocess.run(['ffmpeg','-y','-loglevel','error','-f','concat','-safe','0','-i',f'/tmp/claude-0/demo/seg/{M}.txt','-c','copy',dst], check=True)
 # real per-segment durations after encode
 real = {}

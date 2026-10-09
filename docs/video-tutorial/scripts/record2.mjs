@@ -6,9 +6,10 @@ import { semantics, find, nodes } from './lib.mjs';
 
 const MODE = process.env.MODE || 'desktop';
 const MOB = MODE === 'mobile';
-const TIMING = JSON.parse(fs.readFileSync(`/tmp/claude-0/hf/build/timing_${MODE}.json`, 'utf8'));
+const TAG = process.env.TAG || MODE;
+const TIMING = JSON.parse(fs.readFileSync(`/tmp/claude-0/hf/build/timing_${TAG}.json`, 'utf8'));
 const LEAD = 0.5, TAIL = 0.8;
-const OUT = `/tmp/claude-0/demo/frames_${MODE}`;
+const OUT = `/tmp/claude-0/demo/frames_${TAG}`;
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const post = (k, body) => fetch('http://127.0.0.1:9101/' + k, { method: 'POST', body: JSON.stringify(body) });
 
@@ -291,6 +292,6 @@ await scene('final', async () => {
 
 await cdp.send('Page.stopScreencast');
 await p.waitForTimeout(500);
-fs.writeFileSync(`/tmp/claude-0/demo/frames_${MODE}.json`, JSON.stringify({ frames, marks }));
+fs.writeFileSync(`/tmp/claude-0/demo/frames_${TAG}.json`, JSON.stringify({ frames, marks }));
 console.log('frames', frames.length);
 await b.close();
