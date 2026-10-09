@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field, field_validator
 import db
 import security
 from db import row_to_dict
-from engine import IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, SessionManager, WatchManager, normalize
+from engine import (
+    IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
+)
 from superlive import SuperLiveClient, SuperLiveError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -223,6 +225,17 @@ class ModerationRuleCreate(BaseModel):
     @classmethod
     def _keyword(cls, v: str) -> str:
         return _clean_keyword(v)
+
+
+class ModerationTestRequest(BaseModel):
+    user_id: int
+    text: str = Field(min_length=1, max_length=500)
+
+
+class ModerationBulkCreate(BaseModel):
+    user_id: int
+    action: Literal["mute", "kick"]
+    keywords: list[str] = Field(min_length=1, max_length=200)
 
 
 class ModerationRuleUpdate(BaseModel):
@@ -476,6 +489,63 @@ def create_rule(req: ModerationRuleCreate, current_user: dict = Depends(get_curr
     db.log_activity(req.user_id, "rule_created", f'{req.action}: "{req.keyword}"')
     return row_to_dict(conn.execute(
         "SELECT * FROM moderation_rules WHERE id = ?", (cursor.lastrowid,)).fetchone())
+
+
+@app.post("/moderation/rules/bulk")
+def create_rules_bulk(req: ModerationBulkCreate, current_user: dict = Depends(get_current_user),
+                      conn: sqlite3.Connection = Depends(get_db)):
+    """Adds many keywords to the same list in one call (paste a batch instead
+    of one-by-one). Cleans each line, skips blanks, de-duplicates against
+    what's already registered *and* within the pasted batch itself - partial
+    success is fine, the response says exactly what landed and what didn't."""
+    require_owner(current_user, req.user_id)
+    created, skipped = [], []
+    seen_this_batch = set()
+    for raw in req.keywords:
+        try:
+            keyword = _clean_keyword(raw)
+        except ValueError:
+            skipped.append({"keyword": raw, "reason": "vazia"})
+            continue
+        target = normalize(keyword)
+        if target in seen_this_batch:
+            skipped.append({"keyword": keyword, "reason": "duplicada no lote colado"})
+            continue
+        if _keyword_taken(conn, req.user_id, keyword, req.action):
+            skipped.append({"keyword": keyword, "reason": "já cadastrada"})
+            continue
+        seen_this_batch.add(target)
+        cursor = conn.execute(
+            "INSERT INTO moderation_rules (user_id, keyword, action, is_active) VALUES (?, ?, ?, 1)",
+            (req.user_id, keyword, req.action),
+        )
+        created.append(row_to_dict(conn.execute(
+            "SELECT * FROM moderation_rules WHERE id = ?", (cursor.lastrowid,)).fetchone()))
+    conn.commit()
+    if created:
+        db.log_activity(req.user_id, "rule_created",
+                         f"{len(created)} palavras adicionadas em lote ({req.action})")
+    return {"created": created, "skipped": skipped}
+
+
+@app.post("/moderation/test")
+def test_phrase(req: ModerationTestRequest, current_user: dict = Depends(get_current_user),
+                conn: sqlite3.Connection = Depends(get_db)):
+    """Runs a sample message through the user's own active rules - lets her
+    check whether a tricky spelling ("g0z4", "p4ss4zap") would actually be
+    caught before relying on it live. Uses the exact same RuleMatcher the
+    running robot uses, so the answer here is never out of sync with reality."""
+    require_owner(current_user, req.user_id)
+    rows = conn.execute(
+        "SELECT id, keyword, action FROM moderation_rules WHERE user_id = ? AND is_active = 1",
+        (req.user_id,),
+    ).fetchall()
+    matcher = RuleMatcher([row_to_dict(r) for r in rows])
+    hit = matcher.match(req.text)
+    if hit is None:
+        return {"matched": False, "action": None, "keyword": None}
+    action, keyword = hit
+    return {"matched": True, "action": action, "keyword": keyword}
 
 
 @app.put("/moderation/rules/{rule_id}")

@@ -86,6 +86,43 @@ class ModerationProvider extends ChangeNotifier {
     return updateRule(rule.copyWith(isActive: !rule.isActive));
   }
 
+  /// Runs [text] through the user's own active rules server-side (same
+  /// matcher the robot uses) - lets her check a tricky spelling before
+  /// trusting it live. Returns `null` on a network/server error.
+  Future<PhraseTestResult?> testPhrase({required int userId, required String text}) async {
+    final result = await _api.post('/moderation/test', {'user_id': userId, 'text': text});
+    if (result['success'] == true) return PhraseTestResult.fromJson(result['data']);
+    _error = PortalApiService.errorMessage(result, 'Erro ao testar a frase');
+    notifyListeners();
+    return null;
+  }
+
+  /// Adds every keyword in [keywords] under the same [action] in one request
+  /// - paste a batch instead of one at a time. Returns what the server
+  /// actually created/skipped so the caller can show a precise summary.
+  Future<BulkRuleResult?> addRulesBulk({
+    required int userId,
+    required String action,
+    required List<String> keywords,
+  }) async {
+    final result = await _api.post('/moderation/rules/bulk', {
+      'user_id': userId,
+      'action': action,
+      'keywords': keywords,
+    });
+    if (result['success'] == true) {
+      final bulkResult = BulkRuleResult.fromJson(result['data']);
+      if (bulkResult.created.isNotEmpty) {
+        _rules.insertAll(0, bulkResult.created);
+        notifyListeners();
+      }
+      return bulkResult;
+    }
+    _error = PortalApiService.errorMessage(result, 'Erro ao adicionar palavras em lote');
+    notifyListeners();
+    return null;
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

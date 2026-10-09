@@ -814,6 +814,74 @@ class ModerationFlowTests(RobotTestBase):
             engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
 
 
+class ModerationToolsTests(RobotTestBase):
+    """POST /moderation/test (phrase tester) and POST /moderation/rules/bulk
+    (paste many keywords at once) - no live session needed for either."""
+
+    def test_phrase_tester_matches_leetspeak_and_connected_words(self):
+        self.add_rule("goza", "kick")
+        self.add_rule("passa zap", "mute")
+
+        status, body = api("POST", "/moderation/test",
+                           {"user_id": self.uid, "text": "g0z4 gostoso"}, self.token)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body, {"matched": True, "action": "kick", "keyword": "goza"})
+
+        status, body = api("POST", "/moderation/test",
+                           {"user_id": self.uid, "text": "p4ss4zap"}, self.token)
+        self.assertEqual(body, {"matched": True, "action": "mute", "keyword": "passa zap"})
+
+        status, body = api("POST", "/moderation/test",
+                           {"user_id": self.uid, "text": "oi, tudo bem?"}, self.token)
+        self.assertEqual(body, {"matched": False, "action": None, "keyword": None})
+
+    def test_phrase_tester_ignores_inactive_rules(self):
+        rule = self.add_rule("feia", "kick")
+        api("PUT", f"/moderation/rules/{rule['id']}", {"is_active": False}, self.token)
+        status, body = api("POST", "/moderation/test",
+                           {"user_id": self.uid, "text": "voce e feia"}, self.token)
+        self.assertEqual(body["matched"], False)
+
+    def test_phrase_tester_requires_ownership(self):
+        other_token = new_user("otherphrase")[1]
+        status, _ = api("POST", "/moderation/test",
+                        {"user_id": self.uid, "text": "oi"}, other_token)
+        self.assertEqual(status, 403)
+
+    def test_bulk_create_adds_many_keywords_at_once(self):
+        status, body = api("POST", "/moderation/rules/bulk", {
+            "user_id": self.uid, "action": "kick",
+            "keywords": ["feia", "chata", "  mal educada  "],
+        }, self.token)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(len(body["created"]), 3)
+        self.assertEqual(body["skipped"], [])
+        self.assertEqual(
+            sorted(r["keyword"] for r in body["created"]),
+            ["chata", "feia", "mal educada"],
+        )
+
+    def test_bulk_create_skips_duplicates_within_batch_and_existing(self):
+        self.add_rule("feia", "kick")
+        status, body = api("POST", "/moderation/rules/bulk", {
+            "user_id": self.uid, "action": "kick",
+            "keywords": ["feia", "chata", "CHATA", "", "   "],
+        }, self.token)
+        self.assertEqual(status, 200, body)
+        self.assertEqual([r["keyword"] for r in body["created"]], ["chata"])
+        reasons = {s["reason"] for s in body["skipped"]}
+        self.assertIn("já cadastrada", reasons)
+        self.assertIn("duplicada no lote colado", reasons)
+        self.assertIn("vazia", reasons)
+
+    def test_bulk_create_requires_ownership(self):
+        other_token = new_user("otherbulk")[1]
+        status, _ = api("POST", "/moderation/rules/bulk", {
+            "user_id": self.uid, "action": "kick", "keywords": ["feia"],
+        }, other_token)
+        self.assertEqual(status, 403)
+
+
 class StatsTests(RobotTestBase):
     """GET /stats aggregates moderation_log - no separate tracking to get wrong,
     just the SQL doing what the screen needs."""

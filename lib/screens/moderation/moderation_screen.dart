@@ -44,6 +44,8 @@ class _ModerationScreenState extends State<ModerationScreen>
 
     return Column(
       children: [
+        const _ModerationToolsCard(),
+
         // Tab bar
         Container(
           color: AppTheme.bgCard,
@@ -79,6 +81,299 @@ class _ModerationScreenState extends State<ModerationScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Shared across both tabs (mute/kick) since it tests against every active
+/// rule regardless of which list it belongs to.
+class _ModerationToolsCard extends StatefulWidget {
+  const _ModerationToolsCard();
+
+  @override
+  State<_ModerationToolsCard> createState() => _ModerationToolsCardState();
+}
+
+class _ModerationToolsCardState extends State<_ModerationToolsCard> {
+  final _textController = TextEditingController();
+  bool _expanded = false;
+  bool _testing = false;
+  PhraseTestResult? _result;
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _test() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+    setState(() {
+      _testing = true;
+      _result = null;
+    });
+    final result =
+        await context.read<ModerationProvider>().testPhrase(userId: user.id, text: text);
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _result = result;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const Icon(Icons.science_outlined, color: AppTheme.accent, size: 18),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Testar uma frase',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline_rounded,
+                        color: AppTheme.textMuted, size: 20),
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => const _RulesHelpDialog(),
+                    ),
+                    tooltip: 'Como as regras funcionam',
+                  ),
+                  Icon(
+                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: AppTheme.textMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Digite uma mensagem de exemplo pra ver se alguma regra ativa pegaria ela '
+                    '- inclusive com número no lugar de letra ou letra repetida.',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _textController,
+                          onSubmitted: (_) => _test(),
+                          decoration: const InputDecoration(
+                            hintText: 'ex: g0z4 gostoso',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _testing ? null : _test,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.bgSurface,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: _testing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: AppTheme.primary),
+                                )
+                              : const Text('Testar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_result != null) ...[
+                    const SizedBox(height: 12),
+                    _TestResultBanner(result: _result!),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestResultBanner extends StatelessWidget {
+  final PhraseTestResult result;
+  const _TestResultBanner({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!result.matched) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.success.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.check_circle_outline_rounded, color: AppTheme.success, size: 18),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text('Nenhuma regra ativa pegaria essa frase.',
+                  style: TextStyle(color: AppTheme.success, fontSize: 13)),
+            ),
+          ],
+        ),
+      );
+    }
+    final isKick = result.action == 'kick';
+    final color = isKick ? AppTheme.error : AppTheme.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(isKick ? Icons.block_rounded : Icons.volume_off_rounded, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${isKick ? "Baniria" : "Silenciaria"} - bateu na regra "${result.keyword}"',
+              style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RulesHelpDialog extends StatelessWidget {
+  const _RulesHelpDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.bgCard,
+      title: const Text('Como as regras funcionam',
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+      content: const SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _HelpItem(
+                icon: Icons.star_rounded,
+                title: 'Asterisco no fim (ex: puta*)',
+                body: 'Pega a palavra e qualquer coisa colada depois dela '
+                    '("putaria", "putasso"...). Sem o *, só a palavra inteira conta.',
+              ),
+              _HelpItem(
+                icon: Icons.link_rounded,
+                title: 'Palavras compostas coladas ou separadas',
+                body: 'Uma regra "passa zap" também pega "passazap", '
+                    '"passa-zap", "passa_zap" e "passa.zap".',
+              ),
+              _HelpItem(
+                icon: Icons.filter_1_rounded,
+                title: 'Número no lugar de letra (leetspeak)',
+                body: '0→o, 1→i, 3→e, 4→a, 5→s, 7→t, 8→b, 9→g, @→a, \$→s, !→i. '
+                    '"g0z4" é reconhecido como "goza" automaticamente.',
+              ),
+              _HelpItem(
+                icon: Icons.format_underlined_rounded,
+                title: 'Letra esticada (ex: gozzzaaa)',
+                body: '3 ou mais da mesma letra em sequência colapsam pra 1 só '
+                    'antes de comparar - "goooza" também é pego.',
+              ),
+              _HelpItem(
+                icon: Icons.science_outlined,
+                title: 'Testar uma frase',
+                body: 'Use o campo acima pra conferir ao vivo se uma mensagem '
+                    'específica bateria em alguma regra, antes de confiar nela.',
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Entendi', style: TextStyle(color: AppTheme.primary)),
+        ),
+      ],
+    );
+  }
+}
+
+class _HelpItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  const _HelpItem({required this.icon, required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppTheme.accent, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(body,
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12.5, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -225,6 +520,18 @@ class _RulesTabState extends State<_RulesTab> {
                     action: widget.action,
                     color: color,
                   ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => showDialog(
+                        context: context,
+                        builder: (_) => _BulkImportDialog(action: widget.action, color: color),
+                      ),
+                      icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                      label: const Text('Adicionar várias de uma vez'),
+                      style: TextButton.styleFrom(foregroundColor: color),
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   Text(
@@ -299,6 +606,124 @@ class _RulesTabState extends State<_RulesTab> {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _BulkImportDialog extends StatefulWidget {
+  final String action;
+  final Color color;
+  const _BulkImportDialog({required this.action, required this.color});
+
+  @override
+  State<_BulkImportDialog> createState() => _BulkImportDialogState();
+}
+
+class _BulkImportDialogState extends State<_BulkImportDialog> {
+  final _textController = TextEditingController();
+  bool _saving = false;
+  BulkRuleResult? _result;
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final keywords = _textController.text
+        .split(RegExp(r'[\n,]'))
+        .map((k) => k.trim())
+        .where((k) => k.isNotEmpty)
+        .toList();
+    if (keywords.isEmpty) return;
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    setState(() => _saving = true);
+    final result = await context.read<ModerationProvider>().addRulesBulk(
+          userId: user.id,
+          action: widget.action,
+          keywords: keywords,
+        );
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _result = result;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMute = widget.action == 'mute';
+    return AlertDialog(
+      backgroundColor: AppTheme.bgCard,
+      title: Text(
+        'Adicionar várias palavras — ${isMute ? "Silenciar" : "Banir"}',
+        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15),
+      ),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Uma palavra por linha (ou separadas por vírgula). Já cadastradas '
+              'e repetidas no texto são ignoradas automaticamente.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _textController,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                hintText: 'feia\nchata\nmal educada',
+                isDense: true,
+              ),
+            ),
+            if (_result != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                '${_result!.created.length} adicionada${_result!.created.length != 1 ? "s" : ""}'
+                '${_result!.skipped.isNotEmpty ? ", ${_result!.skipped.length} ignorada${_result!.skipped.length != 1 ? "s" : ""}" : ""}.',
+                style: TextStyle(
+                  color: _result!.created.isNotEmpty ? AppTheme.success : AppTheme.textMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (_result!.skipped.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                ..._result!.skipped.map((s) => Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '• "${s.keyword}" — ${s.reason}',
+                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
+                      ),
+                    )),
+              ],
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fechar', style: TextStyle(color: AppTheme.textMuted)),
+        ),
+        ElevatedButton(
+          onPressed: _saving ? null : _submit,
+          style: ElevatedButton.styleFrom(backgroundColor: widget.color),
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Adicionar'),
+        ),
+      ],
     );
   }
 }

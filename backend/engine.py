@@ -97,11 +97,34 @@ def is_banned_username(name: str) -> bool:
 
 
 # ─── Keyword matching with anti-evasion ───────────────────────────────────────
+# Common internet leetspeak: digits/symbols standing in for a look-alike
+# letter ("g0z4" for "goza", "put@" for "puta"). Applied to both the keyword
+# and the chat text, so a rule written normally still catches the disguised
+# spelling without anyone having to register every variant by hand. Only the
+# unambiguous, widely-used substitutions - no multi-letter ones (ph->f,
+# ck->k) since those swallow real words too easily. "!" is deliberately left
+# out despite being common leetspeak for "i": it's far more often just an
+# exclamation mark, and turning a trailing "!" into a letter breaks the
+# word-boundary check for everything that ends a sentence with one
+# ("palavrao!" -> "palavraoi" no longer ends the word "palavrao" at all).
+_LEETSPEAK_MAP = str.maketrans({
+    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t",
+    "8": "b", "9": "g", "@": "a", "$": "s", "+": "t", "|": "i",
+})
+
+
 def normalize(text: str) -> str:
-    """Lowercase, strip accents, collapse whitespace ("Zap  ZÁP" -> "zap zap")."""
+    """Lowercase, strip accents, delete leetspeak, collapse stretched-out
+    letters and whitespace ("Zap  ZÁP" -> "zap zap", "g0z4" -> "goza",
+    "gozzzaaa" -> "goza"). The 3+ threshold for stretched letters (not 2)
+    is deliberate: plenty of real words have a legitimate double letter
+    ("carro", "assado"), triple+ almost never does.
+    """
     text = unicodedata.normalize("NFKD", text or "")
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    return re.sub(r"\s+", " ", text.casefold()).strip()
+    text = text.casefold().translate(_LEETSPEAK_MAP)
+    text = re.sub(r"(.)\1{2,}", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 class RuleMatcher:

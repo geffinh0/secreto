@@ -100,6 +100,43 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(enter["id"])
 
 
+class LeetspeakAndStretchedLettersTests(unittest.TestCase):
+    def test_leetspeak_substitutions(self):
+        m = RuleMatcher(rules(("goza", "kick")))
+        self.assertIsNotNone(m.match("g0z4"))
+        self.assertIsNotNone(m.match("g0za"))
+        self.assertIsNotNone(m.match("goz4"))
+        self.assertIsNotNone(m.match("g0z@"))
+        self.assertIsNone(m.match("gozar fora disso"))  # different word still rejected
+
+    def test_leetspeak_on_multiword_rule(self):
+        m = RuleMatcher(rules(("passa zap", "mute")))
+        self.assertIsNotNone(m.match("p4ss4 z4p"))
+        self.assertIsNotNone(m.match("p4ss4z4p"))  # leetspeak + connected words together
+
+    def test_stretched_letters_are_collapsed(self):
+        m = RuleMatcher(rules(("goza", "kick")))
+        self.assertIsNotNone(m.match("gozzzaaa"))
+        self.assertIsNotNone(m.match("goooza"))
+        # a real legitimate double letter must still not falsely match an
+        # unrelated rule just because collapsing kicks in
+        m2 = RuleMatcher(rules(("feia", "kick")))
+        self.assertIsNone(m2.match("carro assado"))
+
+    def test_trailing_punctuation_does_not_break_word_boundary(self):
+        # Regression: "!" must not be treated as leetspeak for "i" - that
+        # turned every sentence ending in "!" into one that no longer ends
+        # with the banned word at all ("palavrao!" -> "palavraoi").
+        m = RuleMatcher(rules(("palavrao", "kick")))
+        self.assertIsNotNone(m.match("que PALAVRAO!"))
+        self.assertIsNotNone(m.match("palavrao!!!"))
+
+    def test_normalize_helper_directly(self):
+        self.assertEqual(normalize("g0z4"), "goza")
+        self.assertEqual(normalize("P4SS4 Z4P"), "passa zap")  # "ss" is only 2 - stays (3+ needed to collapse)
+        self.assertEqual(normalize("gozzzaaa"), "goza")
+
+
 class AntiEvasionAndNewRulesTests(unittest.TestCase):
     def test_banned_username_w(self):
         from engine import is_banned_username

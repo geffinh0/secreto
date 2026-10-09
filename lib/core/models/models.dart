@@ -128,6 +128,48 @@ class ModerationRule {
   }
 }
 
+/// Result of POST /moderation/test: whether a sample phrase would trip one
+/// of the user's own active rules right now, and which one.
+class PhraseTestResult {
+  final bool matched;
+  final String? action;
+  final String? keyword;
+
+  PhraseTestResult({required this.matched, this.action, this.keyword});
+
+  factory PhraseTestResult.fromJson(Map<String, dynamic> json) => PhraseTestResult(
+        matched: asBool(json['matched']),
+        action: json['action'],
+        keyword: json['keyword'],
+      );
+}
+
+/// Result of POST /moderation/rules/bulk: exactly what landed and what
+/// didn't (and why), so a pasted batch's outcome is never a guess.
+class BulkSkip {
+  final String keyword;
+  final String reason;
+
+  BulkSkip({required this.keyword, required this.reason});
+
+  factory BulkSkip.fromJson(Map<String, dynamic> json) =>
+      BulkSkip(keyword: json['keyword'] ?? '', reason: json['reason'] ?? '');
+}
+
+class BulkRuleResult {
+  final List<ModerationRule> created;
+  final List<BulkSkip> skipped;
+
+  BulkRuleResult({required this.created, required this.skipped});
+
+  factory BulkRuleResult.fromJson(Map<String, dynamic> json) => BulkRuleResult(
+        created: (json['created'] as List? ?? [])
+            .map((e) => ModerationRule.fromJson(e))
+            .toList(),
+        skipped: (json['skipped'] as List? ?? []).map((e) => BulkSkip.fromJson(e)).toList(),
+      );
+}
+
 // =====================================================
 // AUTO MESSAGE MODEL
 // =====================================================
