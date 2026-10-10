@@ -907,6 +907,21 @@ class BotSession:
                                 pass
             elif kind == "livestream_ended":
                 await self.on_live_ended()
+            elif kind in ("livestream_turned_private", "livestream_info"):
+                # TEMP diagnostic (narrower than the generic branch below):
+                # these two carry the privacy/restriction state we're
+                # trying to identify. Logging just this safelist of fields
+                # (never the full payload - livestream_info also carries
+                # tokens and guest/user info) to see their actual values
+                # while a real private transition is happening.
+                safelist = (
+                    "restrict_type", "restrict_text", "restrict_details",
+                    "is_invited", "private_stream_elapsed_seconds",
+                    "private_livestream_request", "private_stream_switch_settings",
+                    "sent_private_livestream_request_id",
+                )
+                log.info("session %s: %s fields=%s",
+                          self.user_id, kind, {k: data.get(k) for k in safelist if k in data})
             else:
                 # TEMP diagnostic: every frame kind we DO understand is
                 # handled above; anything else is silently dropped today.
