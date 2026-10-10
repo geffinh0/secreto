@@ -23,7 +23,18 @@ from engine import (
 )
 from superlive import SuperLiveClient, SuperLiveError
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+_log_handlers = [logging.StreamHandler()]
+# Opt-in persistent log file (SM_LOG_FILE=path/to/file.log) - used for local
+# multi-account test runs (see start_local_test.bat), where the console
+# scrolls away but the whole session's activity needs reviewing afterwards.
+# Unset in production: console-only logging there is unchanged.
+if os.getenv("SM_LOG_FILE"):
+    _log_handlers.append(logging.FileHandler(os.environ["SM_LOG_FILE"], encoding="utf-8"))
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=_log_handlers,
+)
 
 sessions = SessionManager()
 watchers = WatchManager(sessions)
