@@ -310,6 +310,14 @@ class BotSession:
         Raises SuperLiveError (with a user-facing message) if it cannot start.
         """
         details = await self.client.retrieve_livestream(self.livestream_id)
+        # TEMP diagnostic (remove once we've confirmed how SuperLive marks a
+        # broadcast as "private"/premium): we only ever read details["user"]
+        # today, so any field about privacy/gift-gating - if it's already in
+        # this response - has never been looked at. Logging the top-level
+        # keys here (not the whole payload, which may be large) lets us spot
+        # a likely candidate the next time someone starts the robot.
+        log.info("session %s: livestream/retrieve top-level keys for %s: %s",
+                  self.user_id, self.livestream_id, sorted(details.keys()) if isinstance(details, dict) else type(details))
         streamer = details.get("user") if isinstance(details.get("user"), dict) else {}
         streamer_id = streamer.get("id") or streamer.get("user_id")
         self.streamer_id = str(streamer_id) if streamer_id else None
@@ -899,6 +907,16 @@ class BotSession:
                                 pass
             elif kind == "livestream_ended":
                 await self.on_live_ended()
+            else:
+                # TEMP diagnostic: every frame kind we DO understand is
+                # handled above; anything else is silently dropped today.
+                # If SuperLive pushes an event when a streamer flips a live
+                # to private/premium (livestream/make_private), it would
+                # show up here first. Logging the kind + data's own keys
+                # (not the values, which may include chat/user content)
+                # keeps this cheap enough to leave on while we investigate.
+                log.info("session %s: unhandled frame kind=%r data_keys=%s",
+                          self.user_id, kind, sorted(data.keys()) if data else [])
         except Exception:  # noqa: BLE001 - one bad frame must not kill the loop
             log.exception("could not handle frame")
 
