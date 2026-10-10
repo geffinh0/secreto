@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<title>Atila's Client — Tutorial cinematográfico (celular)</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-300-normal.woff2") format("woff2"); font-weight: 300; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-500-normal.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); font-weight: 800; }
+@font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+:root { --bg: #0b0806; --amber: #F2A65A; --orange: #E07B39; --gold: #D9A441; --rust: #A24A32; --cream: #F7EEE3; --text2: #C9B7A3; --glass: rgba(36,26,19,.72); --line: rgba(242,166,90,.28); --ok: #7FBF6A; --red: #E0563A; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Inter", sans-serif; color: var(--cream); background: var(--bg); }
+.layer { position: absolute; inset: 0; }
+#bg { background: radial-gradient(900px 1100px at 50% 38%, #24170f 0%, #120c09 55%, #070504 100%); }
+.beam { position: absolute; width: 520px; height: 2600px; top: -500px; filter: blur(46px); transform-origin: 50% 0%; }
+#beam1 { left: -180px; background: linear-gradient(180deg, rgba(242,166,90,.38), rgba(242,166,90,0) 70%); }
+#beam2 { left: 700px; background: linear-gradient(180deg, rgba(224,123,57,.30), rgba(224,123,57,0) 65%); }
+#beam3 { left: 300px; width: 380px; background: linear-gradient(180deg, rgba(217,164,65,.20), rgba(217,164,65,0) 60%); }
+#floor { position: absolute; left: -540px; top: 1180px; width: 2160px; height: 1100px; background-image: linear-gradient(rgba(242,166,90,.16) 2px, transparent 2px), linear-gradient(90deg, rgba(242,166,90,.16) 2px, transparent 2px); background-size: 90px 90px; -webkit-mask-image: linear-gradient(180deg, transparent, #000 30%, transparent 85%); mask-image: linear-gradient(180deg, transparent, #000 30%, transparent 85%); opacity: .55; }
+#floorwrap { position: absolute; inset: 0; perspective: 900px; perspective-origin: 50% 40%; }
+.bk { position: absolute; border-radius: 50%; }
+#vignette { background: radial-gradient(1000px 1500px at 50% 45%, transparent 55%, rgba(0,0,0,.75) 100%); }
+#grain { opacity: .05; background-image: repeating-radial-gradient(circle at 17% 32%, #fff 0 1px, transparent 1px 3px); }
+
+/* bands */
+.chapter { position: absolute; left: 60px; top: 64px; width: 960px; height: 70px; z-index: 40; }
+.ch-in { display: flex; align-items: center; justify-content: center; gap: 16px; height: 70px; white-space: nowrap; }
+.ch-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 18px 4px rgba(242,166,90,.8); }
+.ch-tag { font-size: 22px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--amber); }
+.ch-title { font-size: 40px; font-weight: 800; letter-spacing: -0.01em; color: var(--cream); text-shadow: 0 0 30px rgba(242,166,90,.35); }
+.cap { position: absolute; left: 60px; top: 1640px; width: 960px; height: 200px; display: flex; justify-content: center; align-items: center; z-index: 70; }
+.cap-in { display: block; text-align: center; max-width: 960px; font-size: 42px; line-height: 1.28; font-weight: 700; color: #fff; padding: 14px 30px; border-radius: 22px; background: rgba(12,8,6,.82); border: 1px solid var(--line); box-shadow: 0 0 40px rgba(242,166,90,.12), inset 0 1px 0 rgba(255,255,255,.06); }
+.rail { position: absolute; left: 90px; top: 1526px; width: 900px; height: 96px; display: flex; justify-content: center; align-items: center; perspective: 800px; z-index: 30; }
+.chip-in { display: flex; align-items: center; gap: 16px; white-space: nowrap; font-size: 32px; font-weight: 700; padding: 18px 32px; border-radius: 999px; background: var(--glass); border: 1.5px solid var(--line); box-shadow: 0 10px 40px rgba(0,0,0,.5), 0 0 40px rgba(242,166,90,.18); }
+.sd { width: 16px; height: 16px; flex: none; border-radius: 50%; }
+.ok .sd { background: var(--ok); box-shadow: 0 0 16px 4px rgba(127,191,106,.85); }
+.amb .sd { background: var(--amber); box-shadow: 0 0 16px 4px rgba(242,166,90,.85); }
+.red .sd, .live .sd, .ban .sd { background: var(--red); box-shadow: 0 0 16px 4px rgba(224,86,58,.9); }
+.off .sd { background: #8C7968; box-shadow: 0 0 10px 2px rgba(140,121,104,.6); }
+.mute .sd { background: var(--gold); box-shadow: 0 0 16px 4px rgba(217,164,65,.9); }
+.live { border-color: rgba(224,86,58,.5); }
+
+/* phone */
+#stage3d { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; perspective: 2200px; perspective-origin: 50% 45%; }
+#phone3d { position: absolute; left: 182px; top: 96px; width: 716px; height: 1509px; transform-style: preserve-3d; }
+#phone { position: absolute; left: 0; top: 0; width: 716px; height: 1509px; border-radius: 88px; background: linear-gradient(145deg, #2b211a, #0d0907 45%, #1c1511); border: 2px solid rgba(242,166,90,.35); box-shadow: 0 60px 140px rgba(0,0,0,.75), 0 0 90px rgba(242,166,90,.18), inset 0 0 0 6px #050403; }
+#pscreen { position: absolute; left: 16px; top: 16px; width: 682.5px; height: 1477px; border-radius: 72px; overflow: hidden; background: #1B140F; }
+#status { position: absolute; left: 0; top: 0; width: 682.5px; height: 77px; display: flex; align-items: center; justify-content: space-between; padding: 14px 58px 0 66px; font-size: 26px; font-weight: 700; color: var(--cream); }
+.sicons { display: flex; gap: 8px; } .sicons i { display: block; width: 22px; height: 14px; border-radius: 3px; background: var(--cream); opacity: .85; }
+#urlbar { position: absolute; left: 24px; top: 82px; width: 634px; height: 58px; border-radius: 29px; background: #2a1f18; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+#urltxt { font-family: "JetBrains Mono", monospace; font-size: 25px; color: var(--cream); display: inline-block; overflow: hidden; white-space: nowrap; width: 0; }
+#viewport { position: absolute; left: 0; top: 145px; width: 682.5px; height: 1260px; overflow: hidden; }
+#homebar { position: absolute; left: 241px; top: 1432px; width: 200px; height: 10px; border-radius: 5px; background: rgba(247,238,227,.55); }
+#scaler { position: absolute; left: 0; top: 0; width: 780px; height: 1440px; transform: scale(0.875); transform-origin: 0 0; }
+#cam, #screen, #poster { position: absolute; left: 0; top: 0; width: 780px; height: 1440px; }
+#cam { transform-origin: 0 0; }
+#blank { position: absolute; inset: 0; background: #1B140F; }
+#glare { position: absolute; left: -400px; top: 0; width: 300px; height: 1477px; background: linear-gradient(90deg, transparent, rgba(255,230,200,.10), transparent); }
+#dim { position: absolute; left: 16px; top: 161px; width: 682.5px; height: 1260px; border-radius: 0; background: rgba(10,7,5,.82); opacity: 0; }
+#reflect { position: absolute; left: 182px; top: 1470px; width: 716px; height: 120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(242,166,90,.35), transparent); filter: blur(20px); }
+
+/* side event cards */
+.ev { position: absolute; width: 320px; height: 150px; perspective: 900px; z-index: 35; }
+.ev.left { left: 14px; } .ev.right { left: 738px; }
+.ev-in { width: 320px; padding: 16px 18px; border-radius: 26px; background: rgba(28,20,15,.9); border: 1.5px solid var(--line); box-shadow: 0 30px 70px rgba(0,0,0,.6), 0 0 50px rgba(242,166,90,.2); display: flex; flex-direction: column; gap: 10px; }
+.ev-in.ban { border-color: rgba(224,86,58,.55); box-shadow: 0 30px 70px rgba(0,0,0,.6), 0 0 50px rgba(224,86,58,.25); }
+.ev-h { display: flex; align-items: center; gap: 10px; font-size: 25px; white-space: nowrap; }
+.ev-v { margin-left: auto; font-size: 17px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 6px 14px; border-radius: 10px; }
+.mute .ev-v { color: #1b140f; background: var(--gold); }
+.ban .ev-v { color: #fff; background: var(--red); }
+.ev-q { font-size: 20px; overflow: hidden; text-overflow: ellipsis; color: var(--text2); white-space: nowrap; }
+
+/* hero scenes */
+.hero { position: absolute; inset: 0; perspective: 1400px; }
+#intro-box { position: absolute; left: 60px; top: 360px; width: 960px; height: 1150px; display: flex; flex-direction: column; align-items: center; gap: 34px; }
+#intro-fox { width: 620px; height: 413px; object-fit: contain; filter: drop-shadow(0 0 60px rgba(242,166,90,.35)); }
+#intro-title { font-size: 118px; font-weight: 800; letter-spacing: -0.04em; white-space: nowrap; text-shadow: 0 0 60px rgba(242,166,90,.35); }
+#intro-title span { color: var(--amber); }
+#intro-sub { font-size: 38px; font-weight: 300; color: var(--text2); text-align: center; width: 860px; line-height: 1.35; }
+#intro-line { width: 520px; height: 2px; background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+#flare { position: absolute; left: -600px; top: 760px; width: 500px; height: 260px; background: radial-gradient(closest-side, rgba(255,214,160,.55), transparent); filter: blur(10px); }
+#como-box { position: absolute; left: 90px; top: 250px; width: 900px; height: 1300px; display: flex; flex-direction: column; align-items: center; gap: 26px; transform-style: preserve-3d; }
+.gcard { width: 900px; height: 210px; display: flex; align-items: center; gap: 34px; padding: 0 44px; border-radius: 32px; background: var(--glass); border: 1.5px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 60px rgba(242,166,90,.12); }
+.gcard .ic { width: 112px; height: 112px; flex: none; border-radius: 30px; background: rgba(242,166,90,.10); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.gcard .ic img { width: 92px; height: 92px; object-fit: contain; }
+.gcard .tx { display: flex; flex-direction: column; gap: 10px; }
+.gcard h3 { font-size: 42px; font-weight: 800; }
+.gcard p { font-size: 28px; font-weight: 300; color: var(--text2); }
+.conn { width: 4px; height: 40px; border-radius: 2px; background: linear-gradient(180deg, var(--amber), var(--rust)); box-shadow: 0 0 16px rgba(242,166,90,.8); }
+.pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; width: 900px; margin-top: 18px; }
+.pill { display: flex; align-items: center; gap: 14px; white-space: nowrap; font-size: 30px; font-weight: 700; padding: 16px 28px; border-radius: 999px; background: var(--glass); border: 1.5px solid var(--line); }
+#close-tab { width: 900px; text-align: center; font-size: 30px; font-weight: 700; line-height: 1.3; padding: 22px 30px; border-radius: 24px; background: rgba(127,191,106,.12); border: 1.5px solid rgba(127,191,106,.6); color: #d8efcf; margin-top: 10px; }
+#ac-box { position: absolute; left: 90px; top: 420px; width: 900px; height: 1100px; display: flex; flex-direction: column; align-items: center; gap: 46px; transform-style: preserve-3d; }
+#ac-url { width: 900px; height: 124px; border-radius: 62px; display: flex; align-items: center; gap: 24px; padding: 0 46px; background: rgba(36,26,19,.85); border: 2px solid rgba(242,166,90,.5); box-shadow: 0 30px 90px rgba(0,0,0,.6), 0 0 80px rgba(242,166,90,.25); }
+#ac-ty { font-family: "JetBrains Mono", monospace; font-size: 52px; font-weight: 600; color: var(--cream); display: inline-block; overflow: hidden; white-space: nowrap; width: 0; }
+.devs { display: flex; gap: 34px; }
+.dev { width: 300px; height: 250px; border-radius: 30px; background: var(--glass); border: 1.5px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; font-size: 32px; font-weight: 800; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+#ac-pwa { width: 900px; text-align: center; font-size: 30px; font-weight: 700; line-height: 1.3; padding: 22px 30px; border-radius: 24px; background: rgba(217,164,65,.10); border: 1.5px solid rgba(217,164,65,.55); color: #f3dfb2; }
+
+/* overlay cards */
+.ocard { position: absolute; left: 80px; width: 920px; border-radius: 34px; background: rgba(24,17,13,.92); border: 1.5px solid var(--line); box-shadow: 0 40px 120px rgba(0,0,0,.75), 0 0 80px rgba(242,166,90,.18); padding: 46px 48px; display: flex; flex-direction: column; gap: 16px; }
+.ocard h2 { font-size: 46px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 8px; }
+.rule { display: flex; align-items: center; gap: 18px; min-height: 80px; padding: 14px 24px; border-radius: 18px; background: rgba(242,166,90,.06); border: 1px solid rgba(242,166,90,.14); font-size: 30px; font-weight: 500; }
+.rule .ex { flex: 1; white-space: nowrap; }
+.kw { flex: none; font-family: "JetBrains Mono", monospace; font-weight: 600; color: var(--amber); font-size: 27px; padding: 4px 14px; border-radius: 10px; background: rgba(0,0,0,.35); white-space: nowrap; }
+.res { flex: none; white-space: nowrap; font-weight: 800; font-size: 22px; letter-spacing: .08em; text-transform: uppercase; padding: 7px 14px; border-radius: 10px; }
+.yes { color: #dff2d6; background: rgba(127,191,106,.25); }
+.no { color: #f6cdc2; background: rgba(224,86,58,.25); }
+#rg-card { top: 520px; }
+#md-card { top: 600px; align-items: center; text-align: center; gap: 26px; border-color: rgba(217,164,65,.6); box-shadow: 0 40px 120px rgba(0,0,0,.75), 0 0 90px rgba(217,164,65,.28); }
+#md-card h2 { color: var(--gold); }
+#md-card p { font-size: 34px; font-weight: 500; line-height: 1.4; color: var(--cream); }
+#rc-card { top: 360px; }
+.step { display: flex; align-items: center; gap: 22px; min-height: 88px; padding: 0 26px; border-radius: 20px; background: rgba(242,166,90,.06); border: 1px solid rgba(242,166,90,.14); font-size: 34px; font-weight: 700; }
+.num { width: 52px; height: 52px; flex: none; border-radius: 50%; background: var(--orange); color: #1B140F; font-weight: 800; font-size: 26px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(224,123,57,.6); }
+.tick { margin-left: auto; width: 46px; height: 46px; flex: none; border-radius: 50%; background: var(--ok); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 18px rgba(127,191,106,.7); }
+#outro { position: absolute; inset: 0; background: radial-gradient(900px 1200px at 50% 45%, #24170f, #070504 75%); z-index: 50; }
+#outro-box { position: absolute; left: 60px; top: 480px; width: 960px; height: 980px; display: flex; flex-direction: column; align-items: center; gap: 34px; }
+#outro-fox { width: 440px; height: 440px; object-fit: contain; filter: drop-shadow(0 0 70px rgba(242,166,90,.45)); }
+#outro-title { font-size: 108px; font-weight: 800; letter-spacing: -0.04em; white-space: nowrap; text-shadow: 0 0 60px rgba(242,166,90,.35); }
+#outro-title span { color: var(--amber); }
+#outro-sub { font-size: 38px; font-weight: 300; color: var(--text2); }
+#outro-url { font-family: "JetBrains Mono", monospace; font-size: 40px; font-weight: 600; color: var(--amber); padding: 18px 40px; border-radius: 999px; border: 2px solid rgba(242,166,90,.6); box-shadow: 0 0 50px rgba(242,166,90,.3); white-space: nowrap; }
+#progress { position: absolute; left: 0; top: 0; height: 6px; width: 1080px; background: linear-gradient(90deg, var(--rust), var(--orange), var(--amber)); box-shadow: 0 0 14px rgba(242,166,90,.8); transform-origin: 0 50%; z-index: 80; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="291.130" data-width="1080" data-height="1920">
+  <div id="bg" class="layer"></div>
+  <div id="beams" class="layer" data-layout-allow-overflow><div id="beam1" class="beam"></div><div id="beam2" class="beam"></div><div id="beam3" class="beam"></div></div>
+  <div id="floorwrap" data-layout-allow-overflow><div id="floor" data-layout-allow-overflow></div></div>
+  <div id="vignette" class="layer"></div>
+  <div id="grain" class="layer"></div>
+  <div id="bokeh" class="layer" data-layout-allow-overflow><div id="bk0" class="bk" data-layout-allow-overflow style="left:913px;top:925px;width:39px;height:39px;background:#D9A441;filter:blur(7.3px);opacity:0.31"></div><div id="bk1" class="bk" data-layout-allow-overflow style="left:934px;top:1289px;width:64px;height:64px;background:#D9A441;filter:blur(12.3px);opacity:0.19"></div><div id="bk2" class="bk" data-layout-allow-overflow style="left:250px;top:185px;width:39px;height:39px;background:#E07B39;filter:blur(7.3px);opacity:0.31"></div><div id="bk3" class="bk" data-layout-allow-overflow style="left:887px;top:1339px;width:76px;height:76px;background:#D9A441;filter:blur(14.8px);opacity:0.13"></div><div id="bk4" class="bk" data-layout-allow-overflow style="left:1042px;top:129px;width:9px;height:9px;background:#E07B39;filter:blur(1.2px);opacity:0.46"></div><div id="bk5" class="bk" data-layout-allow-overflow style="left:455px;top:1228px;width:21px;height:21px;background:#E07B39;filter:blur(3.7px);opacity:0.4"></div><div id="bk6" class="bk" data-layout-allow-overflow style="left:360px;top:1063px;width:30px;height:30px;background:#D9A441;filter:blur(5.6px);opacity:0.36"></div><div id="bk7" class="bk" data-layout-allow-overflow style="left:134px;top:936px;width:42px;height:42px;background:#F2A65A;filter:blur(8.0px);opacity:0.3"></div><div id="bk8" class="bk" data-layout-allow-overflow style="left:130px;top:1449px;width:77px;height:77px;background:#F2A65A;filter:blur(15.0px);opacity:0.12"></div><div id="bk9" class="bk" data-layout-allow-overflow style="left:1010px;top:591px;width:61px;height:61px;background:#E07B39;filter:blur(11.6px);opacity:0.2"></div><div id="bk10" class="bk" data-layout-allow-overflow style="left:181px;top:820px;width:47px;height:47px;background:#E07B39;filter:blur(8.9px);opacity:0.27"></div><div id="bk11" class="bk" data-layout-allow-overflow style="left:-6px;top:1735px;width:35px;height:35px;background:#E07B39;filter:blur(6.4px);opacity:0.33"></div><div id="bk12" class="bk" data-layout-allow-overflow style="left:67px;top:962px;width:22px;height:22px;background:#A24A32;filter:blur(3.9px);opacity:0.4"></div><div id="bk13" class="bk" data-layout-allow-overflow style="left:366px;top:1594px;width:37px;height:37px;background:#F2A65A;filter:blur(6.9px);opacity:0.32"></div><div id="bk14" class="bk" data-layout-allow-overflow style="left:641px;top:31px;width:14px;height:14px;background:#A24A32;filter:blur(2.2px);opacity:0.44"></div><div id="bk15" class="bk" data-layout-allow-overflow style="left:166px;top:22px;width:17px;height:17px;background:#E07B39;filter:blur(2.9px);opacity:0.42"></div><div id="bk16" class="bk" data-layout-allow-overflow style="left:323px;top:1396px;width:63px;height:63px;background:#D9A441;filter:blur(12.2px);opacity:0.19"></div><div id="bk17" class="bk" data-layout-allow-overflow style="left:228px;top:858px;width:43px;height:43px;background:#A24A32;filter:blur(8.1px);opacity:0.29"></div><div id="bk18" class="bk" data-layout-allow-overflow style="left:395px;top:0px;width:35px;height:35px;background:#F2A65A;filter:blur(6.5px);opacity:0.33"></div><div id="bk19" class="bk" data-layout-allow-overflow style="left:0px;top:431px;width:29px;height:29px;background:#D9A441;filter:blur(5.3px);opacity:0.36"></div><div id="bk20" class="bk" data-layout-allow-overflow style="left:165px;top:86px;width:77px;height:77px;background:#D9A441;filter:blur(14.9px);opacity:0.12"></div><div id="bk21" class="bk" data-layout-allow-overflow style="left:-21px;top:1582px;width:38px;height:38px;background:#F2A65A;filter:blur(7.2px);opacity:0.32"></div><div id="bk22" class="bk" data-layout-allow-overflow style="left:112px;top:184px;width:35px;height:35px;background:#D9A441;filter:blur(6.4px);opacity:0.33"></div><div id="bk23" class="bk" data-layout-allow-overflow style="left:-9px;top:1231px;width:52px;height:52px;background:#F2A65A;filter:blur(9.9px);opacity:0.25"></div><div id="bk24" class="bk" data-layout-allow-overflow style="left:220px;top:1202px;width:51px;height:51px;background:#A24A32;filter:blur(9.7px);opacity:0.25"></div><div id="bk25" class="bk" data-layout-allow-overflow style="left:750px;top:374px;width:17px;height:17px;background:#D9A441;filter:blur(2.9px);opacity:0.42"></div><div id="bk26" class="bk" data-layout-allow-overflow style="left:470px;top:1485px;width:71px;height:71px;background:#D9A441;filter:blur(13.7px);opacity:0.15"></div><div id="bk27" class="bk" data-layout-allow-overflow style="left:362px;top:1406px;width:59px;height:59px;background:#A24A32;filter:blur(11.4px);opacity:0.21"></div><div id="bk28" class="bk" data-layout-allow-overflow style="left:823px;top:97px;width:50px;height:50px;background:#E07B39;filter:blur(9.4px);opacity:0.26"></div><div id="bk29" class="bk" data-layout-allow-overflow style="left:482px;top:488px;width:10px;height:10px;background:#A24A32;filter:blur(1.5px);opacity:0.46"></div><div id="bk30" class="bk" data-layout-allow-overflow style="left:965px;top:600px;width:37px;height:37px;background:#D9A441;filter:blur(6.9px);opacity:0.32"></div><div id="bk31" class="bk" data-layout-allow-overflow style="left:941px;top:1145px;width:16px;height:16px;background:#E07B39;filter:blur(2.8px);opacity:0.43"></div><div id="bk32" class="bk" data-layout-allow-overflow style="left:377px;top:1533px;width:22px;height:22px;background:#E07B39;filter:blur(4.0px);opacity:0.4"></div><div id="bk33" class="bk" data-layout-allow-overflow style="left:872px;top:510px;width:26px;height:26px;background:#E07B39;filter:blur(4.8px);opacity:0.38"></div></div>
+
+  <div id="intro" class="clip hero" data-start="0" data-duration="13.888" data-track-index="1">
+    <div id="intro-box">
+      <img id="intro-fox" src="assets/img/fox_hero.webp" alt="" />
+      <div id="intro-title">Atila's <span>Client</span></div>
+      <div id="intro-line"></div>
+      <div id="intro-sub">O robô que modera as suas lives no SuperLive</div>
+    </div>
+    <div id="flare" data-layout-allow-overflow></div>
+  </div>
+
+  <div id="como" class="clip hero" data-start="13.888" data-duration="25.067" data-track-index="1">
+    <div id="como-box">
+      <div id="g1" class="gcard"><div class="ic"><svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg></div><div class="tx"><h3>Site</h3><p>Você configura tudo pelo navegador</p></div></div>
+      <div id="k1" class="conn"></div>
+      <div id="g2" class="gcard"><div class="ic"><svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="#D9A441" stroke-width="1.8"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></div><div class="tx"><h3>Servidor</h3><p>Guarda as regras e controla o robô</p></div></div>
+      <div id="k2" class="conn"></div>
+      <div id="g3" class="gcard"><div class="ic"><img src="assets/img/fox_avatar.png" alt="" /></div><div class="tx"><h3>Robô na live</h3><p>De olho no chat, 24 horas</p></div></div>
+      <div class="pills">
+        <div id="p1" class="pill mute"><span class="sd"></span>Silencia</div>
+        <div id="p2" class="pill ban"><span class="sd"></span>Expulsa</div>
+        <div id="p3" class="pill ok"><span class="sd"></span>Manda mensagens</div>
+      </div>
+      <div id="close-tab">Pode fechar o navegador: a moderação continua</div>
+    </div>
+  </div>
+
+  <div id="acessar" class="clip hero" data-start="38.955" data-duration="16.375" data-track-index="1">
+    <div id="ac-box">
+      <div id="ac-url"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span id="ac-ty">atilaclient.tech</span></div>
+      <div class="devs">
+        <div id="d1" class="dev"><svg width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="1.6"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M1 20h22"/></svg>Computador</div>
+        <div id="d2" class="dev"><svg width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>Celular</div>
+      </div>
+      <div id="ac-pwa">Dá pra instalar como app em Configurações</div>
+    </div>
+  </div>
+
+  <div id="reflect"></div>
+  <div id="stage3d">
+    <div id="phone3d">
+      <div id="phone">
+        <div id="pscreen">
+          <div id="status"><span>9:41</span><span class="sicons"><i></i><i></i><i></i></span></div>
+          <div id="urlbar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9B7A3" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span id="urltxt">atilaclient.tech</span></div>
+          <div id="viewport"><div id="scaler"><div id="cam">
+            <img id="poster" src="assets/img/first.jpg" alt="" />
+            <video id="screen" src="assets/rec/screen.mp4" muted playsinline data-start="55.330" data-duration="235.700" data-track-index="0"></video>
+          </div></div><div id="blank"></div></div>
+          <div id="homebar"></div>
+          <div id="glare" data-layout-allow-overflow></div>
+        </div>
+        <div id="dim"></div>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <div id="regras" class="clip hero" data-start="107.597" data-duration="21.100" data-track-index="2">
+    <div id="rg-card" class="ocard">
+      <h2>O robô lê a palavra inteira</h2>
+      <div id="r1" class="rule"><span class="kw">passa zap</span><span class="ex">“me PASSA ZÁP”</span><span class="res yes">pega</span></div>
+      <div id="r2" class="rule"><span class="kw">zap</span><span class="ex">“zapzap”</span><span class="res no">não pega</span></div>
+      <div id="r3" class="rule"><span class="kw">divulg*</span><span class="ex">“divulguem”</span><span class="res yes">pega</span></div>
+      <div id="r4" class="rule"><span class="kw">divulg*</span><span class="ex">“divulgação”</span><span class="res yes">pega</span></div>
+    </div>
+  </div>
+
+  <div id="moderador" class="clip hero" data-start="193.897" data-duration="13.500" data-track-index="2">
+    <div id="md-card" class="ocard">
+      <svg width="110" height="110" viewBox="0 0 24 24" fill="none" stroke="#D9A441" stroke-width="1.8"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M12 8v5M12 16h.01"/></svg>
+      <h2>Coloque o robô como moderador</h2>
+      <p>Sem isso, o SuperLive não deixa o robô silenciar nem banir ninguém.</p>
+    </div>
+  </div>
+
+  <div id="recap" class="clip hero" data-start="268.797" data-duration="9.814" data-track-index="2">
+    <div id="rc-card" class="ocard">
+      <h2>Checklist</h2>
+      <div id="st0" class="step"><span class="num">1</span><span>Crie sua conta</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st1" class="step"><span class="num">2</span><span>Cadastre as palavras</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st2" class="step"><span class="num">3</span><span>Monte as mensagens</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st3" class="step"><span class="num">4</span><span>Conecte o robô</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st4" class="step"><span class="num">5</span><span>Coloque de moderador</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st5" class="step"><span class="num">6</span><span>Favorite a streamer</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div>
+    </div>
+  </div>
+
+  <div id="chip-conta-0" class="clip rail" data-start="65.294" data-duration="5.836" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Conta criada</span></div></div><div id="chip-dash-0" class="clip rail" data-start="76.157" data-duration="3.000" data-track-index="2"><div class="chip-in off"><span class="sd"></span><span>Robô desconectado</span></div></div><div id="chip-dash-1" class="clip rail" data-start="79.157" data-duration="10.973" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>0 regras ativas</span></div></div><div id="chip-silenciar-0" class="clip rail" data-start="97.687" data-duration="8.100" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>zap  →  silenciar</span></div></div><div id="chip-silenciar-1" class="clip rail" data-start="105.787" data-duration="1.310" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>passa zap  →  silenciar</span></div></div><div id="chip-banir-0" class="clip rail" data-start="136.827" data-duration="2.000" data-track-index="2"><div class="chip-in red"><span class="sd"></span><span>golpe  →  banir</span></div></div><div id="chip-banir-1" class="clip rail" data-start="138.827" data-duration="11.037" data-track-index="2"><div class="chip-in red"><span class="sd"></span><span>divulg*  →  banir</span></div></div><div id="chip-mensagens-0" class="clip rail" data-start="158.141" data-duration="9.547" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>2 mensagens na fila</span></div></div><div id="chip-mensagens-1" class="clip rail" data-start="167.688" data-duration="4.142" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Envio automático: a cada 30s</span></div></div><div id="chip-robo-0" class="clip rail" data-start="191.310" data-duration="2.087" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Robô conectado</span></div></div><div id="chip-favoritar-0" class="clip rail" data-start="216.671" data-duration="5.753" data-track-index="2"><div class="chip-in live"><span class="sd"></span><span>Streamer ao vivo agora</span></div></div><div id="chip-favoritar-1" class="clip rail" data-start="222.424" data-duration="6.706" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Moderando automaticamente</span></div></div><div id="chip-aovivo-0" class="clip rail" data-start="235.204" data-duration="1.600" data-track-index="2"><div class="chip-in mute"><span class="sd"></span><span>Carlos_88 foi silenciado</span></div></div><div id="chip-aovivo-1" class="clip rail" data-start="236.804" data-duration="1.600" data-track-index="2"><div class="chip-in red"><span class="sd"></span><span>Promo_Fake foi banido</span></div></div><div id="chip-aovivo-2" class="clip rail" data-start="238.404" data-duration="6.193" data-track-index="2"><div class="chip-in red"><span class="sd"></span><span>Lucas foi banido</span></div></div><div id="chip-painel-0" class="clip rail" data-start="247.027" data-duration="4.958" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>Histórico de moderação</span></div></div><div id="chip-painel-1" class="clip rail" data-start="251.985" data-duration="12.612" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Palavras mais acionadas</span></div></div>
+
+  <div id="outro" class="clip" data-start="278.611" data-duration="12.519" data-track-index="2">
+    <div id="outro-box">
+      <img id="outro-fox" src="assets/img/fox_avatar.png" alt="" />
+      <div id="outro-title">Atila's <span>Client</span></div>
+      <div id="outro-sub">Suas lives no piloto automático</div>
+      <div id="outro-url">atilaclient.tech</div>
+    </div>
+  </div>
+
+  <div id="ch-como" class="clip chapter" data-start="13.888" data-duration="25.067" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Visão geral</span><span class="ch-title">Como funciona</span></div></div><div id="ch-acessar" class="clip chapter" data-start="38.955" data-duration="16.375" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 1</span><span class="ch-title">Acesse o site</span></div></div><div id="ch-conta" class="clip chapter" data-start="55.330" data-duration="16.000" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 2</span><span class="ch-title">Crie sua conta</span></div></div><div id="ch-dash" class="clip chapter" data-start="71.330" data-duration="19.000" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 3</span><span class="ch-title">O painel</span></div></div><div id="ch-silenciar" class="clip chapter" data-start="90.330" data-duration="16.967" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 4</span><span class="ch-title">Silenciar palavras</span></div></div><div id="ch-regras" class="clip chapter" data-start="107.297" data-duration="21.600" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Dica</span><span class="ch-title">Palavra inteira</span></div></div><div id="ch-banir" class="clip chapter" data-start="128.897" data-duration="21.167" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 5</span><span class="ch-title">Banir palavras</span></div></div><div id="ch-mensagens" class="clip chapter" data-start="150.063" data-duration="21.967" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 6</span><span class="ch-title">Mensagens automáticas</span></div></div><div id="ch-robo" class="clip chapter" data-start="172.030" data-duration="21.567" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 7</span><span class="ch-title">Conecte o robô</span></div></div><div id="ch-moderador" class="clip chapter" data-start="193.597" data-duration="14.100" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Importante</span><span class="ch-title">Robô moderador</span></div></div><div id="ch-favoritar" class="clip chapter" data-start="207.697" data-duration="21.633" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 8</span><span class="ch-title">Escolha a live</span></div></div><div id="ch-aovivo" class="clip chapter" data-start="229.330" data-duration="15.467" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Ao vivo</span><span class="ch-title">Robô em ação</span></div></div><div id="ch-painel" class="clip chapter" data-start="244.797" data-duration="20.000" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 9</span><span class="ch-title">Estatísticas</span></div></div><div id="ch-final" class="clip chapter" data-start="264.797" data-duration="26.333" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Resumo</span><span class="ch-title">Checklist</span></div></div>
+  <div id="cap0" class="clip cap" data-start="0.630" data-duration="2.719" data-track-index="4"><span class="cap-in">E aí, tudo bem? Hoje eu vou te mostrar,</span></div><div id="cap1" class="clip cap" data-start="3.369" data-duration="0.963" data-track-index="4"><span class="cap-in">passo a passo,</span></div><div id="cap2" class="clip cap" data-start="4.352" data-duration="2.096" data-track-index="4"><span class="cap-in">como usar o Atila&#x27;s Client.</span></div><div id="cap3" class="clip cap" data-start="6.703" data-duration="2.239" data-track-index="4"><span class="cap-in">É um robô que modera as suas lives no</span></div><div id="cap4" class="clip cap" data-start="8.962" data-duration="1.079" data-track-index="4"><span class="cap-in">SuperLive sozinho,</span></div><div id="cap5" class="clip cap" data-start="10.062" data-duration="2.276" data-track-index="4"><span class="cap-in">enquanto você foca na transmissão.</span></div><div id="cap6" class="clip cap" data-start="14.518" data-duration="1.711" data-track-index="4"><span class="cap-in">A ideia é bem simples.</span></div><div id="cap7" class="clip cap" data-start="16.239" data-duration="2.567" data-track-index="4"><span class="cap-in">Você entra no site, cadastra as palavras</span></div><div id="cap8" class="clip cap" data-start="18.826" data-duration="2.464" data-track-index="4"><span class="cap-in">proibidas e conecta uma conta robô.</span></div><div id="cap9" class="clip cap" data-start="21.690" data-duration="1.926" data-track-index="4"><span class="cap-in">Aí o robô entra na sua live,</span></div><div id="cap10" class="clip cap" data-start="23.636" data-duration="1.370" data-track-index="4"><span class="cap-in">fica de olho no chat</span></div><div id="cap11" class="clip cap" data-start="25.026" data-duration="1.440" data-track-index="4"><span class="cap-in">e silencia ou expulsa</span></div><div id="cap12" class="clip cap" data-start="26.486" data-duration="1.648" data-track-index="4"><span class="cap-in">quem passar dos limites.</span></div><div id="cap13" class="clip cap" data-start="28.154" data-duration="1.579" data-track-index="4"><span class="cap-in">E ainda manda mensagens</span></div><div id="cap14" class="clip cap" data-start="29.752" data-duration="1.660" data-track-index="4"><span class="cap-in">automáticas por você.</span></div><div id="cap15" class="clip cap" data-start="31.860" data-duration="2.112" data-track-index="4"><span class="cap-in">E o melhor: ele roda no servidor.</span></div><div id="cap16" class="clip cap" data-start="33.992" data-duration="2.177" data-track-index="4"><span class="cap-in">Pode fechar o navegador tranquilo,</span></div><div id="cap17" class="clip cap" data-start="36.190" data-duration="1.815" data-track-index="4"><span class="cap-in">que a moderação continua.</span></div><div id="cap18" class="clip cap" data-start="39.585" data-duration="0.692" data-track-index="4"><span class="cap-in">Pra começar,</span></div><div id="cap19" class="clip cap" data-start="40.297" data-duration="2.040" data-track-index="4"><span class="cap-in">você não precisa instalar nada.</span></div><div id="cap20" class="clip cap" data-start="42.444" data-duration="0.981" data-track-index="4"><span class="cap-in">É só abrir o navegador e</span></div><div id="cap21" class="clip cap" data-start="43.445" data-duration="1.285" data-track-index="4"><span class="cap-in">entrar em atilaclient.tech</span></div><div id="cap22" class="clip cap" data-start="44.687" data-duration="3.133" data-track-index="4"><span class="cap-in">Funciona no computador e no celular. E,</span></div><div id="cap23" class="clip cap" data-start="47.840" data-duration="2.810" data-track-index="4"><span class="cap-in">se quiser, dá até pra instalar como</span></div><div id="cap24" class="clip cap" data-start="50.670" data-duration="3.110" data-track-index="4"><span class="cap-in">aplicativo, lá na aba Configurações.</span></div><div id="cap25" class="clip cap" data-start="55.960" data-duration="2.616" data-track-index="4"><span class="cap-in">Na primeira vez, toca em “Criar agora”.</span></div><div id="cap26" class="clip cap" data-start="58.831" data-duration="1.097" data-track-index="4"><span class="cap-in">Coloca o seu nome,</span></div><div id="cap27" class="clip cap" data-start="59.948" data-duration="1.813" data-track-index="4"><span class="cap-in">um usuário e o seu e-mail.</span></div><div id="cap28" class="clip cap" data-start="62.094" data-duration="2.303" data-track-index="4"><span class="cap-in">Escolhe uma senha de pelo menos 8</span></div><div id="cap29" class="clip cap" data-start="64.417" data-duration="1.529" data-track-index="4"><span class="cap-in">caracteres, repete ela</span></div><div id="cap30" class="clip cap" data-start="65.966" data-duration="1.889" data-track-index="4"><span class="cap-in">e toca em “Criar conta”.</span></div><div id="cap31" class="clip cap" data-start="71.960" data-duration="1.874" data-track-index="4"><span class="cap-in">Prontinho, você já tá dentro!</span></div><div id="cap32" class="clip cap" data-start="74.157" data-duration="1.977" data-track-index="4"><span class="cap-in">Aqui no Dashboard você vê tudo</span></div><div id="cap33" class="clip cap" data-start="76.154" data-duration="2.110" data-track-index="4"><span class="cap-in">de uma vez: se o robô tá ligado,</span></div><div id="cap34" class="clip cap" data-start="78.283" data-duration="2.443" data-track-index="4"><span class="cap-in">quantas regras você tem, as mensagens</span></div><div id="cap35" class="clip cap" data-start="80.746" data-duration="2.596" data-track-index="4"><span class="cap-in">na fila e quantas vezes ele já agiu.</span></div><div id="cap36" class="clip cap" data-start="83.727" data-duration="3.076" data-track-index="4"><span class="cap-in">E aqui embaixo ficam as abas: Moderação,</span></div><div id="cap37" class="clip cap" data-start="86.823" data-duration="2.677" data-track-index="4"><span class="cap-in">Mensagens, Robô e Configurações.</span></div><div id="cap38" class="clip cap" data-start="90.960" data-duration="2.053" data-track-index="4"><span class="cap-in">Agora vamos montar as regras.</span></div><div id="cap39" class="clip cap" data-start="93.033" data-duration="1.630" data-track-index="4"><span class="cap-in">Toca em “Moderação”.</span></div><div id="cap40" class="clip cap" data-start="95.087" data-duration="1.287" data-track-index="4"><span class="cap-in">Na aba “Silenciar”,</span></div><div id="cap41" class="clip cap" data-start="96.394" data-duration="2.884" data-track-index="4"><span class="cap-in">digita a palavra e toca em “Adicionar”.</span></div><div id="cap42" class="clip cap" data-start="99.886" data-duration="1.357" data-track-index="4"><span class="cap-in">Quem mandar essa palavra</span></div><div id="cap43" class="clip cap" data-start="101.263" data-duration="1.692" data-track-index="4"><span class="cap-in">no chat fica mudo na live.</span></div><div id="cap44" class="clip cap" data-start="103.387" data-duration="1.769" data-track-index="4"><span class="cap-in">Dá pra colocar frases também,</span></div><div id="cap45" class="clip cap" data-start="105.176" data-duration="1.249" data-track-index="4"><span class="cap-in">tipo “passa zap”.</span></div><div id="cap46" class="clip cap" data-start="107.927" data-duration="0.960" data-track-index="4"><span class="cap-in">Ah, e uma dica:</span></div><div id="cap47" class="clip cap" data-start="108.907" data-duration="2.355" data-track-index="4"><span class="cap-in">o robô compara a palavra inteira.</span></div><div id="cap48" class="clip cap" data-start="111.216" data-duration="2.625" data-track-index="4"><span class="cap-in">Não adianta o espertinho escrever em</span></div><div id="cap49" class="clip cap" data-start="113.861" data-duration="2.405" data-track-index="4"><span class="cap-in">maiúscula, com acento ou cheio de</span></div><div id="cap50" class="clip cap" data-start="116.286" data-duration="2.551" data-track-index="4"><span class="cap-in">espaço: ele pega do mesmo jeito.</span></div><div id="cap51" class="clip cap" data-start="119.376" data-duration="2.852" data-track-index="4"><span class="cap-in">E com um asterisco no final, vale tudo</span></div><div id="cap52" class="clip cap" data-start="122.248" data-duration="2.625" data-track-index="4"><span class="cap-in">que começa com aquilo: divulg* pega</span></div><div id="cap53" class="clip cap" data-start="124.893" data-duration="3.147" data-track-index="4"><span class="cap-in">“divulguem”, “divulgação” e por aí vai.</span></div><div id="cap54" class="clip cap" data-start="129.527" data-duration="2.261" data-track-index="4"><span class="cap-in">Já na aba “Banir”, a pessoa não</span></div><div id="cap55" class="clip cap" data-start="131.808" data-duration="2.849" data-track-index="4"><span class="cap-in">fica só muda: ela é expulsa da live.</span></div><div id="cap56" class="clip cap" data-start="135.227" data-duration="3.780" data-track-index="4"><span class="cap-in">Vou colocar “golpe” e “divulg*”.</span></div><div id="cap57" class="clip cap" data-start="139.787" data-duration="1.934" data-track-index="4"><span class="cap-in">Aqui em cima tem três chaves:</span></div><div id="cap58" class="clip cap" data-start="141.741" data-duration="1.395" data-track-index="4"><span class="cap-in">moderação automática,</span></div><div id="cap59" class="clip cap" data-start="143.156" data-duration="1.327" data-track-index="4"><span class="cap-in">banimento permanente</span></div><div id="cap60" class="clip cap" data-start="144.503" data-duration="1.732" data-track-index="4"><span class="cap-in">e imunidade por diamantes,</span></div><div id="cap61" class="clip cap" data-start="146.255" data-duration="1.125" data-track-index="4"><span class="cap-in">que livra quem já</span></div><div id="cap62" class="clip cap" data-start="147.400" data-duration="1.817" data-track-index="4"><span class="cap-in">mandou presente na live.</span></div><div id="cap63" class="clip cap" data-start="150.693" data-duration="2.412" data-track-index="4"><span class="cap-in">Agora, as mensagens automáticas.</span></div><div id="cap64" class="clip cap" data-start="153.125" data-duration="1.720" data-track-index="4"><span class="cap-in">Toca em “Mensagens”.</span></div><div id="cap65" class="clip cap" data-start="155.141" data-duration="2.555" data-track-index="4"><span class="cap-in">Escreve o recado e toca em “Adicionar à</span></div><div id="cap66" class="clip cap" data-start="157.716" data-duration="2.291" data-track-index="4"><span class="cap-in">fila”. Pode colocar quantas quiser:</span></div><div id="cap67" class="clip cap" data-start="160.026" data-duration="1.630" data-track-index="4"><span class="cap-in">elas vão saindo na ordem,</span></div><div id="cap68" class="clip cap" data-start="161.677" data-duration="1.454" data-track-index="4"><span class="cap-in">uma atrás da outra.</span></div><div id="cap69" class="clip cap" data-start="163.688" data-duration="1.988" data-track-index="4"><span class="cap-in">Escolhe de quanto em quanto tempo,</span></div><div id="cap70" class="clip cap" data-start="165.696" data-duration="1.339" data-track-index="4"><span class="cap-in">liga o envio automático</span></div><div id="cap71" class="clip cap" data-start="167.055" data-duration="1.322" data-track-index="4"><span class="cap-in">e toca em “Salvar”.</span></div><div id="cap72" class="clip cap" data-start="172.660" data-duration="2.050" data-track-index="4"><span class="cap-in">Agora é hora de conectar o robô.</span></div><div id="cap73" class="clip cap" data-start="174.730" data-duration="1.597" data-track-index="4"><span class="cap-in">O ideal é criar uma conta</span></div><div id="cap74" class="clip cap" data-start="176.347" data-duration="1.753" data-track-index="4"><span class="cap-in">no SuperLive só pra ele.</span></div><div id="cap75" class="clip cap" data-start="178.690" data-duration="3.051" data-track-index="4"><span class="cap-in">Na aba “Robô”, você escolhe como entrar:</span></div><div id="cap76" class="clip cap" data-start="181.761" data-duration="2.590" data-track-index="4"><span class="cap-in">e-mail e senha, celular com código</span></div><div id="cap77" class="clip cap" data-start="184.371" data-duration="2.349" data-track-index="4"><span class="cap-in">por SMS, ou colando o token.</span></div><div id="cap78" class="clip cap" data-start="187.300" data-duration="1.348" data-track-index="4"><span class="cap-in">Eu vou de e-mail e senha</span></div><div id="cap79" class="clip cap" data-start="188.668" data-duration="1.682" data-track-index="4"><span class="cap-in">e toco em “Conectar Robô”.</span></div><div id="cap80" class="clip cap" data-start="191.010" data-duration="1.760" data-track-index="4"><span class="cap-in">Pronto, robô conectado!</span></div><div id="cap81" class="clip cap" data-start="194.227" data-duration="2.154" data-track-index="4"><span class="cap-in">Agora, presta atenção nessa parte,</span></div><div id="cap82" class="clip cap" data-start="196.401" data-duration="1.734" data-track-index="4"><span class="cap-in">que é a mais importante!</span></div><div id="cap83" class="clip cap" data-start="198.103" data-duration="2.033" data-track-index="4"><span class="cap-in">A dona da live precisa colocar</span></div><div id="cap84" class="clip cap" data-start="200.156" data-duration="2.170" data-track-index="4"><span class="cap-in">a conta do robô como moderadora.</span></div><div id="cap85" class="clip cap" data-start="202.346" data-duration="2.102" data-track-index="4"><span class="cap-in">Sem isso, o SuperLive não deixa</span></div><div id="cap86" class="clip cap" data-start="204.468" data-duration="2.390" data-track-index="4"><span class="cap-in">ele silenciar nem banir ninguém.</span></div><div id="cap87" class="clip cap" data-start="208.327" data-duration="1.373" data-track-index="4"><span class="cap-in">Agora é só falar pro robô</span></div><div id="cap88" class="clip cap" data-start="209.720" data-duration="1.649" data-track-index="4"><span class="cap-in">qual live ele vai moderar.</span></div><div id="cap89" class="clip cap" data-start="211.672" data-duration="2.065" data-track-index="4"><span class="cap-in">Digita o ID que aparece no perfil</span></div><div id="cap90" class="clip cap" data-start="213.757" data-duration="1.906" data-track-index="4"><span class="cap-in">da streamer e toca na lupa.</span></div><div id="cap91" class="clip cap" data-start="216.071" data-duration="1.401" data-track-index="4"><span class="cap-in">Se ela estiver ao vivo,</span></div><div id="cap92" class="clip cap" data-start="217.492" data-duration="1.991" data-track-index="4"><span class="cap-in">o ID da live aparece sozinho.</span></div><div id="cap93" class="clip cap" data-start="219.824" data-duration="2.564" data-track-index="4"><span class="cap-in">Aí toca em “Favoritar”. Toda vez que ela</span></div><div id="cap94" class="clip cap" data-start="222.408" data-duration="2.370" data-track-index="4"><span class="cap-in">abrir uma live, o robô entra sozinho,</span></div><div id="cap95" class="clip cap" data-start="224.797" data-duration="1.815" data-track-index="4"><span class="cap-in">mesmo com o site fechado.</span></div><div id="cap96" class="clip cap" data-start="229.960" data-duration="1.631" data-track-index="4"><span class="cap-in">E olha ele trabalhando!</span></div><div id="cap97" class="clip cap" data-start="231.611" data-duration="2.855" data-track-index="4"><span class="cap-in">O chat da live aparece aqui, ao vivo.</span></div><div id="cap98" class="clip cap" data-start="234.804" data-duration="1.794" data-track-index="4"><span class="cap-in">Pediu o zap? Ficou mudo.</span></div><div id="cap99" class="clip cap" data-start="236.618" data-duration="2.846" data-track-index="4"><span class="cap-in">Falou em golpe? Tchau, foi expulso.</span></div><div id="cap100" class="clip cap" data-start="240.180" data-duration="1.743" data-track-index="4"><span class="cap-in">E tudo fica anotado aqui embaixo,</span></div><div id="cap101" class="clip cap" data-start="241.943" data-duration="2.016" data-track-index="4"><span class="cap-in">com a palavra que fez o robô agir.</span></div><div id="cap102" class="clip cap" data-start="245.427" data-duration="1.396" data-track-index="4"><span class="cap-in">Voltando pro Dashboard,</span></div><div id="cap103" class="clip cap" data-start="246.843" data-duration="2.171" data-track-index="4"><span class="cap-in">os números já foram atualizados.</span></div><div id="cap104" class="clip cap" data-start="249.385" data-duration="2.387" data-track-index="4"><span class="cap-in">Em “Estatísticas”, você vê o histórico,</span></div><div id="cap105" class="clip cap" data-start="251.792" data-duration="1.214" data-track-index="4"><span class="cap-in">as palavras que mais</span></div><div id="cap106" class="clip cap" data-start="253.026" data-duration="2.052" data-track-index="4"><span class="cap-in">apareceram e as últimas lives.</span></div><div id="cap107" class="clip cap" data-start="255.438" data-duration="2.089" data-track-index="4"><span class="cap-in">E em “Configurações” ficam os dados da</span></div><div id="cap108" class="clip cap" data-start="257.547" data-duration="2.309" data-track-index="4"><span class="cap-in">sua conta e tudo o que aconteceu nela.</span></div><div id="cap109" class="clip cap" data-start="265.427" data-duration="1.119" data-track-index="4"><span class="cap-in">Quando quiser parar,</span></div><div id="cap110" class="clip cap" data-start="266.566" data-duration="2.306" data-track-index="4"><span class="cap-in">é só tocar em “Parar”, na aba “Robô”.</span></div><div id="cap111" class="clip cap" data-start="269.296" data-duration="1.674" data-track-index="4"><span class="cap-in">Resumindo: cria a conta,</span></div><div id="cap112" class="clip cap" data-start="270.990" data-duration="1.462" data-track-index="4"><span class="cap-in">cadastra as palavras,</span></div><div id="cap113" class="clip cap" data-start="272.473" data-duration="1.321" data-track-index="4"><span class="cap-in">monta as mensagens,</span></div><div id="cap114" class="clip cap" data-start="273.814" data-duration="2.027" data-track-index="4"><span class="cap-in">conecta o robô, coloca ele de</span></div><div id="cap115" class="clip cap" data-start="275.861" data-duration="2.459" data-track-index="4"><span class="cap-in">moderador e favorita a streamer.</span></div><div id="cap116" class="clip cap" data-start="278.611" data-duration="1.908" data-track-index="4"><span class="cap-in">Pronto! Agora suas lives estão</span></div><div id="cap117" class="clip cap" data-start="280.539" data-duration="2.037" data-track-index="4"><span class="cap-in">protegidas no piloto automático.</span></div><div id="cap118" class="clip cap" data-start="282.597" data-duration="1.678" data-track-index="4"><span class="cap-in">Valeu, e até a próxima!</span></div>
+  <div id="progress"></div>
+  <audio id="vo-intro" src="assets/vo/intro.wav" data-start="0.550" data-duration="11.888" data-track-index="5" data-volume="1"></audio><audio id="vo-como" src="assets/vo/como.wav" data-start="14.438" data-duration="23.667" data-track-index="5" data-volume="1"></audio><audio id="vo-acessar" src="assets/vo/acessar.wav" data-start="39.505" data-duration="14.375" data-track-index="5" data-volume="1"></audio><audio id="vo-conta" src="assets/vo/conta.wav" data-start="55.880" data-duration="12.075" data-track-index="5" data-volume="1"></audio><audio id="vo-dash" src="assets/vo/dash.wav" data-start="71.880" data-duration="17.720" data-track-index="5" data-volume="1"></audio><audio id="vo-silenciar" src="assets/vo/silenciar.wav" data-start="90.880" data-duration="15.645" data-track-index="5" data-volume="1"></audio><audio id="vo-regras" src="assets/vo/regras.wav" data-start="107.847" data-duration="20.293" data-track-index="5" data-volume="1"></audio><audio id="vo-banir" src="assets/vo/banir.wav" data-start="129.447" data-duration="19.864" data-track-index="5" data-volume="1"></audio><audio id="vo-mensagens" src="assets/vo/mensagens.wav" data-start="150.613" data-duration="17.864" data-track-index="5" data-volume="1"></audio><audio id="vo-robo" src="assets/vo/robo.wav" data-start="172.580" data-duration="20.290" data-track-index="5" data-volume="1"></audio><audio id="vo-moderador" src="assets/vo/moderador.wav" data-start="194.147" data-duration="12.811" data-track-index="5" data-volume="1"></audio><audio id="vo-favoritar" src="assets/vo/favoritar.wav" data-start="208.247" data-duration="18.465" data-track-index="5" data-volume="1"></audio><audio id="vo-aovivo" src="assets/vo/aovivo.wav" data-start="229.880" data-duration="14.179" data-track-index="5" data-volume="1"></audio><audio id="vo-painel" src="assets/vo/painel.wav" data-start="245.347" data-duration="14.608" data-track-index="5" data-volume="1"></audio><audio id="vo-final" src="assets/vo/final.wav" data-start="265.347" data-duration="19.028" data-track-index="5" data-volume="1"></audio><audio id="bgm" src="assets/bgm_long.mp3" data-start="0" data-duration="291.130" data-track-index="6" data-volume="0.16"></audio><audio id="wh0" src="assets/whoosh.mp3" data-start="13.588" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh1" src="assets/whoosh.mp3" data-start="38.655" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh2" src="assets/whoosh.mp3" data-start="54.130" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh3" src="assets/whoosh.mp3" data-start="107.147" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh4" src="assets/whoosh.mp3" data-start="193.447" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh5" src="assets/whoosh.mp3" data-start="264.647" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="pp0" src="assets/pop.mp3" data-start="65.344" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp1" src="assets/pop.mp3" data-start="76.207" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp2" src="assets/pop.mp3" data-start="79.207" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp3" src="assets/pop.mp3" data-start="97.737" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp4" src="assets/pop.mp3" data-start="105.837" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp5" src="assets/pop.mp3" data-start="136.877" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp6" src="assets/pop.mp3" data-start="138.877" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp7" src="assets/pop.mp3" data-start="158.191" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp8" src="assets/pop.mp3" data-start="167.738" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp9" src="assets/pop.mp3" data-start="191.360" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp10" src="assets/pop.mp3" data-start="216.721" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp11" src="assets/pop.mp3" data-start="222.474" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp12" src="assets/pop.mp3" data-start="235.254" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp13" src="assets/pop.mp3" data-start="236.854" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp14" src="assets/pop.mp3" data-start="238.454" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp15" src="assets/pop.mp3" data-start="247.077" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp16" src="assets/pop.mp3" data-start="252.035" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+const TOTAL = 291.130;
+tl.fromTo("#progress", { scaleX: 0 }, { scaleX: 1, duration: TOTAL, ease: "none" }, 0);
+
+// volumetric light: slow sway + breathing
+tl.fromTo("#beam1", { rotation: 18 }, { rotation: 8, duration: TOTAL / 2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+tl.fromTo("#beam2", { rotation: -20 }, { rotation: -9, duration: TOTAL / 3, ease: "sine.inOut", yoyo: true, repeat: 2 }, 0);
+tl.fromTo("#beam3", { rotation: 4, opacity: .5 }, { rotation: -6, opacity: 1, duration: TOTAL / 4, ease: "sine.inOut", yoyo: true, repeat: 3 }, 0);
+tl.fromTo("#floor", { rotationX: 72, y: 0 }, { rotationX: 72, y: 180, duration: TOTAL, ease: "none" }, 0);
+
+// INTRO: light sweep reveals the logo
+tl.fromTo("#intro-fox", { opacity: 0, scale: .82, y: 60, filter: "blur(18px)" }, { opacity: 1, scale: 1, y: 0, filter: "blur(0px)", duration: 1.6, ease: "power3.out" }, 0.2);
+tl.fromTo("#intro-title", { opacity: 0, scale: 1.18, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.4, ease: "power3.out" }, 0.9);
+tl.fromTo("#intro-line", { scaleX: 0 }, { scaleX: 1, duration: 1.1, ease: "power2.inOut" }, 1.6);
+tl.fromTo("#intro-sub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .9, ease: "power2.out" }, 2.0);
+tl.fromTo("#flare", { x: 0 }, { x: 2200, duration: 2.4, ease: "power2.inOut" }, 0.8);
+tl.to("#intro-fox", { y: -16, duration: 2.6, ease: "sine.inOut", yoyo: true, repeat: 2 }, 1.8);
+tl.to("#intro-box", { scale: 1.35, opacity: 0, filter: "blur(16px)", duration: .9, ease: "power2.in" }, 12.888);
+
+// COMO: glass cards float in from depth
+const cc = [14.518, 16.239, 21.69, 31.86];
+tl.fromTo("#g1", { opacity: 0, z: -500, rotationX: 40 }, { opacity: 1, z: 0, rotationX: 0, duration: .9, ease: "power3.out" }, cc[1]);
+tl.fromTo("#k1", { scaleY: 0 }, { scaleY: 1, duration: .4 }, cc[1] + 1.5);
+tl.fromTo("#g2", { opacity: 0, z: -500, rotationX: 40 }, { opacity: 1, z: 0, rotationX: 0, duration: .9, ease: "power3.out" }, cc[1] + 1.8);
+tl.fromTo("#k2", { scaleY: 0 }, { scaleY: 1, duration: .4 }, cc[1] + 3.3);
+tl.fromTo("#g3", { opacity: 0, z: -500, rotationX: 40 }, { opacity: 1, z: 0, rotationX: 0, duration: .9, ease: "power3.out" }, cc[2]);
+tl.fromTo("#p1", { opacity: 0, y: 30, scale: .9 }, { opacity: 1, y: 0, scale: 1, duration: .5, ease: "back.out(2)" }, cc[2] + 4.0);
+tl.fromTo("#p2", { opacity: 0, y: 30, scale: .9 }, { opacity: 1, y: 0, scale: 1, duration: .5, ease: "back.out(2)" }, cc[2] + 5.0);
+tl.fromTo("#p3", { opacity: 0, y: 30, scale: .9 }, { opacity: 1, y: 0, scale: 1, duration: .5, ease: "back.out(2)" }, cc[2] + 8.0);
+tl.fromTo("#close-tab", { opacity: 0, scale: .92 }, { opacity: 1, scale: 1, duration: .5, ease: "back.out(2)" }, cc[3] + 1.3);
+tl.fromTo("#como-box", { rotationY: -8, rotationX: 4 }, { rotationY: 8, rotationX: -3, duration: 25.07, ease: "sine.inOut" }, 13.888);
+tl.to("#como-box", { scale: 1.3, opacity: 0, filter: "blur(16px)", duration: .8, ease: "power2.in" }, 38.105);
+
+// ACESSAR: glowing URL bar types, devices float
+const ac = [39.585, 42.444, 44.687];
+tl.fromTo("#ac-url", { opacity: 0, z: -600, rotationX: 30 }, { opacity: 1, z: 0, rotationX: 0, duration: 1, ease: "power3.out" }, 39.255);
+tl.fromTo("#ac-ty", { width: 0 }, { width: "16ch", duration: 1.2, ease: "steps(16)" }, ac[1] + 2.6);
+tl.fromTo("#d1", { opacity: 0, y: 50, rotationY: -30 }, { opacity: 1, y: 0, rotationY: 0, duration: .7, ease: "power3.out" }, ac[2] + 0.5);
+tl.fromTo("#d2", { opacity: 0, y: 50, rotationY: 30 }, { opacity: 1, y: 0, rotationY: 0, duration: .7, ease: "power3.out" }, ac[2] + 1.1);
+tl.fromTo("#ac-pwa", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: .5 }, ac[2] + 4.8);
+tl.to("#ac-box", { scale: 1.3, opacity: 0, filter: "blur(16px)", duration: .7, ease: "power2.in" }, 53.130);
+
+// PHONE flies in from depth, then floats
+tl.fromTo("#phone3d", { opacity: 0, z: -1600, rotationY: 38, rotationX: 12, scale: .86 }, { opacity: 1, z: 0, rotationY: -6, rotationX: 3, scale: .86, duration: 1.6, ease: "power3.out" }, 54.030);
+tl.fromTo("#reflect", { opacity: 0 }, { opacity: 1, duration: 1.2 }, 54.430);
+tl.fromTo("#phone3d", { y: 0 }, { y: -18, duration: 3.2, ease: "sine.inOut", yoyo: true, repeat: 74 }, 55.630);
+tl.fromTo("#urltxt", { width: 0 }, { width: "16ch", duration: .6, ease: "steps(16)" }, 54.630);
+tl.to("#blank", { opacity: 0, duration: .4 }, 55.130);
+tl.set("#poster", { opacity: 0 }, 55.530);
+for (let g = 0; g < 9; g++) tl.fromTo("#glare", { x: 0 }, { x: 1400, duration: 1.6, ease: "power2.inOut" }, 55.330 + g * 21);
+
+// overlays: dim the screen, cards float in front
+const dim = (a, b) => { tl.to("#dim", { opacity: 1, duration: .4 }, a); if (b) tl.to("#dim", { opacity: 0, duration: .4 }, b); };
+dim(107.597, 128.397);
+dim(193.897, 207.097);
+dim(268.797, 0);
+const rc = [107.927, 111.216, 119.376];
+tl.fromTo("#rg-card", { opacity: 0, z: -400, rotationX: 25 }, { opacity: 1, z: 0, rotationX: 0, duration: .8, ease: "power3.out" }, 107.697);
+tl.fromTo("#r1", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[1] + 0.8);
+tl.fromTo("#r2", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[1] + 2.6);
+tl.fromTo("#r3", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[2] + 6.2);
+tl.fromTo("#r4", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[2] + 7.4);
+tl.to("#rg-card", { opacity: 0, scale: 1.08, filter: "blur(10px)", duration: .45 }, 127.997);
+tl.fromTo("#md-card", { opacity: 0, z: -400, rotationX: 25 }, { opacity: 1, z: 0, rotationX: 0, duration: .8, ease: "power3.out" }, 193.997);
+tl.to("#md-card svg", { scale: 1.12, duration: .5, yoyo: true, repeat: 5, ease: "sine.inOut" }, 194.597);
+tl.to("#md-card", { opacity: 0, scale: 1.08, filter: "blur(10px)", duration: .45 }, 206.697);
+const fc = [265.427, 269.296, 278.611];
+tl.fromTo("#rc-card", { opacity: 0, z: -400, rotationX: 25 }, { opacity: 1, z: 0, rotationX: 0, duration: .8, ease: "power3.out" }, 268.897);
+[0.6, 1.6, 3.0, 4.3, 5.6, 7.3].forEach((d, i) => {
+  tl.fromTo("#st" + i, { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .35, ease: "power2.out" }, fc[1] + d);
+  tl.fromTo("#st" + i + " .tick", { scale: 0 }, { scale: 1, duration: .35, ease: "back.out(3)" }, fc[1] + d + 0.4);
+});
+tl.fromTo("#outro-fox", { opacity: 0, scale: .7, filter: "blur(16px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "power3.out" }, fc[2] + 0.1);
+tl.fromTo("#outro-title", { opacity: 0, scale: 1.18, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.0, ease: "power3.out" }, fc[2] + 0.5);
+tl.fromTo("#outro-sub", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .6 }, fc[2] + 1.0);
+tl.fromTo("#outro-url", { opacity: 0, scale: .85 }, { opacity: 1, scale: 1, duration: .6, ease: "back.out(2)" }, fc[2] + 1.4);
+
+tl.fromTo("#cap0 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},0.630);
+tl.fromTo("#cap1 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},3.369);
+tl.fromTo("#cap2 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},4.352);
+tl.fromTo("#cap3 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},6.703);
+tl.fromTo("#cap4 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},8.962);
+tl.fromTo("#cap5 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},10.062);
+tl.fromTo("#cap6 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},14.518);
+tl.fromTo("#cap7 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},16.239);
+tl.fromTo("#cap8 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},18.826);
+tl.fromTo("#cap9 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},21.690);
+tl.fromTo("#cap10 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},23.636);
+tl.fromTo("#cap11 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},25.026);
+tl.fromTo("#cap12 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},26.486);
+tl.fromTo("#cap13 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},28.154);
+tl.fromTo("#cap14 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},29.752);
+tl.fromTo("#cap15 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},31.860);
+tl.fromTo("#cap16 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},33.992);
+tl.fromTo("#cap17 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},36.190);
+tl.fromTo("#cap18 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},39.585);
+tl.fromTo("#cap19 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},40.297);
+tl.fromTo("#cap20 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},42.444);
+tl.fromTo("#cap21 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},43.445);
+tl.fromTo("#cap22 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},44.687);
+tl.fromTo("#cap23 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},47.840);
+tl.fromTo("#cap24 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},50.670);
+tl.fromTo("#cap25 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},55.960);
+tl.fromTo("#cap26 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},58.831);
+tl.fromTo("#cap27 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},59.948);
+tl.fromTo("#cap28 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},62.094);
+tl.fromTo("#cap29 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},64.417);
+tl.fromTo("#cap30 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},65.966);
+tl.fromTo("#cap31 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},71.960);
+tl.fromTo("#cap32 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},74.157);
+tl.fromTo("#cap33 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},76.154);
+tl.fromTo("#cap34 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},78.283);
+tl.fromTo("#cap35 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},80.746);
+tl.fromTo("#cap36 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},83.727);
+tl.fromTo("#cap37 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},86.823);
+tl.fromTo("#cap38 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},90.960);
+tl.fromTo("#cap39 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},93.033);
+tl.fromTo("#cap40 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},95.087);
+tl.fromTo("#cap41 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},96.394);
+tl.fromTo("#cap42 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},99.886);
+tl.fromTo("#cap43 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},101.263);
+tl.fromTo("#cap44 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},103.387);
+tl.fromTo("#cap45 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},105.176);
+tl.fromTo("#cap46 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},107.927);
+tl.fromTo("#cap47 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},108.907);
+tl.fromTo("#cap48 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},111.216);
+tl.fromTo("#cap49 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},113.861);
+tl.fromTo("#cap50 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},116.286);
+tl.fromTo("#cap51 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},119.376);
+tl.fromTo("#cap52 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},122.248);
+tl.fromTo("#cap53 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},124.893);
+tl.fromTo("#cap54 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},129.527);
+tl.fromTo("#cap55 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},131.808);
+tl.fromTo("#cap56 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},135.227);
+tl.fromTo("#cap57 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},139.787);
+tl.fromTo("#cap58 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},141.741);
+tl.fromTo("#cap59 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},143.156);
+tl.fromTo("#cap60 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},144.503);
+tl.fromTo("#cap61 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},146.255);
+tl.fromTo("#cap62 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},147.400);
+tl.fromTo("#cap63 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},150.693);
+tl.fromTo("#cap64 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},153.125);
+tl.fromTo("#cap65 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},155.141);
+tl.fromTo("#cap66 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},157.716);
+tl.fromTo("#cap67 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},160.026);
+tl.fromTo("#cap68 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},161.677);
+tl.fromTo("#cap69 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},163.688);
+tl.fromTo("#cap70 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},165.696);
+tl.fromTo("#cap71 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},167.055);
+tl.fromTo("#cap72 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},172.660);
+tl.fromTo("#cap73 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},174.730);
+tl.fromTo("#cap74 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},176.347);
+tl.fromTo("#cap75 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},178.690);
+tl.fromTo("#cap76 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},181.761);
+tl.fromTo("#cap77 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},184.371);
+tl.fromTo("#cap78 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},187.300);
+tl.fromTo("#cap79 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},188.668);
+tl.fromTo("#cap80 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},191.010);
+tl.fromTo("#cap81 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},194.227);
+tl.fromTo("#cap82 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},196.401);
+tl.fromTo("#cap83 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},198.103);
+tl.fromTo("#cap84 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},200.156);
+tl.fromTo("#cap85 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},202.346);
+tl.fromTo("#cap86 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},204.468);
+tl.fromTo("#cap87 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},208.327);
+tl.fromTo("#cap88 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},209.720);
+tl.fromTo("#cap89 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},211.672);
+tl.fromTo("#cap90 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},213.757);
+tl.fromTo("#cap91 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},216.071);
+tl.fromTo("#cap92 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},217.492);
+tl.fromTo("#cap93 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},219.824);
+tl.fromTo("#cap94 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},222.408);
+tl.fromTo("#cap95 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},224.797);
+tl.fromTo("#cap96 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},229.960);
+tl.fromTo("#cap97 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},231.611);
+tl.fromTo("#cap98 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},234.804);
+tl.fromTo("#cap99 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},236.618);
+tl.fromTo("#cap100 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},240.180);
+tl.fromTo("#cap101 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},241.943);
+tl.fromTo("#cap102 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},245.427);
+tl.fromTo("#cap103 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},246.843);
+tl.fromTo("#cap104 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},249.385);
+tl.fromTo("#cap105 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},251.792);
+tl.fromTo("#cap106 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},253.026);
+tl.fromTo("#cap107 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},255.438);
+tl.fromTo("#cap108 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},257.547);
+tl.fromTo("#cap109 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},265.427);
+tl.fromTo("#cap110 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},266.566);
+tl.fromTo("#cap111 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},269.296);
+tl.fromTo("#cap112 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},270.990);
+tl.fromTo("#cap113 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},272.473);
+tl.fromTo("#cap114 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},273.814);
+tl.fromTo("#cap115 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},275.861);
+tl.fromTo("#cap116 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},278.611);
+tl.fromTo("#cap117 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},280.539);
+tl.fromTo("#cap118 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},282.597);
+tl.fromTo("#ch-como .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},14.038);
+tl.to("#ch-como .ch-in",{opacity:0,y:-10,duration:.3},38.605);
+tl.fromTo("#ch-acessar .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},39.105);
+tl.to("#ch-acessar .ch-in",{opacity:0,y:-10,duration:.3},54.980);
+tl.fromTo("#ch-conta .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},55.480);
+tl.to("#ch-conta .ch-in",{opacity:0,y:-10,duration:.3},70.980);
+tl.fromTo("#ch-dash .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},71.480);
+tl.to("#ch-dash .ch-in",{opacity:0,y:-10,duration:.3},89.980);
+tl.fromTo("#ch-silenciar .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},90.480);
+tl.to("#ch-silenciar .ch-in",{opacity:0,y:-10,duration:.3},106.947);
+tl.fromTo("#ch-regras .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},107.447);
+tl.to("#ch-regras .ch-in",{opacity:0,y:-10,duration:.3},128.547);
+tl.fromTo("#ch-banir .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},129.047);
+tl.to("#ch-banir .ch-in",{opacity:0,y:-10,duration:.3},149.714);
+tl.fromTo("#ch-mensagens .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},150.213);
+tl.to("#ch-mensagens .ch-in",{opacity:0,y:-10,duration:.3},171.680);
+tl.fromTo("#ch-robo .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},172.180);
+tl.to("#ch-robo .ch-in",{opacity:0,y:-10,duration:.3},193.247);
+tl.fromTo("#ch-moderador .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},193.747);
+tl.to("#ch-moderador .ch-in",{opacity:0,y:-10,duration:.3},207.347);
+tl.fromTo("#ch-favoritar .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},207.847);
+tl.to("#ch-favoritar .ch-in",{opacity:0,y:-10,duration:.3},228.980);
+tl.fromTo("#ch-aovivo .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},229.480);
+tl.to("#ch-aovivo .ch-in",{opacity:0,y:-10,duration:.3},244.447);
+tl.fromTo("#ch-painel .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},244.947);
+tl.to("#ch-painel .ch-in",{opacity:0,y:-10,duration:.3},264.447);
+tl.fromTo("#ch-final .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},264.947);
+tl.to("#ch-final .ch-in",{opacity:0,y:-10,duration:.3},290.780);
+tl.fromTo("#chip-conta-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},65.294);
+tl.to("#chip-conta-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},70.810);
+tl.fromTo("#chip-dash-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},76.157);
+tl.to("#chip-dash-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},78.837);
+tl.fromTo("#chip-dash-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},79.157);
+tl.to("#chip-dash-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},89.810);
+tl.fromTo("#chip-silenciar-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},97.687);
+tl.to("#chip-silenciar-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},105.467);
+tl.fromTo("#chip-silenciar-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},105.787);
+tl.to("#chip-silenciar-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},106.777);
+tl.fromTo("#chip-banir-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},136.827);
+tl.to("#chip-banir-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},138.507);
+tl.fromTo("#chip-banir-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},138.827);
+tl.to("#chip-banir-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},149.544);
+tl.fromTo("#chip-mensagens-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},158.141);
+tl.to("#chip-mensagens-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},167.368);
+tl.fromTo("#chip-mensagens-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},167.688);
+tl.to("#chip-mensagens-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},171.510);
+tl.fromTo("#chip-robo-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},191.310);
+tl.to("#chip-robo-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},193.077);
+tl.fromTo("#chip-favoritar-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},216.671);
+tl.to("#chip-favoritar-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},222.104);
+tl.fromTo("#chip-favoritar-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},222.424);
+tl.to("#chip-favoritar-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},228.810);
+tl.fromTo("#chip-aovivo-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},235.204);
+tl.to("#chip-aovivo-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},236.484);
+tl.fromTo("#chip-aovivo-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},236.804);
+tl.to("#chip-aovivo-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},238.084);
+tl.fromTo("#chip-aovivo-2 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},238.404);
+tl.to("#chip-aovivo-2 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},244.277);
+tl.fromTo("#chip-painel-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},247.027);
+tl.to("#chip-painel-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},251.665);
+tl.fromTo("#chip-painel-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},251.985);
+tl.to("#chip-painel-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},264.277);
+tl.to("#phone3d",{rotationY:-4,rotationX:2,duration:12.80,ease:"sine.inOut"},55.330);
+tl.to("#phone3d",{rotationY:4,rotationX:-1.5,duration:15.20,ease:"sine.inOut"},71.330);
+tl.to("#phone3d",{rotationY:-3,rotationX:-2,duration:13.57,ease:"sine.inOut"},90.330);
+tl.to("#phone3d",{rotationY:4,rotationX:1.5,duration:17.28,ease:"sine.inOut"},107.297);
+tl.to("#phone3d",{rotationY:-4,rotationX:1.5,duration:16.93,ease:"sine.inOut"},128.897);
+tl.to("#phone3d",{rotationY:3,rotationX:-2,duration:17.57,ease:"sine.inOut"},150.063);
+tl.to("#phone3d",{rotationY:-4,rotationX:2,duration:17.25,ease:"sine.inOut"},172.030);
+tl.to("#phone3d",{rotationY:4,rotationX:-1.5,duration:11.28,ease:"sine.inOut"},193.597);
+tl.to("#phone3d",{rotationY:-3,rotationX:-2,duration:17.31,ease:"sine.inOut"},207.697);
+tl.to("#phone3d",{rotationY:4,rotationX:1.5,duration:12.37,ease:"sine.inOut"},229.330);
+tl.to("#phone3d",{rotationY:-4,rotationX:1.5,duration:16.00,ease:"sine.inOut"},244.797);
+tl.to("#phone3d",{rotationY:3,rotationX:-2,duration:21.07,ease:"sine.inOut"},264.797);
+tl.fromTo("#bk0",{y:0,x:0},{y:-309,x:-33,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk1",{y:0,x:0},{y:-457,x:-56,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk2",{y:0,x:0},{y:-307,x:72,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk3",{y:0,x:0},{y:-532,x:79,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk4",{y:0,x:0},{y:-126,x:-71,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk5",{y:0,x:0},{y:-199,x:38,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk6",{y:0,x:0},{y:-257,x:-5,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk7",{y:0,x:0},{y:-329,x:24,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk8",{y:0,x:0},{y:-539,x:0,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk9",{y:0,x:0},{y:-438,x:-63,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk10",{y:0,x:0},{y:-356,x:-6,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk11",{y:0,x:0},{y:-282,x:-26,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk12",{y:0,x:0},{y:-208,x:21,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk13",{y:0,x:0},{y:-296,x:6,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk14",{y:0,x:0},{y:-156,x:-50,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk15",{y:0,x:0},{y:-176,x:39,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk16",{y:0,x:0},{y:-454,x:34,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk17",{y:0,x:0},{y:-333,x:-51,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk18",{y:0,x:0},{y:-285,x:71,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk19",{y:0,x:0},{y:-247,x:20,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk20",{y:0,x:0},{y:-538,x:-26,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk21",{y:0,x:0},{y:-305,x:-5,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk22",{y:0,x:0},{y:-282,x:69,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk23",{y:0,x:0},{y:-387,x:15,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk24",{y:0,x:0},{y:-381,x:67,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk25",{y:0,x:0},{y:-177,x:-1,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk26",{y:0,x:0},{y:-501,x:-40,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk27",{y:0,x:0},{y:-430,x:43,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk28",{y:0,x:0},{y:-373,x:-53,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk29",{y:0,x:0},{y:-136,x:-15,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk30",{y:0,x:0},{y:-296,x:-63,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk31",{y:0,x:0},{y:-173,x:-9,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk32",{y:0,x:0},{y:-209,x:-63,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk33",{y:0,x:0},{y:-233,x:-69,duration:TOTAL,ease:"none"},0);
+
+window.__timelines["main"] = tl;
+</script>
+</body>
+</html>

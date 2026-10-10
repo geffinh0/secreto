@@ -7,7 +7,8 @@ Duas versões do mesmo tutorial, narradas em pt-BR, com legendas e trilha:
 | `atilas-client-computador.mp4` | 1920×1080 (16:9) | YouTube, site, apresentação. Mostra o site no navegador do computador |
 | `atilas-client-celular.mp4` | 1080×1920 (9:16) | Reels, TikTok, Shorts, Status. Mostra o site no celular |
 | `atilas-client-celular-cinematico.mp4` | 1080×1920 (9:16) | Versão cinematográfica do celular: luz âmbar volumétrica, partículas com profundidade de campo, celular em 3D, cartões de status brilhando, voz masculina Piper "Cadu" (`scripts/tts3.py`, `scripts/gen3.py`) |
-| `atilas-celular-narracao-elevenlabs.mp4` | 1080×1920 (9:16) | **Versão final**: mesmo visual cinematográfico, com narração gravada na ElevenLabs (voz Ana Alice). O áudio foi alinhado às cenas com Whisper (`scripts/transcribe.py`, `scripts/split_eleven.py`, `scripts/gen4.py`) |
+| `atilas-client-tutorial-celular.mp4` | 1080×1920 (9:16) | **Versão final**: refeita do zero, com narração Gemini TTS (voz Sulafat, `scripts/gemini_tts.py` com a chave em `GEMINI_API_KEY`). App gravado em 2x, sem zoom e com a tela inteira dentro do celular (`scripts/record3.mjs`, `scripts/align.py`, `scripts/gen5.py`) |
+| `atilas-celular-narracao-elevenlabs.mp4` | 1080×1920 (9:16) | Versão anterior: mesmo visual cinematográfico, com narração gravada na ElevenLabs (voz Ana Alice). O áudio foi alinhado às cenas com Whisper (`scripts/transcribe.py`, `scripts/split_eleven.py`, `scripts/gen4.py`) |
 
 Roteiro (cerca de 4 min):
 

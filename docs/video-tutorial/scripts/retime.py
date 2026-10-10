@@ -10,7 +10,7 @@ for i, k in enumerate(ks):
     a = m[k]['page'] - t0
     b = (m[ks[i + 1]]['page'] - t0) if i + 1 < len(ks) else min(total, a + m[k]['dur'] + 1.5)
     act = b - a; want = m[k]['dur']
-    slot = want if act > want + 0.3 else act
+    slot = max(want, act / 1.15) if act > want + 0.3 else act
     if k == ks[-1]: slot = act
     f = act / slot
     out = f'/tmp/claude-0/demo/seg/{M}_{i:02d}.mp4'
