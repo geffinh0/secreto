@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/models.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/auto_message_provider.dart';
@@ -58,18 +59,19 @@ class _BotControlScreenState extends State<BotControlScreen> {
   Widget build(BuildContext context) {
     final bot = context.watch<BotProvider>();
 
+    final gap = AppSpacing.section(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.page(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _RobotConnectionCard(bot: bot),
           if (bot.isConnected) ...[
-            const SizedBox(height: 24),
+            SizedBox(height: gap),
             _LiveControlCard(bot: bot, streamIdController: _streamIdController),
-            const SizedBox(height: 24),
+            SizedBox(height: gap),
             _LiveFeedCard(bot: bot),
-            const SizedBox(height: 24),
+            SizedBox(height: gap),
             _ActionsCard(bot: bot),
           ],
         ],
@@ -1003,29 +1005,48 @@ class _LiveControlCardState extends State<_LiveControlCard> {
             ),
           ],
           const SizedBox(height: 20),
-          Row(
-            children: [
-              _MiniStat(
-                icon: Icons.chat_rounded,
-                label: 'Msgs vistas',
-                value: '${session.chatSeen}',
-                color: AppTheme.textSecondary,
-              ),
-              const SizedBox(width: 12),
-              _MiniStat(
-                icon: Icons.send_rounded,
-                label: 'Msgs enviadas',
-                value: '${session.messagesSent}',
-                color: AppTheme.accent,
-              ),
-              const SizedBox(width: 12),
-              _MiniStat(
-                icon: Icons.shield_rounded,
-                label: 'Ações de mod.',
-                value: '${session.actionsOk}',
-                color: AppTheme.warning,
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stats = [
+                _MiniStat(
+                  icon: Icons.chat_rounded,
+                  label: 'Msgs vistas',
+                  value: '${session.chatSeen}',
+                  color: AppTheme.textSecondary,
+                ),
+                _MiniStat(
+                  icon: Icons.send_rounded,
+                  label: 'Msgs enviadas',
+                  value: '${session.messagesSent}',
+                  color: AppTheme.accent,
+                ),
+                _MiniStat(
+                  icon: Icons.shield_rounded,
+                  label: 'Ações de mod.',
+                  value: '${session.actionsOk}',
+                  color: AppTheme.warning,
+                ),
+              ];
+              // 3 Expanded tiles squeeze "Ações de mod." into an ellipsis on
+              // a narrow phone - 2-up wrap keeps every label fully readable.
+              if (constraints.maxWidth < 380) {
+                const gap = 10.0;
+                final itemWidth = (constraints.maxWidth - gap) / 2;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final stat in stats) SizedBox(width: itemWidth, child: stat),
+                  ],
+                );
+              }
+              final children = <Widget>[];
+              for (var i = 0; i < stats.length; i++) {
+                if (i > 0) children.add(const SizedBox(width: 12));
+                children.add(Expanded(child: stats[i]));
+              }
+              return Row(children: children);
+            },
           ),
         ],
       ),
@@ -1318,31 +1339,32 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                  color: color, fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            Text(
-              label,
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+    // No self-Expanded: the caller decides how to size this (Expanded in a
+    // Row on wide screens, a fixed-width SizedBox in a Wrap on narrow ones).
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+                color: color, fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          Text(
+            label,
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

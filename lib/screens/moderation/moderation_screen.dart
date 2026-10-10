@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -86,17 +87,78 @@ class _ModerationScreenState extends State<ModerationScreen>
 }
 
 /// Shared across both tabs (mute/kick) since it tests against every active
-/// rule regardless of which list it belongs to.
-class _ModerationToolsCard extends StatefulWidget {
+/// rule regardless of which list it belongs to. Fixed height on purpose: it
+/// used to expand inline and fight the tab bar/list below for vertical
+/// space (worst on mobile, where the keyboard eats the rest). It now just
+/// opens a bottom sheet that owns its own scrolling and keyboard inset, so
+/// the rest of the screen never resizes under it.
+class _ModerationToolsCard extends StatelessWidget {
   const _ModerationToolsCard();
 
   @override
-  State<_ModerationToolsCard> createState() => _ModerationToolsCardState();
+  Widget build(BuildContext context) {
+    final h = AppSpacing.pageHorizontal(context);
+    return Container(
+      margin: EdgeInsets.fromLTRB(h, 16, h, 14),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: InkWell(
+        onTap: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const _PhraseTesterSheet(),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              const Icon(Icons.science_outlined, color: AppTheme.accent, size: 18),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Testar uma frase',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.help_outline_rounded,
+                    color: AppTheme.textMuted, size: 20),
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (_) => const _RulesHelpDialog(),
+                ),
+                tooltip: 'Como as regras funcionam',
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _ModerationToolsCardState extends State<_ModerationToolsCard> {
+/// Bottom sheet content for the phrase tester. Owns its own text field,
+/// request state and result banner - fully isolated from the rest of the
+/// moderation screen's layout, and safe-area/keyboard aware on its own.
+class _PhraseTesterSheet extends StatefulWidget {
+  const _PhraseTesterSheet();
+
+  @override
+  State<_PhraseTesterSheet> createState() => _PhraseTesterSheetState();
+}
+
+class _PhraseTesterSheetState extends State<_PhraseTesterSheet> {
   final _textController = TextEditingController();
-  bool _expanded = false;
   bool _testing = false;
   PhraseTestResult? _result;
 
@@ -126,106 +188,97 @@ class _ModerationToolsCardState extends State<_ModerationToolsCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  const Icon(Icons.science_outlined, color: AppTheme.accent, size: 18),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * 0.85;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 160),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.bgCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border(
+              top: BorderSide(color: AppTheme.border),
+              left: BorderSide(color: AppTheme.border),
+              right: BorderSide(color: AppTheme.border),
+            ),
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              20, 12, 20, 20 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.border,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const Row(
+                  children: [
+                    Icon(Icons.science_outlined, color: AppTheme.accent, size: 18),
+                    SizedBox(width: 10),
+                    Text(
                       'Testar uma frase',
                       style: TextStyle(
                         color: AppTheme.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Digite uma mensagem de exemplo pra ver se alguma regra ativa pegaria ela '
+                  '- inclusive com número no lugar de letra ou letra repetida.',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 12.5, height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _textController,
+                  autofocus: true,
+                  onSubmitted: (_) => _test(),
+                  decoration: const InputDecoration(
+                    hintText: 'ex: g0z4 gostoso',
+                    isDense: true,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.help_outline_rounded,
-                        color: AppTheme.textMuted, size: 20),
-                    onPressed: () => showDialog(
-                      context: context,
-                      builder: (_) => const _RulesHelpDialog(),
-                    ),
-                    tooltip: 'Como as regras funcionam',
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _testing ? null : _test,
+                    child: _testing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppTheme.onAccent),
+                          )
+                        : const Text('Testar'),
                   ),
-                  Icon(
-                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                    color: AppTheme.textMuted,
-                  ),
+                ),
+                if (_result != null) ...[
+                  const SizedBox(height: 14),
+                  _TestResultBanner(result: _result!),
                 ],
-              ),
+              ],
             ),
           ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Digite uma mensagem de exemplo pra ver se alguma regra ativa pegaria ela '
-                    '- inclusive com número no lugar de letra ou letra repetida.',
-                    style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _textController,
-                          onSubmitted: (_) => _test(),
-                          decoration: const InputDecoration(
-                            hintText: 'ex: g0z4 gostoso',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _testing ? null : _test,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.bgSurface,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: _testing
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: AppTheme.primary),
-                                )
-                              : const Text('Testar'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_result != null) ...[
-                    const SizedBox(height: 12),
-                    _TestResultBanner(result: _result!),
-                  ],
-                ],
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -458,7 +511,7 @@ class _RulesTabState extends State<_RulesTab> {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: AppSpacing.page(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -596,7 +649,9 @@ class _RulesTabState extends State<_RulesTab> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.pageHorizontal(context), 0, AppSpacing.pageHorizontal(context), 24,
+              ),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
@@ -729,9 +784,9 @@ class _BulkImportDialogState extends State<_BulkImportDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.onAccent),
                 )
-              : const Text('Adicionar'),
+              : const Text('Adicionar', style: TextStyle(color: AppTheme.onAccent)),
         ),
       ],
     );
@@ -820,12 +875,12 @@ class _AddKeywordForm extends StatelessWidget {
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
+                              strokeWidth: 2, color: AppTheme.onAccent),
                         )
                       : const Text(
                           'Adicionar',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: AppTheme.onAccent,
                               fontWeight: FontWeight.w600),
                         ),
                 ),

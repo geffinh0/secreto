@@ -79,7 +79,7 @@ class _GradientButtonState extends State<GradientButton> {
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                      color: widget.isOutlined ? AppTheme.primary : Colors.white,
+                      color: widget.isOutlined ? AppTheme.primary : AppTheme.onAccent,
                       strokeWidth: 2,
                     ),
                   ),
@@ -89,14 +89,14 @@ class _GradientButtonState extends State<GradientButton> {
                   children: [
                     if (widget.icon != null) ...[
                       Icon(widget.icon,
-                          color: widget.isOutlined ? AppTheme.primary : Colors.white,
+                          color: widget.isOutlined ? AppTheme.primary : AppTheme.onAccent,
                           size: 18),
                       const SizedBox(width: 8),
                     ],
                     Text(
                       widget.label,
                       style: TextStyle(
-                        color: widget.isOutlined ? AppTheme.primary : Colors.white,
+                        color: widget.isOutlined ? AppTheme.primary : AppTheme.onAccent,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.3,

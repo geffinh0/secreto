@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/models/models.dart';
 import '../../core/services/portal_api_service.dart';
 import '../../core/services/pwa_install_service.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
@@ -18,13 +19,14 @@ class SettingsScreen extends StatelessWidget {
     final user = context.watch<AuthProvider>().user;
     final bot = context.watch<BotProvider>();
 
+    final gap = AppSpacing.section(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.page(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _PwaInstallCard(),
-          const SizedBox(height: 24),
+          SizedBox(height: gap),
 
           // Profile section
           _SectionCard(

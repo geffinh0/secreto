@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -31,7 +32,7 @@ class _AutoMessagesScreenState extends State<AutoMessagesScreen> {
     final user = context.watch<AuthProvider>().user;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.page(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -567,8 +568,13 @@ class _MessageItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A full-height colored sidebar for just a number, plus 4 controls
+    // stacked in a narrow column, used to squeeze the message text into a
+    // sliver down the middle on a phone-width row. A header row (badge +
+    // controls) above full-width text reads the same at any width instead.
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 12),
       decoration: BoxDecoration(
         color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(12),
@@ -578,51 +584,27 @@ class _MessageItem extends StatelessWidget {
               : AppTheme.border,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Order number
-          Container(
-            width: 50,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: const BoxDecoration(
-              color: AppTheme.bgSurface,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(12),
-                bottomLeft: Radius.circular(12),
-              ),
-            ),
-            child: Text(
-              '${index + 1}',
-              style: const TextStyle(
-                color: AppTheme.accent,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-
-          // Content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                message.content,
-                style: TextStyle(
-                  color: message.isActive
-                      ? AppTheme.textPrimary
-                      : AppTheme.textMuted,
-                  fontSize: 14,
-                  height: 1.4,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.bgSurface,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '#${index + 1}',
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-            ),
-          ),
-
-          // Actions
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+              const Spacer(),
               Tooltip(
                 message: message.isActive
                     ? 'Ativa: entra no envio automático'
@@ -646,16 +628,31 @@ class _MessageItem extends StatelessWidget {
                 color: AppTheme.textMuted,
                 onPressed: onEdit,
                 tooltip: 'Editar',
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
               ),
               IconButton(
                 icon: const Icon(Icons.delete_rounded, size: 16),
                 color: AppTheme.error.withValues(alpha: 0.7),
                 onPressed: onDelete,
                 tooltip: 'Remover',
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
               ),
             ],
           ),
-          const SizedBox(width: 4),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, right: 8),
+            child: Text(
+              message.content,
+              style: TextStyle(
+                color: message.isActive ? AppTheme.textPrimary : AppTheme.textMuted,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ),
         ],
       ),
     );

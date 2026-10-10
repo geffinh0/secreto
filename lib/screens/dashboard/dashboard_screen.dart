@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
@@ -46,7 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: AppTheme.bgCard,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: AppSpacing.page(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

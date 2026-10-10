@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/models.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/stats_provider.dart';
@@ -36,7 +37,7 @@ class _StatsScreenState extends State<StatsScreen> {
       backgroundColor: AppTheme.bgCard,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: AppSpacing.page(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -157,12 +158,13 @@ class _StatsScreenState extends State<StatsScreen> {
           ? const _EmptyHint('Nenhuma ação registrada nesse período.')
           : SizedBox(
               height: 120,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (final d in stats.byDay)
-                    Expanded(
-                      child: Padding(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const minBarWidth = 26.0;
+                  final maxCount = stats.byDay
+                      .map((e) => e.count)
+                      .reduce((a, b) => a > b ? a : b);
+                  Widget bar(DayCount d) => Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 2),
                         child: Tooltip(
                           message: '${d.count} em ${DateFormat('dd/MM').format(d.day)}',
@@ -170,12 +172,7 @@ class _StatsScreenState extends State<StatsScreen> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               Container(
-                                height: 6 +
-                                    80 *
-                                        (d.count /
-                                            stats.byDay
-                                                .map((e) => e.count)
-                                                .reduce((a, b) => a > b ? a : b)),
+                                height: 6 + 80 * (d.count / maxCount),
                                 decoration: BoxDecoration(
                                   color: AppTheme.primary,
                                   borderRadius: BorderRadius.circular(3),
@@ -190,9 +187,34 @@ class _StatsScreenState extends State<StatsScreen> {
                             ],
                           ),
                         ),
+                      );
+
+                  // Many days (e.g. the 90-day view) squeezed into Expanded
+                  // columns end up unreadably thin - past a minimum bar
+                  // width, scroll horizontally instead of shrinking further.
+                  final fitsWithoutScroll =
+                      constraints.maxWidth / stats.byDay.length >= minBarWidth;
+                  if (fitsWithoutScroll) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (final d in stats.byDay) Expanded(child: bar(d)),
+                      ],
+                    );
+                  }
+                  return Scrollbar(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          for (final d in stats.byDay)
+                            SizedBox(width: minBarWidth, child: bar(d)),
+                        ],
                       ),
                     ),
-                ],
+                  );
+                },
               ),
             ),
     );

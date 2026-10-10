@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
@@ -46,7 +47,18 @@ class _MainShellState extends State<MainShell> {
             child: Column(
               children: [
                 _buildTopBar(context),
-                Expanded(child: widget.child),
+                Expanded(
+                  // Caps content width on very wide monitors so text/forms
+                  // never stretch edge-to-edge - mobile/tablet are narrower
+                  // than the cap already, so this is a no-op there.
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(maxWidth: AppSpacing.maxContentWidth),
+                      child: widget.child,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

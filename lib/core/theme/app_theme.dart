@@ -1,37 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Palette drawn from Atila's own fur: fox orange, warm burrow browns, a
-/// soft cream for the belly fur. Flat and restrained on purpose - no neon
-/// glows, no decorative multi-hue gradients.
+/// Palette from GUIA_DESIGN_ATILAS_CLIENT.md ("A toca de comando"): fox
+/// orange, warm burrow browns, soft cream. Flat and restrained on purpose -
+/// no neon glows, no decorative multi-hue gradients. Names kept stable so
+/// existing screens don't need touching; only the hex values moved to the
+/// new guide's tokens (bgDark=canvas, bgCard=surface, bgSurface=surface
+/// used as a slightly lighter field fill, bgElevated=surfaceRaised).
 class AppTheme {
   // Brand Colors
-  static const Color primary = Color(0xFFE07B39); // Fox orange
-  static const Color primaryDark = Color(0xFFB35F26); // pressed/hover state
+  static const Color primary = Color(0xFFE07B39); // fox
+  static const Color primaryDark = Color(0xFFB95F29); // fox-pressed
 
-  static const Color secondary = Color(0xFFA24A32); // Ember (deep rust)
-  static const Color accent = Color(0xFFD9A441); // Warm gold
+  static const Color secondary = Color(0xFFA24A32); // ember
+  static const Color accent = Color(0xFFD9A441); // gold
 
   // Background (a den at dusk, not a cold black)
-  static const Color bgDark = Color(0xFF1B140F);
-  static const Color bgCard = Color(0xFF241B15);
-  static const Color bgSurface = Color(0xFF2C2119);
-  static const Color bgElevated = Color(0xFF362820);
+  static const Color bgDark = Color(0xFF17110D); // canvas
+  static const Color bgCard = Color(0xFF211811); // surface
+  static const Color bgSurface = Color(0xFF2B2017); // surface-raised (fields)
+  static const Color bgElevated = Color(0xFF35271D); // surface-hover
 
   // Text
-  static const Color textPrimary = Color(0xFFF7EEE3);
-  static const Color textSecondary = Color(0xFFCBB8A4);
-  static const Color textMuted = Color(0xFF8C7968);
-  static const Color textDisabled = Color(0xFF5A4C40);
+  static const Color textPrimary = Color(0xFFF8F0E7); // ink
+  static const Color textSecondary = Color(0xFFCBB8A5); // ink-muted
+  static const Color textMuted = Color(0xFF9B8673); // ink-subtle
+  static const Color textDisabled = Color(0xFF6B5A49);
 
   // Status (muted, same warm family)
-  static const Color success = Color(0xFF6E9B5E);
-  static const Color warning = Color(0xFFD9A441);
-  static const Color error = Color(0xFFC2543A);
+  static const Color success = Color(0xFF79A86A);
+  static const Color warning = Color(0xFFE0B45B);
+  static const Color error = Color(0xFFD66A52); // danger
+  static const Color info = Color(0xFF82AFC0);
 
   // Borders
-  static const Color border = Color(0xFF3A2D22);
-  static const Color borderLight = Color(0xFF4A3A2C);
+  static const Color border = Color(0xFF463428);
+  static const Color borderLight = Color(0xFF634733); // border-strong
+
+  // Dark ink for text/icons sitting on top of a bright fill (primary button,
+  // status pills, chips) - measured higher contrast than textPrimary there.
+  static const Color onAccent = Color(0xFF211811);
 
   static ThemeData get darkTheme {
     return ThemeData(
@@ -125,7 +133,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: textPrimary,
+          foregroundColor: onAccent,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
