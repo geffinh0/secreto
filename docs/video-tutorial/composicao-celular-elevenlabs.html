@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<title>Atila's Client — Tutorial cinematográfico (celular)</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-300-normal.woff2") format("woff2"); font-weight: 300; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-500-normal.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); font-weight: 800; }
+@font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+:root { --bg: #0b0806; --amber: #F2A65A; --orange: #E07B39; --gold: #D9A441; --rust: #A24A32; --cream: #F7EEE3; --text2: #C9B7A3; --glass: rgba(36,26,19,.72); --line: rgba(242,166,90,.28); --ok: #7FBF6A; --red: #E0563A; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Inter", sans-serif; color: var(--cream); background: var(--bg); }
+.layer { position: absolute; inset: 0; }
+#bg { background: radial-gradient(900px 1100px at 50% 38%, #24170f 0%, #120c09 55%, #070504 100%); }
+.beam { position: absolute; width: 520px; height: 2600px; top: -500px; filter: blur(46px); transform-origin: 50% 0%; }
+#beam1 { left: -180px; background: linear-gradient(180deg, rgba(242,166,90,.38), rgba(242,166,90,0) 70%); }
+#beam2 { left: 700px; background: linear-gradient(180deg, rgba(224,123,57,.30), rgba(224,123,57,0) 65%); }
+#beam3 { left: 300px; width: 380px; background: linear-gradient(180deg, rgba(217,164,65,.20), rgba(217,164,65,0) 60%); }
+#floor { position: absolute; left: -540px; top: 1180px; width: 2160px; height: 1100px; background-image: linear-gradient(rgba(242,166,90,.16) 2px, transparent 2px), linear-gradient(90deg, rgba(242,166,90,.16) 2px, transparent 2px); background-size: 90px 90px; -webkit-mask-image: linear-gradient(180deg, transparent, #000 30%, transparent 85%); mask-image: linear-gradient(180deg, transparent, #000 30%, transparent 85%); opacity: .55; }
+#floorwrap { position: absolute; inset: 0; perspective: 900px; perspective-origin: 50% 40%; }
+.bk { position: absolute; border-radius: 50%; }
+#vignette { background: radial-gradient(1000px 1500px at 50% 45%, transparent 55%, rgba(0,0,0,.75) 100%); }
+#grain { opacity: .05; background-image: repeating-radial-gradient(circle at 17% 32%, #fff 0 1px, transparent 1px 3px); }
+
+/* bands */
+.chapter { position: absolute; left: 60px; top: 64px; width: 960px; height: 70px; z-index: 40; }
+.ch-in { display: flex; align-items: center; justify-content: center; gap: 16px; height: 70px; white-space: nowrap; }
+.ch-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 18px 4px rgba(242,166,90,.8); }
+.ch-tag { font-size: 22px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--amber); }
+.ch-title { font-size: 40px; font-weight: 800; letter-spacing: -0.01em; color: var(--cream); text-shadow: 0 0 30px rgba(242,166,90,.35); }
+.cap { position: absolute; left: 60px; top: 1640px; width: 960px; height: 200px; display: flex; justify-content: center; align-items: center; z-index: 70; }
+.cap-in { display: block; text-align: center; max-width: 960px; font-size: 42px; line-height: 1.28; font-weight: 700; color: #fff; padding: 14px 30px; border-radius: 22px; background: rgba(12,8,6,.82); border: 1px solid var(--line); box-shadow: 0 0 40px rgba(242,166,90,.12), inset 0 1px 0 rgba(255,255,255,.06); }
+.rail { position: absolute; left: 90px; top: 1526px; width: 900px; height: 96px; display: flex; justify-content: center; align-items: center; perspective: 800px; z-index: 30; }
+.chip-in { display: flex; align-items: center; gap: 16px; white-space: nowrap; font-size: 32px; font-weight: 700; padding: 18px 32px; border-radius: 999px; background: var(--glass); border: 1.5px solid var(--line); box-shadow: 0 10px 40px rgba(0,0,0,.5), 0 0 40px rgba(242,166,90,.18); }
+.sd { width: 16px; height: 16px; flex: none; border-radius: 50%; }
+.ok .sd { background: var(--ok); box-shadow: 0 0 16px 4px rgba(127,191,106,.85); }
+.amb .sd { background: var(--amber); box-shadow: 0 0 16px 4px rgba(242,166,90,.85); }
+.red .sd, .live .sd, .ban .sd { background: var(--red); box-shadow: 0 0 16px 4px rgba(224,86,58,.9); }
+.off .sd { background: #8C7968; box-shadow: 0 0 10px 2px rgba(140,121,104,.6); }
+.mute .sd { background: var(--gold); box-shadow: 0 0 16px 4px rgba(217,164,65,.9); }
+.live { border-color: rgba(224,86,58,.5); }
+
+/* phone */
+#stage3d { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; perspective: 2200px; perspective-origin: 50% 45%; }
+#phone3d { position: absolute; left: 182px; top: 96px; width: 716px; height: 1509px; transform-style: preserve-3d; }
+#phone { position: absolute; left: 0; top: 0; width: 716px; height: 1509px; border-radius: 88px; background: linear-gradient(145deg, #2b211a, #0d0907 45%, #1c1511); border: 2px solid rgba(242,166,90,.35); box-shadow: 0 60px 140px rgba(0,0,0,.75), 0 0 90px rgba(242,166,90,.18), inset 0 0 0 6px #050403; }
+#pscreen { position: absolute; left: 16px; top: 16px; width: 682.5px; height: 1477px; border-radius: 72px; overflow: hidden; background: #1B140F; }
+#status { position: absolute; left: 0; top: 0; width: 682.5px; height: 77px; display: flex; align-items: center; justify-content: space-between; padding: 14px 58px 0 66px; font-size: 26px; font-weight: 700; color: var(--cream); }
+.sicons { display: flex; gap: 8px; } .sicons i { display: block; width: 22px; height: 14px; border-radius: 3px; background: var(--cream); opacity: .85; }
+#urlbar { position: absolute; left: 24px; top: 82px; width: 634px; height: 58px; border-radius: 29px; background: #2a1f18; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+#urltxt { font-family: "JetBrains Mono", monospace; font-size: 25px; color: var(--cream); display: inline-block; overflow: hidden; white-space: nowrap; width: 0; }
+#viewport { position: absolute; left: 0; top: 147px; width: 682.5px; height: 1330px; overflow: hidden; }
+#scaler { position: absolute; left: 0; top: 0; width: 780px; height: 1520px; transform: scale(0.875); transform-origin: 0 0; }
+#cam, #screen, #poster { position: absolute; left: 0; top: 0; width: 780px; height: 1520px; }
+#cam { transform-origin: 0 0; }
+#blank { position: absolute; inset: 0; background: #1B140F; }
+#glare { position: absolute; left: -400px; top: 0; width: 300px; height: 1477px; background: linear-gradient(90deg, transparent, rgba(255,230,200,.10), transparent); }
+#dim { position: absolute; left: 16px; top: 163px; width: 682.5px; height: 1330px; border-radius: 0 0 72px 72px; background: rgba(10,7,5,.82); opacity: 0; }
+#reflect { position: absolute; left: 182px; top: 1470px; width: 716px; height: 120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(242,166,90,.35), transparent); filter: blur(20px); }
+
+/* side event cards */
+.ev { position: absolute; width: 320px; height: 150px; perspective: 900px; z-index: 35; }
+.ev.left { left: 14px; } .ev.right { left: 738px; }
+.ev-in { width: 320px; padding: 16px 18px; border-radius: 26px; background: rgba(28,20,15,.9); border: 1.5px solid var(--line); box-shadow: 0 30px 70px rgba(0,0,0,.6), 0 0 50px rgba(242,166,90,.2); display: flex; flex-direction: column; gap: 10px; }
+.ev-in.ban { border-color: rgba(224,86,58,.55); box-shadow: 0 30px 70px rgba(0,0,0,.6), 0 0 50px rgba(224,86,58,.25); }
+.ev-h { display: flex; align-items: center; gap: 10px; font-size: 25px; white-space: nowrap; }
+.ev-v { margin-left: auto; font-size: 17px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 6px 14px; border-radius: 10px; }
+.mute .ev-v { color: #1b140f; background: var(--gold); }
+.ban .ev-v { color: #fff; background: var(--red); }
+.ev-q { font-size: 20px; overflow: hidden; text-overflow: ellipsis; color: var(--text2); white-space: nowrap; }
+
+/* hero scenes */
+.hero { position: absolute; inset: 0; perspective: 1400px; }
+#intro-box { position: absolute; left: 60px; top: 360px; width: 960px; height: 1150px; display: flex; flex-direction: column; align-items: center; gap: 34px; }
+#intro-fox { width: 620px; height: 413px; object-fit: contain; filter: drop-shadow(0 0 60px rgba(242,166,90,.35)); }
+#intro-title { font-size: 118px; font-weight: 800; letter-spacing: -0.04em; white-space: nowrap; text-shadow: 0 0 60px rgba(242,166,90,.35); }
+#intro-title span { color: var(--amber); }
+#intro-sub { font-size: 38px; font-weight: 300; color: var(--text2); text-align: center; width: 860px; line-height: 1.35; }
+#intro-line { width: 520px; height: 2px; background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+#flare { position: absolute; left: -600px; top: 760px; width: 500px; height: 260px; background: radial-gradient(closest-side, rgba(255,214,160,.55), transparent); filter: blur(10px); }
+#como-box { position: absolute; left: 90px; top: 250px; width: 900px; height: 1300px; display: flex; flex-direction: column; align-items: center; gap: 26px; transform-style: preserve-3d; }
+.gcard { width: 900px; height: 210px; display: flex; align-items: center; gap: 34px; padding: 0 44px; border-radius: 32px; background: var(--glass); border: 1.5px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 60px rgba(242,166,90,.12); }
+.gcard .ic { width: 112px; height: 112px; flex: none; border-radius: 30px; background: rgba(242,166,90,.10); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.gcard .ic img { width: 92px; height: 92px; object-fit: contain; }
+.gcard .tx { display: flex; flex-direction: column; gap: 10px; }
+.gcard h3 { font-size: 42px; font-weight: 800; }
+.gcard p { font-size: 28px; font-weight: 300; color: var(--text2); }
+.conn { width: 4px; height: 40px; border-radius: 2px; background: linear-gradient(180deg, var(--amber), var(--rust)); box-shadow: 0 0 16px rgba(242,166,90,.8); }
+.pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; width: 900px; margin-top: 18px; }
+.pill { display: flex; align-items: center; gap: 14px; white-space: nowrap; font-size: 30px; font-weight: 700; padding: 16px 28px; border-radius: 999px; background: var(--glass); border: 1.5px solid var(--line); }
+#close-tab { width: 900px; text-align: center; font-size: 30px; font-weight: 700; line-height: 1.3; padding: 22px 30px; border-radius: 24px; background: rgba(127,191,106,.12); border: 1.5px solid rgba(127,191,106,.6); color: #d8efcf; margin-top: 10px; }
+#ac-box { position: absolute; left: 90px; top: 420px; width: 900px; height: 1100px; display: flex; flex-direction: column; align-items: center; gap: 46px; transform-style: preserve-3d; }
+#ac-url { width: 900px; height: 124px; border-radius: 62px; display: flex; align-items: center; gap: 24px; padding: 0 46px; background: rgba(36,26,19,.85); border: 2px solid rgba(242,166,90,.5); box-shadow: 0 30px 90px rgba(0,0,0,.6), 0 0 80px rgba(242,166,90,.25); }
+#ac-ty { font-family: "JetBrains Mono", monospace; font-size: 52px; font-weight: 600; color: var(--cream); display: inline-block; overflow: hidden; white-space: nowrap; width: 0; }
+.devs { display: flex; gap: 34px; }
+.dev { width: 300px; height: 250px; border-radius: 30px; background: var(--glass); border: 1.5px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; font-size: 32px; font-weight: 800; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+#ac-pwa { width: 900px; text-align: center; font-size: 30px; font-weight: 700; line-height: 1.3; padding: 22px 30px; border-radius: 24px; background: rgba(217,164,65,.10); border: 1.5px solid rgba(217,164,65,.55); color: #f3dfb2; }
+
+/* overlay cards */
+.ocard { position: absolute; left: 80px; width: 920px; border-radius: 34px; background: rgba(24,17,13,.92); border: 1.5px solid var(--line); box-shadow: 0 40px 120px rgba(0,0,0,.75), 0 0 80px rgba(242,166,90,.18); padding: 46px 48px; display: flex; flex-direction: column; gap: 16px; }
+.ocard h2 { font-size: 46px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 8px; }
+.rule { display: flex; align-items: center; gap: 18px; min-height: 80px; padding: 14px 24px; border-radius: 18px; background: rgba(242,166,90,.06); border: 1px solid rgba(242,166,90,.14); font-size: 30px; font-weight: 500; }
+.rule .ex { flex: 1; white-space: nowrap; }
+.kw { flex: none; font-family: "JetBrains Mono", monospace; font-weight: 600; color: var(--amber); font-size: 27px; padding: 4px 14px; border-radius: 10px; background: rgba(0,0,0,.35); white-space: nowrap; }
+.res { flex: none; white-space: nowrap; font-weight: 800; font-size: 22px; letter-spacing: .08em; text-transform: uppercase; padding: 7px 14px; border-radius: 10px; }
+.yes { color: #dff2d6; background: rgba(127,191,106,.25); }
+.no { color: #f6cdc2; background: rgba(224,86,58,.25); }
+#rg-card { top: 520px; }
+#md-card { top: 600px; align-items: center; text-align: center; gap: 26px; border-color: rgba(217,164,65,.6); box-shadow: 0 40px 120px rgba(0,0,0,.75), 0 0 90px rgba(217,164,65,.28); }
+#md-card h2 { color: var(--gold); }
+#md-card p { font-size: 34px; font-weight: 500; line-height: 1.4; color: var(--cream); }
+#rc-card { top: 360px; }
+.step { display: flex; align-items: center; gap: 22px; min-height: 88px; padding: 0 26px; border-radius: 20px; background: rgba(242,166,90,.06); border: 1px solid rgba(242,166,90,.14); font-size: 34px; font-weight: 700; }
+.num { width: 52px; height: 52px; flex: none; border-radius: 50%; background: var(--orange); color: #1B140F; font-weight: 800; font-size: 26px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(224,123,57,.6); }
+.tick { margin-left: auto; width: 46px; height: 46px; flex: none; border-radius: 50%; background: var(--ok); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 18px rgba(127,191,106,.7); }
+#outro { position: absolute; inset: 0; background: radial-gradient(900px 1200px at 50% 45%, #24170f, #070504 75%); z-index: 50; }
+#outro-box { position: absolute; left: 60px; top: 480px; width: 960px; height: 980px; display: flex; flex-direction: column; align-items: center; gap: 34px; }
+#outro-fox { width: 440px; height: 440px; object-fit: contain; filter: drop-shadow(0 0 70px rgba(242,166,90,.45)); }
+#outro-title { font-size: 108px; font-weight: 800; letter-spacing: -0.04em; white-space: nowrap; text-shadow: 0 0 60px rgba(242,166,90,.35); }
+#outro-title span { color: var(--amber); }
+#outro-sub { font-size: 38px; font-weight: 300; color: var(--text2); }
+#outro-url { font-family: "JetBrains Mono", monospace; font-size: 40px; font-weight: 600; color: var(--amber); padding: 18px 40px; border-radius: 999px; border: 2px solid rgba(242,166,90,.6); box-shadow: 0 0 50px rgba(242,166,90,.3); white-space: nowrap; }
+#progress { position: absolute; left: 0; top: 0; height: 6px; width: 1080px; background: linear-gradient(90deg, var(--rust), var(--orange), var(--amber)); box-shadow: 0 0 14px rgba(242,166,90,.8); transform-origin: 0 50%; z-index: 80; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="295.657" data-width="1080" data-height="1920">
+  <div id="bg" class="layer"></div>
+  <div id="beams" class="layer" data-layout-allow-overflow><div id="beam1" class="beam"></div><div id="beam2" class="beam"></div><div id="beam3" class="beam"></div></div>
+  <div id="floorwrap" data-layout-allow-overflow><div id="floor" data-layout-allow-overflow></div></div>
+  <div id="vignette" class="layer"></div>
+  <div id="grain" class="layer"></div>
+  <div id="bokeh" class="layer" data-layout-allow-overflow><div id="bk0" class="bk" data-layout-allow-overflow style="left:913px;top:925px;width:39px;height:39px;background:#D9A441;filter:blur(7.3px);opacity:0.31"></div><div id="bk1" class="bk" data-layout-allow-overflow style="left:934px;top:1289px;width:64px;height:64px;background:#D9A441;filter:blur(12.3px);opacity:0.19"></div><div id="bk2" class="bk" data-layout-allow-overflow style="left:250px;top:185px;width:39px;height:39px;background:#E07B39;filter:blur(7.3px);opacity:0.31"></div><div id="bk3" class="bk" data-layout-allow-overflow style="left:887px;top:1339px;width:76px;height:76px;background:#D9A441;filter:blur(14.8px);opacity:0.13"></div><div id="bk4" class="bk" data-layout-allow-overflow style="left:1042px;top:129px;width:9px;height:9px;background:#E07B39;filter:blur(1.2px);opacity:0.46"></div><div id="bk5" class="bk" data-layout-allow-overflow style="left:455px;top:1228px;width:21px;height:21px;background:#E07B39;filter:blur(3.7px);opacity:0.4"></div><div id="bk6" class="bk" data-layout-allow-overflow style="left:360px;top:1063px;width:30px;height:30px;background:#D9A441;filter:blur(5.6px);opacity:0.36"></div><div id="bk7" class="bk" data-layout-allow-overflow style="left:134px;top:936px;width:42px;height:42px;background:#F2A65A;filter:blur(8.0px);opacity:0.3"></div><div id="bk8" class="bk" data-layout-allow-overflow style="left:130px;top:1449px;width:77px;height:77px;background:#F2A65A;filter:blur(15.0px);opacity:0.12"></div><div id="bk9" class="bk" data-layout-allow-overflow style="left:1010px;top:591px;width:61px;height:61px;background:#E07B39;filter:blur(11.6px);opacity:0.2"></div><div id="bk10" class="bk" data-layout-allow-overflow style="left:181px;top:820px;width:47px;height:47px;background:#E07B39;filter:blur(8.9px);opacity:0.27"></div><div id="bk11" class="bk" data-layout-allow-overflow style="left:-6px;top:1735px;width:35px;height:35px;background:#E07B39;filter:blur(6.4px);opacity:0.33"></div><div id="bk12" class="bk" data-layout-allow-overflow style="left:67px;top:962px;width:22px;height:22px;background:#A24A32;filter:blur(3.9px);opacity:0.4"></div><div id="bk13" class="bk" data-layout-allow-overflow style="left:366px;top:1594px;width:37px;height:37px;background:#F2A65A;filter:blur(6.9px);opacity:0.32"></div><div id="bk14" class="bk" data-layout-allow-overflow style="left:641px;top:31px;width:14px;height:14px;background:#A24A32;filter:blur(2.2px);opacity:0.44"></div><div id="bk15" class="bk" data-layout-allow-overflow style="left:166px;top:22px;width:17px;height:17px;background:#E07B39;filter:blur(2.9px);opacity:0.42"></div><div id="bk16" class="bk" data-layout-allow-overflow style="left:323px;top:1396px;width:63px;height:63px;background:#D9A441;filter:blur(12.2px);opacity:0.19"></div><div id="bk17" class="bk" data-layout-allow-overflow style="left:228px;top:858px;width:43px;height:43px;background:#A24A32;filter:blur(8.1px);opacity:0.29"></div><div id="bk18" class="bk" data-layout-allow-overflow style="left:395px;top:0px;width:35px;height:35px;background:#F2A65A;filter:blur(6.5px);opacity:0.33"></div><div id="bk19" class="bk" data-layout-allow-overflow style="left:0px;top:431px;width:29px;height:29px;background:#D9A441;filter:blur(5.3px);opacity:0.36"></div><div id="bk20" class="bk" data-layout-allow-overflow style="left:165px;top:86px;width:77px;height:77px;background:#D9A441;filter:blur(14.9px);opacity:0.12"></div><div id="bk21" class="bk" data-layout-allow-overflow style="left:-21px;top:1582px;width:38px;height:38px;background:#F2A65A;filter:blur(7.2px);opacity:0.32"></div><div id="bk22" class="bk" data-layout-allow-overflow style="left:112px;top:184px;width:35px;height:35px;background:#D9A441;filter:blur(6.4px);opacity:0.33"></div><div id="bk23" class="bk" data-layout-allow-overflow style="left:-9px;top:1231px;width:52px;height:52px;background:#F2A65A;filter:blur(9.9px);opacity:0.25"></div><div id="bk24" class="bk" data-layout-allow-overflow style="left:220px;top:1202px;width:51px;height:51px;background:#A24A32;filter:blur(9.7px);opacity:0.25"></div><div id="bk25" class="bk" data-layout-allow-overflow style="left:750px;top:374px;width:17px;height:17px;background:#D9A441;filter:blur(2.9px);opacity:0.42"></div><div id="bk26" class="bk" data-layout-allow-overflow style="left:470px;top:1485px;width:71px;height:71px;background:#D9A441;filter:blur(13.7px);opacity:0.15"></div><div id="bk27" class="bk" data-layout-allow-overflow style="left:362px;top:1406px;width:59px;height:59px;background:#A24A32;filter:blur(11.4px);opacity:0.21"></div><div id="bk28" class="bk" data-layout-allow-overflow style="left:823px;top:97px;width:50px;height:50px;background:#E07B39;filter:blur(9.4px);opacity:0.26"></div><div id="bk29" class="bk" data-layout-allow-overflow style="left:482px;top:488px;width:10px;height:10px;background:#A24A32;filter:blur(1.5px);opacity:0.46"></div><div id="bk30" class="bk" data-layout-allow-overflow style="left:965px;top:600px;width:37px;height:37px;background:#D9A441;filter:blur(6.9px);opacity:0.32"></div><div id="bk31" class="bk" data-layout-allow-overflow style="left:941px;top:1145px;width:16px;height:16px;background:#E07B39;filter:blur(2.8px);opacity:0.43"></div><div id="bk32" class="bk" data-layout-allow-overflow style="left:377px;top:1533px;width:22px;height:22px;background:#E07B39;filter:blur(4.0px);opacity:0.4"></div><div id="bk33" class="bk" data-layout-allow-overflow style="left:872px;top:510px;width:26px;height:26px;background:#E07B39;filter:blur(4.8px);opacity:0.38"></div></div>
+
+  <div id="intro" class="clip hero" data-start="0" data-duration="15.300" data-track-index="1">
+    <div id="intro-box">
+      <img id="intro-fox" src="assets/img/fox_hero.webp" alt="" />
+      <div id="intro-title">Atila's <span>Client</span></div>
+      <div id="intro-line"></div>
+      <div id="intro-sub">O robô que modera as suas lives no SuperLive</div>
+    </div>
+    <div id="flare" data-layout-allow-overflow></div>
+  </div>
+
+  <div id="como" class="clip hero" data-start="15.300" data-duration="27.370" data-track-index="1">
+    <div id="como-box">
+      <div id="g1" class="gcard"><div class="ic"><svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg></div><div class="tx"><h3>Site</h3><p>Você configura tudo pelo navegador</p></div></div>
+      <div id="k1" class="conn"></div>
+      <div id="g2" class="gcard"><div class="ic"><svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="#D9A441" stroke-width="1.8"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></div><div class="tx"><h3>Servidor</h3><p>Guarda as regras e controla o robô</p></div></div>
+      <div id="k2" class="conn"></div>
+      <div id="g3" class="gcard"><div class="ic"><img src="assets/img/fox_avatar.png" alt="" /></div><div class="tx"><h3>Robô na live</h3><p>De olho no chat, 24 horas</p></div></div>
+      <div class="pills">
+        <div id="p1" class="pill mute"><span class="sd"></span>Silencia</div>
+        <div id="p2" class="pill ban"><span class="sd"></span>Expulsa</div>
+        <div id="p3" class="pill ok"><span class="sd"></span>Manda mensagens</div>
+      </div>
+      <div id="close-tab">Pode fechar o navegador: a moderação continua</div>
+    </div>
+  </div>
+
+  <div id="acessar" class="clip hero" data-start="42.670" data-duration="18.420" data-track-index="1">
+    <div id="ac-box">
+      <div id="ac-url"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span id="ac-ty">atilaclient.tech</span></div>
+      <div class="devs">
+        <div id="d1" class="dev"><svg width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="1.6"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M1 20h22"/></svg>Computador</div>
+        <div id="d2" class="dev"><svg width="92" height="92" viewBox="0 0 24 24" fill="none" stroke="#F2A65A" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>Celular</div>
+      </div>
+      <div id="ac-pwa">Dá pra instalar como app em Configurações</div>
+    </div>
+  </div>
+
+  <div id="reflect"></div>
+  <div id="stage3d">
+    <div id="phone3d">
+      <div id="phone">
+        <div id="pscreen">
+          <div id="status"><span>9:41</span><span class="sicons"><i></i><i></i><i></i></span></div>
+          <div id="urlbar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9B7A3" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span id="urltxt">atilaclient.tech</span></div>
+          <div id="viewport"><div id="scaler"><div id="cam">
+            <img id="poster" src="assets/img/first.jpg" alt="" />
+            <video id="screen" src="assets/rec/screen.mp4" muted playsinline data-start="61.090" data-duration="234.500" data-track-index="0"></video>
+          </div></div><div id="blank"></div></div>
+          <div id="glare" data-layout-allow-overflow></div>
+        </div>
+        <div id="dim"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ev0" class="clip ev left" data-start="240.670" data-duration="10.153" data-track-index="2" style="top:520px"><div class="ev-in mute"><div class="ev-h"><span class="sd"></span><b>Carlos_88</b><span class="ev-v">silenciado</span></div><div class="ev-q">“me passa o zap?”</div></div></div><div id="ev1" class="clip ev right" data-start="242.270" data-duration="8.553" data-track-index="2" style="top:770px"><div class="ev-in ban"><div class="ev-h"><span class="sd"></span><b>Promo_Fake</b><span class="ev-v">banido</span></div><div class="ev-q">“... nao e golpe”</div></div></div><div id="ev2" class="clip ev left" data-start="243.870" data-duration="6.953" data-track-index="2" style="top:1020px"><div class="ev-in ban"><div class="ev-h"><span class="sd"></span><b>Lucas</b><span class="ev-v">banido</span></div><div class="ev-q">“divulguem meu canal”</div></div></div>
+
+  <div id="regras" class="clip hero" data-start="112.657" data-duration="21.900" data-track-index="2">
+    <div id="rg-card" class="ocard">
+      <h2>O robô lê a palavra inteira</h2>
+      <div id="r1" class="rule"><span class="kw">passa zap</span><span class="ex">“me PASSA ZÁP”</span><span class="res yes">pega</span></div>
+      <div id="r2" class="rule"><span class="kw">zap</span><span class="ex">“zapzap”</span><span class="res no">não pega</span></div>
+      <div id="r3" class="rule"><span class="kw">divulg*</span><span class="ex">“divulguem”</span><span class="res yes">pega</span></div>
+      <div id="r4" class="rule"><span class="kw">divulg*</span><span class="ex">“divulgação”</span><span class="res yes">pega</span></div>
+    </div>
+  </div>
+
+  <div id="moderador" class="clip hero" data-start="198.390" data-duration="14.433" data-track-index="2">
+    <div id="md-card" class="ocard">
+      <svg width="110" height="110" viewBox="0 0 24 24" fill="none" stroke="#D9A441" stroke-width="1.8"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M12 8v5M12 16h.01"/></svg>
+      <h2>Coloque o robô como moderador</h2>
+      <p>Sem isso, o SuperLive não deixa o robô silenciar nem banir ninguém.</p>
+    </div>
+  </div>
+
+  <div id="recap" class="clip hero" data-start="271.023" data-duration="11.560" data-track-index="2">
+    <div id="rc-card" class="ocard">
+      <h2>Checklist</h2>
+      <div id="st0" class="step"><span class="num">1</span><span>Crie sua conta</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st1" class="step"><span class="num">2</span><span>Cadastre as palavras</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st2" class="step"><span class="num">3</span><span>Monte as mensagens</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st3" class="step"><span class="num">4</span><span>Conecte o robô</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st4" class="step"><span class="num">5</span><span>Coloque de moderador</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div><div id="st5" class="step"><span class="num">6</span><span>Favorite a streamer</span><span class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></span></div>
+    </div>
+  </div>
+
+  <div id="chip-conta-0" class="clip rail" data-start="71.480" data-duration="3.410" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Conta criada</span></div></div><div id="chip-dash-0" class="clip rail" data-start="80.420" data-duration="3.000" data-track-index="2"><div class="chip-in off"><span class="sd"></span><span>Robô desconectado</span></div></div><div id="chip-dash-1" class="clip rail" data-start="83.420" data-duration="11.970" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>0 regras ativas</span></div></div><div id="chip-silenciar-0" class="clip rail" data-start="102.980" data-duration="8.340" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>zap  →  silenciar</span></div></div><div id="chip-silenciar-1" class="clip rail" data-start="111.320" data-duration="0.837" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>passa zap  →  silenciar</span></div></div><div id="chip-banir-0" class="clip rail" data-start="141.987" data-duration="2.000" data-track-index="2"><div class="chip-in red"><span class="sd"></span><span>golpe  →  banir</span></div></div><div id="chip-banir-1" class="clip rail" data-start="143.987" data-duration="10.003" data-track-index="2"><div class="chip-in red"><span class="sd"></span><span>divulg*  →  banir</span></div></div><div id="chip-mensagens-0" class="clip rail" data-start="162.200" data-duration="10.980" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>2 mensagens na fila</span></div></div><div id="chip-mensagens-1" class="clip rail" data-start="173.180" data-duration="2.077" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Envio automático: a cada 30s</span></div></div><div id="chip-robo-0" class="clip rail" data-start="195.177" data-duration="2.713" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Robô conectado</span></div></div><div id="chip-favoritar-0" class="clip rail" data-start="222.903" data-duration="6.490" data-track-index="2"><div class="chip-in live"><span class="sd"></span><span>Streamer ao vivo agora</span></div></div><div id="chip-favoritar-1" class="clip rail" data-start="229.393" data-duration="4.897" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>Moderando automaticamente</span></div></div><div id="chip-painel-0" class="clip rail" data-start="253.333" data-duration="4.580" data-track-index="2"><div class="chip-in amb"><span class="sd"></span><span>3 ações de moderação</span></div></div><div id="chip-painel-1" class="clip rail" data-start="257.913" data-duration="8.910" data-track-index="2"><div class="chip-in ok"><span class="sd"></span><span>100% de sucesso</span></div></div>
+
+  <div id="outro" class="clip" data-start="282.583" data-duration="13.074" data-track-index="2">
+    <div id="outro-box">
+      <img id="outro-fox" src="assets/img/fox_avatar.png" alt="" />
+      <div id="outro-title">Atila's <span>Client</span></div>
+      <div id="outro-sub">Suas lives no piloto automático</div>
+      <div id="outro-url">atilaclient.tech</div>
+    </div>
+  </div>
+
+  <div id="ch-como" class="clip chapter" data-start="15.300" data-duration="27.370" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Visão geral</span><span class="ch-title">Como funciona</span></div></div><div id="ch-acessar" class="clip chapter" data-start="42.670" data-duration="18.420" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 1</span><span class="ch-title">Acesse o site</span></div></div><div id="ch-conta" class="clip chapter" data-start="61.090" data-duration="14.000" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 2</span><span class="ch-title">Crie sua conta</span></div></div><div id="ch-dash" class="clip chapter" data-start="75.090" data-duration="20.500" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 3</span><span class="ch-title">O painel</span></div></div><div id="ch-silenciar" class="clip chapter" data-start="95.590" data-duration="16.767" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 4</span><span class="ch-title">Silenciar palavras</span></div></div><div id="ch-regras" class="clip chapter" data-start="112.357" data-duration="22.400" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Dica</span><span class="ch-title">Palavra inteira</span></div></div><div id="ch-banir" class="clip chapter" data-start="134.757" data-duration="19.433" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 5</span><span class="ch-title">Banir palavras</span></div></div><div id="ch-mensagens" class="clip chapter" data-start="154.190" data-duration="21.267" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 6</span><span class="ch-title">Mensagens automáticas</span></div></div><div id="ch-robo" class="clip chapter" data-start="175.457" data-duration="22.633" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 7</span><span class="ch-title">Conecte o robô</span></div></div><div id="ch-moderador" class="clip chapter" data-start="198.090" data-duration="15.033" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Importante</span><span class="ch-title">Robô moderador</span></div></div><div id="ch-favoritar" class="clip chapter" data-start="213.123" data-duration="21.367" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 8</span><span class="ch-title">Escolha a live</span></div></div><div id="ch-aovivo" class="clip chapter" data-start="234.490" data-duration="16.633" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Ao vivo</span><span class="ch-title">Robô em ação</span></div></div><div id="ch-painel" class="clip chapter" data-start="251.123" data-duration="15.900" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Passo 9</span><span class="ch-title">Estatísticas</span></div></div><div id="ch-final" class="clip chapter" data-start="267.023" data-duration="28.633" data-track-index="3"><div class="ch-in"><span class="ch-dot"></span><span class="ch-tag">Resumo</span><span class="ch-title">Checklist</span></div></div>
+  <div id="cap0" class="clip cap" data-start="0.550" data-duration="3.373" data-track-index="4"><span class="cap-in">E aí, tudo bem? Hoje eu vou te mostrar,</span></div><div id="cap1" class="clip cap" data-start="3.943" data-duration="1.198" data-track-index="4"><span class="cap-in">passo a passo,</span></div><div id="cap2" class="clip cap" data-start="5.161" data-duration="2.549" data-track-index="4"><span class="cap-in">como usar o Atila&#x27;s Client.</span></div><div id="cap3" class="clip cap" data-start="8.050" data-duration="2.287" data-track-index="4"><span class="cap-in">É um robô que modera as suas lives no</span></div><div id="cap4" class="clip cap" data-start="10.357" data-duration="1.102" data-track-index="4"><span class="cap-in">SuperLive sozinho,</span></div><div id="cap5" class="clip cap" data-start="11.480" data-duration="2.320" data-track-index="4"><span class="cap-in">enquanto você foca na transmissão.</span></div><div id="cap6" class="clip cap" data-start="15.910" data-duration="1.560" data-track-index="4"><span class="cap-in">A ideia é bem simples.</span></div><div id="cap7" class="clip cap" data-start="17.730" data-duration="2.977" data-track-index="4"><span class="cap-in">Você entra no site, cadastra as palavras</span></div><div id="cap8" class="clip cap" data-start="20.727" data-duration="2.823" data-track-index="4"><span class="cap-in">proibidas e conecta uma conta robô.</span></div><div id="cap9" class="clip cap" data-start="24.020" data-duration="2.079" data-track-index="4"><span class="cap-in">Aí o robô entra na sua live,</span></div><div id="cap10" class="clip cap" data-start="26.119" data-duration="1.479" data-track-index="4"><span class="cap-in">fica de olho no chat</span></div><div id="cap11" class="clip cap" data-start="27.618" data-duration="1.554" data-track-index="4"><span class="cap-in">e silencia ou expulsa</span></div><div id="cap12" class="clip cap" data-start="29.192" data-duration="1.779" data-track-index="4"><span class="cap-in">quem passar dos limites.</span></div><div id="cap13" class="clip cap" data-start="30.992" data-duration="1.704" data-track-index="4"><span class="cap-in">E ainda manda mensagens</span></div><div id="cap14" class="clip cap" data-start="32.716" data-duration="1.774" data-track-index="4"><span class="cap-in">automáticas por você.</span></div><div id="cap15" class="clip cap" data-start="34.990" data-duration="2.340" data-track-index="4"><span class="cap-in">E o melhor: ele roda no servidor.</span></div><div id="cap16" class="clip cap" data-start="37.350" data-duration="2.412" data-track-index="4"><span class="cap-in">Pode fechar o navegador tranquilo,</span></div><div id="cap17" class="clip cap" data-start="39.782" data-duration="1.988" data-track-index="4"><span class="cap-in">que a moderação continua.</span></div><div id="cap18" class="clip cap" data-start="43.280" data-duration="0.731" data-track-index="4"><span class="cap-in">Pra começar,</span></div><div id="cap19" class="clip cap" data-start="44.031" data-duration="2.139" data-track-index="4"><span class="cap-in">você não precisa instalar nada.</span></div><div id="cap20" class="clip cap" data-start="46.500" data-duration="2.097" data-track-index="4"><span class="cap-in">É só abrir o navegador e</span></div><div id="cap21" class="clip cap" data-start="48.617" data-duration="2.493" data-track-index="4"><span class="cap-in">entrar em atilaclient.tech</span></div><div id="cap22" class="clip cap" data-start="51.530" data-duration="2.767" data-track-index="4"><span class="cap-in">Funciona no computador e no celular. E,</span></div><div id="cap23" class="clip cap" data-start="54.317" data-duration="2.481" data-track-index="4"><span class="cap-in">se quiser, dá até pra instalar como</span></div><div id="cap24" class="clip cap" data-start="56.818" data-duration="2.772" data-track-index="4"><span class="cap-in">aplicativo, lá na aba Configurações.</span></div><div id="cap25" class="clip cap" data-start="61.700" data-duration="2.410" data-track-index="4"><span class="cap-in">Na primeira vez, toca em “Criar agora”.</span></div><div id="cap26" class="clip cap" data-start="64.640" data-duration="1.220" data-track-index="4"><span class="cap-in">Coloca o seu nome,</span></div><div id="cap27" class="clip cap" data-start="65.880" data-duration="1.990" data-track-index="4"><span class="cap-in">um usuário e o seu e-mail.</span></div><div id="cap28" class="clip cap" data-start="68.280" data-duration="2.407" data-track-index="4"><span class="cap-in">Escolhe uma senha de pelo menos 8</span></div><div id="cap29" class="clip cap" data-start="70.707" data-duration="1.598" data-track-index="4"><span class="cap-in">caracteres, repete ela</span></div><div id="cap30" class="clip cap" data-start="72.325" data-duration="1.965" data-track-index="4"><span class="cap-in">e toca em “Criar conta”.</span></div><div id="cap31" class="clip cap" data-start="75.700" data-duration="2.330" data-track-index="4"><span class="cap-in">Prontinho, você já tá dentro!</span></div><div id="cap32" class="clip cap" data-start="78.420" data-duration="2.000" data-track-index="4"><span class="cap-in">Aqui no Dashboard você vê tudo</span></div><div id="cap33" class="clip cap" data-start="80.440" data-duration="2.135" data-track-index="4"><span class="cap-in">de uma vez: se o robô tá ligado,</span></div><div id="cap34" class="clip cap" data-start="82.595" data-duration="2.471" data-track-index="4"><span class="cap-in">quantas regras você tem, as mensagens</span></div><div id="cap35" class="clip cap" data-start="85.086" data-duration="2.624" data-track-index="4"><span class="cap-in">na fila e quantas vezes ele já agiu.</span></div><div id="cap36" class="clip cap" data-start="88.190" data-duration="3.536" data-track-index="4"><span class="cap-in">E aqui embaixo ficam as abas: Moderação,</span></div><div id="cap37" class="clip cap" data-start="91.746" data-duration="3.044" data-track-index="4"><span class="cap-in">Mensagens, Robô e Configurações.</span></div><div id="cap38" class="clip cap" data-start="96.200" data-duration="1.963" data-track-index="4"><span class="cap-in">Agora vamos montar as regras.</span></div><div id="cap39" class="clip cap" data-start="98.183" data-duration="1.567" data-track-index="4"><span class="cap-in">Toca em “Moderação”.</span></div><div id="cap40" class="clip cap" data-start="100.380" data-duration="1.546" data-track-index="4"><span class="cap-in">Na aba “Silenciar”,</span></div><div id="cap41" class="clip cap" data-start="101.946" data-duration="3.414" data-track-index="4"><span class="cap-in">digita a palavra e toca em “Adicionar”.</span></div><div id="cap42" class="clip cap" data-start="106.000" data-duration="1.122" data-track-index="4"><span class="cap-in">Quem mandar essa palavra</span></div><div id="cap43" class="clip cap" data-start="107.142" data-duration="1.438" data-track-index="4"><span class="cap-in">no chat fica mudo na live.</span></div><div id="cap44" class="clip cap" data-start="108.920" data-duration="1.506" data-track-index="4"><span class="cap-in">Dá pra colocar frases também,</span></div><div id="cap45" class="clip cap" data-start="110.446" data-duration="1.094" data-track-index="4"><span class="cap-in">tipo “passa zap”.</span></div><div id="cap46" class="clip cap" data-start="112.967" data-duration="1.242" data-track-index="4"><span class="cap-in">Ah, e uma dica:</span></div><div id="cap47" class="clip cap" data-start="114.230" data-duration="2.978" data-track-index="4"><span class="cap-in">o robô compara a palavra inteira.</span></div><div id="cap48" class="clip cap" data-start="117.677" data-duration="2.065" data-track-index="4"><span class="cap-in">Não adianta o espertinho escrever em</span></div><div id="cap49" class="clip cap" data-start="119.762" data-duration="1.891" data-track-index="4"><span class="cap-in">maiúscula, com acento ou cheio de</span></div><div id="cap50" class="clip cap" data-start="121.674" data-duration="2.053" data-track-index="4"><span class="cap-in">espaço: ele pega do mesmo jeito.</span></div><div id="cap51" class="clip cap" data-start="124.207" data-duration="3.220" data-track-index="4"><span class="cap-in">E com um asterisco no final, vale tudo</span></div><div id="cap52" class="clip cap" data-start="127.447" data-duration="2.964" data-track-index="4"><span class="cap-in">que começa com aquilo: divulg* pega</span></div><div id="cap53" class="clip cap" data-start="130.432" data-duration="3.525" data-track-index="4"><span class="cap-in">“divulguem”, “divulgação” e por aí vai.</span></div><div id="cap54" class="clip cap" data-start="135.367" data-duration="2.025" data-track-index="4"><span class="cap-in">Já na aba “Banir”, a pessoa não</span></div><div id="cap55" class="clip cap" data-start="137.412" data-duration="2.575" data-track-index="4"><span class="cap-in">fica só muda: ela é expulsa da live.</span></div><div id="cap56" class="clip cap" data-start="140.387" data-duration="2.470" data-track-index="4"><span class="cap-in">Vou colocar “golpe” e “divulg*”.</span></div><div id="cap57" class="clip cap" data-start="143.287" data-duration="2.074" data-track-index="4"><span class="cap-in">Aqui em cima tem três chaves:</span></div><div id="cap58" class="clip cap" data-start="145.381" data-duration="1.496" data-track-index="4"><span class="cap-in">moderação automática,</span></div><div id="cap59" class="clip cap" data-start="146.896" data-duration="1.424" data-track-index="4"><span class="cap-in">banimento permanente</span></div><div id="cap60" class="clip cap" data-start="148.340" data-duration="1.857" data-track-index="4"><span class="cap-in">e imunidade por diamantes,</span></div><div id="cap61" class="clip cap" data-start="150.217" data-duration="1.207" data-track-index="4"><span class="cap-in">que livra quem já</span></div><div id="cap62" class="clip cap" data-start="151.444" data-duration="1.933" data-track-index="4"><span class="cap-in">mandou presente na live.</span></div><div id="cap63" class="clip cap" data-start="154.800" data-duration="2.485" data-track-index="4"><span class="cap-in">Agora, as mensagens automáticas.</span></div><div id="cap64" class="clip cap" data-start="157.305" data-duration="1.765" data-track-index="4"><span class="cap-in">Toca em “Mensagens”.</span></div><div id="cap65" class="clip cap" data-start="159.200" data-duration="3.024" data-track-index="4"><span class="cap-in">Escreve o recado e toca em “Adicionar à</span></div><div id="cap66" class="clip cap" data-start="162.244" data-duration="2.712" data-track-index="4"><span class="cap-in">fila”. Pode colocar quantas quiser:</span></div><div id="cap67" class="clip cap" data-start="164.976" data-duration="1.931" data-track-index="4"><span class="cap-in">elas vão saindo na ordem,</span></div><div id="cap68" class="clip cap" data-start="166.927" data-duration="1.683" data-track-index="4"><span class="cap-in">uma atrás da outra.</span></div><div id="cap69" class="clip cap" data-start="169.180" data-duration="2.342" data-track-index="4"><span class="cap-in">Escolhe de quanto em quanto tempo,</span></div><div id="cap70" class="clip cap" data-start="171.542" data-duration="1.578" data-track-index="4"><span class="cap-in">liga o envio automático</span></div><div id="cap71" class="clip cap" data-start="173.140" data-duration="1.520" data-track-index="4"><span class="cap-in">e toca em “Salvar”.</span></div><div id="cap72" class="clip cap" data-start="176.067" data-duration="1.979" data-track-index="4"><span class="cap-in">Agora é hora de conectar o robô.</span></div><div id="cap73" class="clip cap" data-start="178.066" data-duration="1.542" data-track-index="4"><span class="cap-in">O ideal é criar uma conta</span></div><div id="cap74" class="clip cap" data-start="179.628" data-duration="1.699" data-track-index="4"><span class="cap-in">no SuperLive só pra ele.</span></div><div id="cap75" class="clip cap" data-start="181.987" data-duration="3.435" data-track-index="4"><span class="cap-in">Na aba “Robô”, você escolhe como entrar:</span></div><div id="cap76" class="clip cap" data-start="185.442" data-duration="2.917" data-track-index="4"><span class="cap-in">e-mail e senha, celular com código</span></div><div id="cap77" class="clip cap" data-start="188.379" data-duration="2.618" data-track-index="4"><span class="cap-in">por SMS, ou colando o token.</span></div><div id="cap78" class="clip cap" data-start="191.427" data-duration="1.391" data-track-index="4"><span class="cap-in">Eu vou de e-mail e senha</span></div><div id="cap79" class="clip cap" data-start="192.838" data-duration="1.729" data-track-index="4"><span class="cap-in">e toco em “Conectar Robô”.</span></div><div id="cap80" class="clip cap" data-start="194.877" data-duration="2.400" data-track-index="4"><span class="cap-in">Pronto, robô conectado!</span></div><div id="cap81" class="clip cap" data-start="198.700" data-duration="2.114" data-track-index="4"><span class="cap-in">Agora, presta atenção nessa parte,</span></div><div id="cap82" class="clip cap" data-start="200.834" data-duration="1.706" data-track-index="4"><span class="cap-in">que é a mais importante!</span></div><div id="cap83" class="clip cap" data-start="203.040" data-duration="2.159" data-track-index="4"><span class="cap-in">A dona da live precisa colocar</span></div><div id="cap84" class="clip cap" data-start="205.219" data-duration="2.304" data-track-index="4"><span class="cap-in">a conta do robô como moderadora.</span></div><div id="cap85" class="clip cap" data-start="207.544" data-duration="2.232" data-track-index="4"><span class="cap-in">Sem isso, o SuperLive não deixa</span></div><div id="cap86" class="clip cap" data-start="209.796" data-duration="2.524" data-track-index="4"><span class="cap-in">ele silenciar nem banir ninguém.</span></div><div id="cap87" class="clip cap" data-start="213.733" data-duration="1.514" data-track-index="4"><span class="cap-in">Agora é só falar pro robô</span></div><div id="cap88" class="clip cap" data-start="215.267" data-duration="1.796" data-track-index="4"><span class="cap-in">qual live ele vai moderar.</span></div><div id="cap89" class="clip cap" data-start="217.623" data-duration="2.235" data-track-index="4"><span class="cap-in">Digita o ID que aparece no perfil</span></div><div id="cap90" class="clip cap" data-start="219.878" data-duration="2.045" data-track-index="4"><span class="cap-in">da streamer e toca na lupa.</span></div><div id="cap91" class="clip cap" data-start="222.303" data-duration="1.727" data-track-index="4"><span class="cap-in">Se ela estiver ao vivo,</span></div><div id="cap92" class="clip cap" data-start="224.050" data-duration="2.403" data-track-index="4"><span class="cap-in">o ID da live aparece sozinho.</span></div><div id="cap93" class="clip cap" data-start="226.793" data-duration="2.604" data-track-index="4"><span class="cap-in">Aí toca em “Favoritar”. Toda vez que ela</span></div><div id="cap94" class="clip cap" data-start="229.417" data-duration="2.407" data-track-index="4"><span class="cap-in">abrir uma live, o robô entra sozinho,</span></div><div id="cap95" class="clip cap" data-start="231.843" data-duration="1.840" data-track-index="4"><span class="cap-in">mesmo com o site fechado.</span></div><div id="cap96" class="clip cap" data-start="235.100" data-duration="1.751" data-track-index="4"><span class="cap-in">E olha ele trabalhando!</span></div><div id="cap97" class="clip cap" data-start="236.871" data-duration="3.049" data-track-index="4"><span class="cap-in">O chat da live aparece aqui, ao vivo.</span></div><div id="cap98" class="clip cap" data-start="240.270" data-duration="2.055" data-track-index="4"><span class="cap-in">Pediu o zap? Ficou mudo.</span></div><div id="cap99" class="clip cap" data-start="242.345" data-duration="3.225" data-track-index="4"><span class="cap-in">Falou em golpe? Tchau, foi expulso.</span></div><div id="cap100" class="clip cap" data-start="245.830" data-duration="2.088" data-track-index="4"><span class="cap-in">E tudo fica anotado aqui embaixo,</span></div><div id="cap101" class="clip cap" data-start="247.938" data-duration="2.372" data-track-index="4"><span class="cap-in">com a palavra que fez o robô agir.</span></div><div id="cap102" class="clip cap" data-start="251.733" data-duration="1.272" data-track-index="4"><span class="cap-in">Voltando pro Dashboard,</span></div><div id="cap103" class="clip cap" data-start="253.025" data-duration="1.998" data-track-index="4"><span class="cap-in">os números já foram atualizados.</span></div><div id="cap104" class="clip cap" data-start="255.313" data-duration="2.570" data-track-index="4"><span class="cap-in">Em “Estatísticas”, você vê o histórico,</span></div><div id="cap105" class="clip cap" data-start="257.903" data-duration="1.308" data-track-index="4"><span class="cap-in">as palavras que mais</span></div><div id="cap106" class="clip cap" data-start="259.231" data-duration="2.192" data-track-index="4"><span class="cap-in">apareceram e as últimas lives.</span></div><div id="cap107" class="clip cap" data-start="261.733" data-duration="2.130" data-track-index="4"><span class="cap-in">E em “Configurações” ficam os dados da</span></div><div id="cap108" class="clip cap" data-start="263.883" data-duration="2.350" data-track-index="4"><span class="cap-in">sua conta e tudo o que aconteceu nela.</span></div><div id="cap109" class="clip cap" data-start="267.633" data-duration="1.075" data-track-index="4"><span class="cap-in">Quando quiser parar,</span></div><div id="cap110" class="clip cap" data-start="268.728" data-duration="2.225" data-track-index="4"><span class="cap-in">é só tocar em “Parar”, na aba “Robô”.</span></div><div id="cap111" class="clip cap" data-start="271.703" data-duration="1.946" data-track-index="4"><span class="cap-in">Resumindo: cria a conta,</span></div><div id="cap112" class="clip cap" data-start="273.669" data-duration="1.700" data-track-index="4"><span class="cap-in">cadastra as palavras,</span></div><div id="cap113" class="clip cap" data-start="275.389" data-duration="1.536" data-track-index="4"><span class="cap-in">monta as mensagens,</span></div><div id="cap114" class="clip cap" data-start="276.946" data-duration="2.356" data-track-index="4"><span class="cap-in">conecta o robô, coloca ele de</span></div><div id="cap115" class="clip cap" data-start="279.322" data-duration="2.821" data-track-index="4"><span class="cap-in">moderador e favorita a streamer.</span></div><div id="cap116" class="clip cap" data-start="282.583" data-duration="2.271" data-track-index="4"><span class="cap-in">Pronto! Agora suas lives estão</span></div><div id="cap117" class="clip cap" data-start="284.874" data-duration="2.423" data-track-index="4"><span class="cap-in">protegidas no piloto automático.</span></div><div id="cap118" class="clip cap" data-start="287.317" data-duration="1.956" data-track-index="4"><span class="cap-in">Valeu, e até a próxima!</span></div>
+  <div id="progress"></div>
+  <audio id="vo-intro" src="assets/vo/intro.wav" data-start="0.550" data-duration="13.300" data-track-index="5" data-volume="1"></audio><audio id="vo-como" src="assets/vo/como.wav" data-start="15.850" data-duration="25.970" data-track-index="5" data-volume="1"></audio><audio id="vo-acessar" src="assets/vo/acessar.wav" data-start="43.220" data-duration="16.420" data-track-index="5" data-volume="1"></audio><audio id="vo-conta" src="assets/vo/conta.wav" data-start="61.640" data-duration="12.700" data-track-index="5" data-volume="1"></audio><audio id="vo-dash" src="assets/vo/dash.wav" data-start="75.640" data-duration="19.200" data-track-index="5" data-volume="1"></audio><audio id="vo-silenciar" src="assets/vo/silenciar.wav" data-start="96.140" data-duration="15.450" data-track-index="5" data-volume="1"></audio><audio id="vo-regras" src="assets/vo/regras.wav" data-start="112.907" data-duration="21.100" data-track-index="5" data-volume="1"></audio><audio id="vo-banir" src="assets/vo/banir.wav" data-start="135.307" data-duration="18.120" data-track-index="5" data-volume="1"></audio><audio id="vo-mensagens" src="assets/vo/mensagens.wav" data-start="154.740" data-duration="19.970" data-track-index="5" data-volume="1"></audio><audio id="vo-robo" src="assets/vo/robo.wav" data-start="176.007" data-duration="21.320" data-track-index="5" data-volume="1"></audio><audio id="vo-moderador" src="assets/vo/moderador.wav" data-start="198.640" data-duration="13.730" data-track-index="5" data-volume="1"></audio><audio id="vo-favoritar" src="assets/vo/favoritar.wav" data-start="213.673" data-duration="20.060" data-track-index="5" data-volume="1"></audio><audio id="vo-aovivo" src="assets/vo/aovivo.wav" data-start="235.040" data-duration="15.320" data-track-index="5" data-volume="1"></audio><audio id="vo-painel" src="assets/vo/painel.wav" data-start="251.673" data-duration="14.610" data-track-index="5" data-volume="1"></audio><audio id="vo-final" src="assets/vo/final.wav" data-start="267.573" data-duration="21.750" data-track-index="5" data-volume="1"></audio><audio id="bgm" src="assets/bgm_long.mp3" data-start="0" data-duration="295.657" data-track-index="6" data-volume="0.16"></audio><audio id="wh0" src="assets/whoosh.mp3" data-start="15.000" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh1" src="assets/whoosh.mp3" data-start="42.370" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh2" src="assets/whoosh.mp3" data-start="59.890" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh3" src="assets/whoosh.mp3" data-start="112.207" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh4" src="assets/whoosh.mp3" data-start="197.940" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="wh5" src="assets/whoosh.mp3" data-start="266.873" data-duration="1.0" data-track-index="7" data-volume="0.35"></audio><audio id="pp0" src="assets/pop.mp3" data-start="71.530" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp1" src="assets/pop.mp3" data-start="80.470" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp2" src="assets/pop.mp3" data-start="83.470" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp3" src="assets/pop.mp3" data-start="103.030" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp4" src="assets/pop.mp3" data-start="111.370" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp5" src="assets/pop.mp3" data-start="142.037" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp6" src="assets/pop.mp3" data-start="144.037" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp7" src="assets/pop.mp3" data-start="162.250" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp8" src="assets/pop.mp3" data-start="173.230" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp9" src="assets/pop.mp3" data-start="195.227" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp10" src="assets/pop.mp3" data-start="222.953" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp11" src="assets/pop.mp3" data-start="229.443" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp12" src="assets/pop.mp3" data-start="253.383" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp13" src="assets/pop.mp3" data-start="257.963" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp14" src="assets/pop.mp3" data-start="240.720" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp15" src="assets/pop.mp3" data-start="242.320" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio><audio id="pp16" src="assets/pop.mp3" data-start="243.920" data-duration="0.25" data-track-index="8" data-volume="0.22"></audio>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+const TOTAL = 295.657;
+tl.fromTo("#progress", { scaleX: 0 }, { scaleX: 1, duration: TOTAL, ease: "none" }, 0);
+
+// volumetric light: slow sway + breathing
+tl.fromTo("#beam1", { rotation: 18 }, { rotation: 8, duration: TOTAL / 2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+tl.fromTo("#beam2", { rotation: -20 }, { rotation: -9, duration: TOTAL / 3, ease: "sine.inOut", yoyo: true, repeat: 2 }, 0);
+tl.fromTo("#beam3", { rotation: 4, opacity: .5 }, { rotation: -6, opacity: 1, duration: TOTAL / 4, ease: "sine.inOut", yoyo: true, repeat: 3 }, 0);
+tl.fromTo("#floor", { rotationX: 72, y: 0 }, { rotationX: 72, y: 180, duration: TOTAL, ease: "none" }, 0);
+
+// INTRO: light sweep reveals the logo
+tl.fromTo("#intro-fox", { opacity: 0, scale: .82, y: 60, filter: "blur(18px)" }, { opacity: 1, scale: 1, y: 0, filter: "blur(0px)", duration: 1.6, ease: "power3.out" }, 0.2);
+tl.fromTo("#intro-title", { opacity: 0, scale: 1.18, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.4, ease: "power3.out" }, 0.9);
+tl.fromTo("#intro-line", { scaleX: 0 }, { scaleX: 1, duration: 1.1, ease: "power2.inOut" }, 1.6);
+tl.fromTo("#intro-sub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .9, ease: "power2.out" }, 2.0);
+tl.fromTo("#flare", { x: 0 }, { x: 2200, duration: 2.4, ease: "power2.inOut" }, 0.8);
+tl.to("#intro-fox", { y: -16, duration: 2.6, ease: "sine.inOut", yoyo: true, repeat: 2 }, 1.8);
+tl.to("#intro-box", { scale: 1.35, opacity: 0, filter: "blur(16px)", duration: .9, ease: "power2.in" }, 14.300);
+
+// COMO: glass cards float in from depth
+const cc = [15.91, 17.73, 24.02, 34.99];
+tl.fromTo("#g1", { opacity: 0, z: -500, rotationX: 40 }, { opacity: 1, z: 0, rotationX: 0, duration: .9, ease: "power3.out" }, cc[1]);
+tl.fromTo("#k1", { scaleY: 0 }, { scaleY: 1, duration: .4 }, cc[1] + 1.5);
+tl.fromTo("#g2", { opacity: 0, z: -500, rotationX: 40 }, { opacity: 1, z: 0, rotationX: 0, duration: .9, ease: "power3.out" }, cc[1] + 1.8);
+tl.fromTo("#k2", { scaleY: 0 }, { scaleY: 1, duration: .4 }, cc[1] + 3.3);
+tl.fromTo("#g3", { opacity: 0, z: -500, rotationX: 40 }, { opacity: 1, z: 0, rotationX: 0, duration: .9, ease: "power3.out" }, cc[2]);
+tl.fromTo("#p1", { opacity: 0, y: 30, scale: .9 }, { opacity: 1, y: 0, scale: 1, duration: .5, ease: "back.out(2)" }, cc[2] + 4.0);
+tl.fromTo("#p2", { opacity: 0, y: 30, scale: .9 }, { opacity: 1, y: 0, scale: 1, duration: .5, ease: "back.out(2)" }, cc[2] + 5.0);
+tl.fromTo("#p3", { opacity: 0, y: 30, scale: .9 }, { opacity: 1, y: 0, scale: 1, duration: .5, ease: "back.out(2)" }, cc[2] + 8.0);
+tl.fromTo("#close-tab", { opacity: 0, scale: .92 }, { opacity: 1, scale: 1, duration: .5, ease: "back.out(2)" }, cc[3] + 1.3);
+tl.fromTo("#como-box", { rotationY: -8, rotationX: 4 }, { rotationY: 8, rotationX: -3, duration: 27.37, ease: "sine.inOut" }, 15.300);
+tl.to("#como-box", { scale: 1.3, opacity: 0, filter: "blur(16px)", duration: .8, ease: "power2.in" }, 41.820);
+
+// ACESSAR: glowing URL bar types, devices float
+const ac = [43.28, 46.5, 51.53];
+tl.fromTo("#ac-url", { opacity: 0, z: -600, rotationX: 30 }, { opacity: 1, z: 0, rotationX: 0, duration: 1, ease: "power3.out" }, 42.970);
+tl.fromTo("#ac-ty", { width: 0 }, { width: "16ch", duration: 1.2, ease: "steps(16)" }, ac[1] + 2.6);
+tl.fromTo("#d1", { opacity: 0, y: 50, rotationY: -30 }, { opacity: 1, y: 0, rotationY: 0, duration: .7, ease: "power3.out" }, ac[2] + 0.5);
+tl.fromTo("#d2", { opacity: 0, y: 50, rotationY: 30 }, { opacity: 1, y: 0, rotationY: 0, duration: .7, ease: "power3.out" }, ac[2] + 1.1);
+tl.fromTo("#ac-pwa", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: .5 }, ac[2] + 4.8);
+tl.to("#ac-box", { scale: 1.3, opacity: 0, filter: "blur(16px)", duration: .7, ease: "power2.in" }, 58.890);
+
+// PHONE flies in from depth, then floats
+tl.fromTo("#phone3d", { opacity: 0, z: -1600, rotationY: 38, rotationX: 12, scale: .86 }, { opacity: 1, z: 0, rotationY: -6, rotationX: 3, scale: .86, duration: 1.6, ease: "power3.out" }, 59.790);
+tl.fromTo("#reflect", { opacity: 0 }, { opacity: 1, duration: 1.2 }, 60.190);
+tl.fromTo("#phone3d", { y: 0 }, { y: -18, duration: 3.2, ease: "sine.inOut", yoyo: true, repeat: 73 }, 61.390);
+tl.fromTo("#urltxt", { width: 0 }, { width: "16ch", duration: .6, ease: "steps(16)" }, 60.390);
+tl.to("#blank", { opacity: 0, duration: .4 }, 60.890);
+tl.set("#poster", { opacity: 0 }, 61.290);
+for (let g = 0; g < 9; g++) tl.fromTo("#glare", { x: 0 }, { x: 1400, duration: 1.6, ease: "power2.inOut" }, 61.090 + g * 21);
+
+// overlays: dim the screen, cards float in front
+const dim = (a, b) => { tl.to("#dim", { opacity: 1, duration: .4 }, a); if (b) tl.to("#dim", { opacity: 0, duration: .4 }, b); };
+dim(112.657, 134.257);
+dim(198.390, 212.523);
+dim(271.023, 0);
+const rc = [112.967, 117.677, 124.207];
+tl.fromTo("#rg-card", { opacity: 0, z: -400, rotationX: 25 }, { opacity: 1, z: 0, rotationX: 0, duration: .8, ease: "power3.out" }, 112.757);
+tl.fromTo("#r1", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[1] + 0.8);
+tl.fromTo("#r2", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[1] + 2.6);
+tl.fromTo("#r3", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[2] + 6.2);
+tl.fromTo("#r4", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4 }, rc[2] + 7.4);
+tl.to("#rg-card", { opacity: 0, scale: 1.08, filter: "blur(10px)", duration: .45 }, 133.857);
+tl.fromTo("#md-card", { opacity: 0, z: -400, rotationX: 25 }, { opacity: 1, z: 0, rotationX: 0, duration: .8, ease: "power3.out" }, 198.490);
+tl.to("#md-card svg", { scale: 1.12, duration: .5, yoyo: true, repeat: 5, ease: "sine.inOut" }, 199.090);
+tl.to("#md-card", { opacity: 0, scale: 1.08, filter: "blur(10px)", duration: .45 }, 212.123);
+const fc = [267.633, 271.703, 282.583];
+tl.fromTo("#rc-card", { opacity: 0, z: -400, rotationX: 25 }, { opacity: 1, z: 0, rotationX: 0, duration: .8, ease: "power3.out" }, 271.123);
+[1.0, 2.2, 3.6, 5.0, 6.4, 8.3].forEach((d, i) => {
+  tl.fromTo("#st" + i, { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .35, ease: "power2.out" }, fc[1] + d);
+  tl.fromTo("#st" + i + " .tick", { scale: 0 }, { scale: 1, duration: .35, ease: "back.out(3)" }, fc[1] + d + 0.4);
+});
+tl.fromTo("#outro-fox", { opacity: 0, scale: .7, filter: "blur(16px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "power3.out" }, fc[2] + 0.1);
+tl.fromTo("#outro-title", { opacity: 0, scale: 1.18, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.0, ease: "power3.out" }, fc[2] + 0.5);
+tl.fromTo("#outro-sub", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .6 }, fc[2] + 1.0);
+tl.fromTo("#outro-url", { opacity: 0, scale: .85 }, { opacity: 1, scale: 1, duration: .6, ease: "back.out(2)" }, fc[2] + 1.4);
+
+tl.fromTo("#cap0 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},0.550);
+tl.fromTo("#cap1 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},3.943);
+tl.fromTo("#cap2 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},5.161);
+tl.fromTo("#cap3 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},8.050);
+tl.fromTo("#cap4 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},10.357);
+tl.fromTo("#cap5 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},11.480);
+tl.fromTo("#cap6 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},15.910);
+tl.fromTo("#cap7 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},17.730);
+tl.fromTo("#cap8 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},20.727);
+tl.fromTo("#cap9 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},24.020);
+tl.fromTo("#cap10 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},26.119);
+tl.fromTo("#cap11 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},27.618);
+tl.fromTo("#cap12 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},29.192);
+tl.fromTo("#cap13 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},30.992);
+tl.fromTo("#cap14 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},32.716);
+tl.fromTo("#cap15 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},34.990);
+tl.fromTo("#cap16 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},37.350);
+tl.fromTo("#cap17 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},39.782);
+tl.fromTo("#cap18 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},43.280);
+tl.fromTo("#cap19 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},44.031);
+tl.fromTo("#cap20 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},46.500);
+tl.fromTo("#cap21 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},48.617);
+tl.fromTo("#cap22 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},51.530);
+tl.fromTo("#cap23 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},54.317);
+tl.fromTo("#cap24 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},56.818);
+tl.fromTo("#cap25 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},61.700);
+tl.fromTo("#cap26 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},64.640);
+tl.fromTo("#cap27 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},65.880);
+tl.fromTo("#cap28 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},68.280);
+tl.fromTo("#cap29 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},70.707);
+tl.fromTo("#cap30 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},72.325);
+tl.fromTo("#cap31 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},75.700);
+tl.fromTo("#cap32 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},78.420);
+tl.fromTo("#cap33 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},80.440);
+tl.fromTo("#cap34 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},82.595);
+tl.fromTo("#cap35 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},85.086);
+tl.fromTo("#cap36 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},88.190);
+tl.fromTo("#cap37 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},91.746);
+tl.fromTo("#cap38 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},96.200);
+tl.fromTo("#cap39 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},98.183);
+tl.fromTo("#cap40 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},100.380);
+tl.fromTo("#cap41 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},101.946);
+tl.fromTo("#cap42 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},106.000);
+tl.fromTo("#cap43 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},107.142);
+tl.fromTo("#cap44 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},108.920);
+tl.fromTo("#cap45 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},110.446);
+tl.fromTo("#cap46 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},112.967);
+tl.fromTo("#cap47 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},114.230);
+tl.fromTo("#cap48 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},117.677);
+tl.fromTo("#cap49 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},119.762);
+tl.fromTo("#cap50 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},121.674);
+tl.fromTo("#cap51 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},124.207);
+tl.fromTo("#cap52 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},127.447);
+tl.fromTo("#cap53 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},130.432);
+tl.fromTo("#cap54 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},135.367);
+tl.fromTo("#cap55 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},137.412);
+tl.fromTo("#cap56 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},140.387);
+tl.fromTo("#cap57 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},143.287);
+tl.fromTo("#cap58 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},145.381);
+tl.fromTo("#cap59 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},146.896);
+tl.fromTo("#cap60 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},148.340);
+tl.fromTo("#cap61 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},150.217);
+tl.fromTo("#cap62 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},151.444);
+tl.fromTo("#cap63 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},154.800);
+tl.fromTo("#cap64 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},157.305);
+tl.fromTo("#cap65 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},159.200);
+tl.fromTo("#cap66 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},162.244);
+tl.fromTo("#cap67 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},164.976);
+tl.fromTo("#cap68 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},166.927);
+tl.fromTo("#cap69 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},169.180);
+tl.fromTo("#cap70 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},171.542);
+tl.fromTo("#cap71 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},173.140);
+tl.fromTo("#cap72 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},176.067);
+tl.fromTo("#cap73 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},178.066);
+tl.fromTo("#cap74 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},179.628);
+tl.fromTo("#cap75 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},181.987);
+tl.fromTo("#cap76 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},185.442);
+tl.fromTo("#cap77 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},188.379);
+tl.fromTo("#cap78 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},191.427);
+tl.fromTo("#cap79 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},192.838);
+tl.fromTo("#cap80 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},194.877);
+tl.fromTo("#cap81 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},198.700);
+tl.fromTo("#cap82 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},200.834);
+tl.fromTo("#cap83 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},203.040);
+tl.fromTo("#cap84 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},205.219);
+tl.fromTo("#cap85 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},207.544);
+tl.fromTo("#cap86 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},209.796);
+tl.fromTo("#cap87 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},213.733);
+tl.fromTo("#cap88 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},215.267);
+tl.fromTo("#cap89 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},217.623);
+tl.fromTo("#cap90 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},219.878);
+tl.fromTo("#cap91 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},222.303);
+tl.fromTo("#cap92 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},224.050);
+tl.fromTo("#cap93 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},226.793);
+tl.fromTo("#cap94 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},229.417);
+tl.fromTo("#cap95 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},231.843);
+tl.fromTo("#cap96 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},235.100);
+tl.fromTo("#cap97 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},236.871);
+tl.fromTo("#cap98 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},240.270);
+tl.fromTo("#cap99 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},242.345);
+tl.fromTo("#cap100 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},245.830);
+tl.fromTo("#cap101 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},247.938);
+tl.fromTo("#cap102 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},251.733);
+tl.fromTo("#cap103 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},253.025);
+tl.fromTo("#cap104 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},255.313);
+tl.fromTo("#cap105 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},257.903);
+tl.fromTo("#cap106 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},259.231);
+tl.fromTo("#cap107 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},261.733);
+tl.fromTo("#cap108 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},263.883);
+tl.fromTo("#cap109 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},267.633);
+tl.fromTo("#cap110 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},268.728);
+tl.fromTo("#cap111 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},271.703);
+tl.fromTo("#cap112 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},273.669);
+tl.fromTo("#cap113 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},275.389);
+tl.fromTo("#cap114 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},276.946);
+tl.fromTo("#cap115 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},279.322);
+tl.fromTo("#cap116 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},282.583);
+tl.fromTo("#cap117 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},284.874);
+tl.fromTo("#cap118 .cap-in",{opacity:0,y:12,filter:"blur(6px)"},{opacity:1,y:0,filter:"blur(0px)",duration:.28,ease:"power2.out"},287.317);
+tl.fromTo("#ch-como .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},15.450);
+tl.to("#ch-como .ch-in",{opacity:0,y:-10,duration:.3},42.320);
+tl.fromTo("#ch-acessar .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},42.820);
+tl.to("#ch-acessar .ch-in",{opacity:0,y:-10,duration:.3},60.740);
+tl.fromTo("#ch-conta .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},61.240);
+tl.to("#ch-conta .ch-in",{opacity:0,y:-10,duration:.3},74.740);
+tl.fromTo("#ch-dash .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},75.240);
+tl.to("#ch-dash .ch-in",{opacity:0,y:-10,duration:.3},95.240);
+tl.fromTo("#ch-silenciar .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},95.740);
+tl.to("#ch-silenciar .ch-in",{opacity:0,y:-10,duration:.3},112.007);
+tl.fromTo("#ch-regras .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},112.507);
+tl.to("#ch-regras .ch-in",{opacity:0,y:-10,duration:.3},134.407);
+tl.fromTo("#ch-banir .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},134.907);
+tl.to("#ch-banir .ch-in",{opacity:0,y:-10,duration:.3},153.840);
+tl.fromTo("#ch-mensagens .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},154.340);
+tl.to("#ch-mensagens .ch-in",{opacity:0,y:-10,duration:.3},175.107);
+tl.fromTo("#ch-robo .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},175.607);
+tl.to("#ch-robo .ch-in",{opacity:0,y:-10,duration:.3},197.740);
+tl.fromTo("#ch-moderador .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},198.240);
+tl.to("#ch-moderador .ch-in",{opacity:0,y:-10,duration:.3},212.773);
+tl.fromTo("#ch-favoritar .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},213.273);
+tl.to("#ch-favoritar .ch-in",{opacity:0,y:-10,duration:.3},234.140);
+tl.fromTo("#ch-aovivo .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},234.640);
+tl.to("#ch-aovivo .ch-in",{opacity:0,y:-10,duration:.3},250.773);
+tl.fromTo("#ch-painel .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},251.273);
+tl.to("#ch-painel .ch-in",{opacity:0,y:-10,duration:.3},266.673);
+tl.fromTo("#ch-final .ch-in",{y:-20,opacity:0,filter:"blur(8px)"},{y:0,opacity:1,filter:"blur(0px)",duration:.6,ease:"power3.out"},267.173);
+tl.to("#ch-final .ch-in",{opacity:0,y:-10,duration:.3},295.306);
+tl.fromTo("#chip-conta-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},71.480);
+tl.to("#chip-conta-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},74.570);
+tl.fromTo("#chip-dash-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},80.420);
+tl.to("#chip-dash-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},83.100);
+tl.fromTo("#chip-dash-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},83.420);
+tl.to("#chip-dash-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},95.070);
+tl.fromTo("#chip-silenciar-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},102.980);
+tl.to("#chip-silenciar-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},111.000);
+tl.fromTo("#chip-silenciar-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},111.320);
+tl.to("#chip-silenciar-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},111.837);
+tl.fromTo("#chip-banir-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},141.987);
+tl.to("#chip-banir-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},143.667);
+tl.fromTo("#chip-banir-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},143.987);
+tl.to("#chip-banir-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},153.670);
+tl.fromTo("#chip-mensagens-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},162.200);
+tl.to("#chip-mensagens-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},172.860);
+tl.fromTo("#chip-mensagens-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},173.180);
+tl.to("#chip-mensagens-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},174.937);
+tl.fromTo("#chip-robo-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},195.177);
+tl.to("#chip-robo-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},197.570);
+tl.fromTo("#chip-favoritar-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},222.903);
+tl.to("#chip-favoritar-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},229.073);
+tl.fromTo("#chip-favoritar-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},229.393);
+tl.to("#chip-favoritar-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},233.970);
+tl.fromTo("#chip-painel-0 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},253.333);
+tl.to("#chip-painel-0 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},257.593);
+tl.fromTo("#chip-painel-1 .chip-in",{y:26,opacity:0,scale:.9,rotationX:-50},{y:0,opacity:1,scale:1,rotationX:0,duration:.55,ease:"back.out(1.6)"},257.913);
+tl.to("#chip-painel-1 .chip-in",{y:-14,opacity:0,duration:.3,ease:"power2.in"},266.503);
+tl.fromTo("#ev0 .ev-in",{x:-120,opacity:0,rotationY:30,z:-200},{x:0,opacity:1,rotationY:10,z:80,duration:.7,ease:"power3.out"},240.670);
+tl.to("#ev0 .ev-in",{y:-12,duration:2.2,ease:"sine.inOut",yoyo:true,repeat:1},241.370);
+tl.to("#ev0 .ev-in",{opacity:0,x:-60,duration:.35},250.423);
+tl.fromTo("#ev1 .ev-in",{x:120,opacity:0,rotationY:-30,z:-200},{x:0,opacity:1,rotationY:-10,z:80,duration:.7,ease:"power3.out"},242.270);
+tl.to("#ev1 .ev-in",{y:-12,duration:2.2,ease:"sine.inOut",yoyo:true,repeat:1},242.970);
+tl.to("#ev1 .ev-in",{opacity:0,x:60,duration:.35},250.423);
+tl.fromTo("#ev2 .ev-in",{x:-120,opacity:0,rotationY:30,z:-200},{x:0,opacity:1,rotationY:10,z:80,duration:.7,ease:"power3.out"},243.870);
+tl.to("#ev2 .ev-in",{y:-12,duration:2.2,ease:"sine.inOut",yoyo:true,repeat:1},244.570);
+tl.to("#ev2 .ev-in",{opacity:0,x:-60,duration:.35},250.423);
+tl.to("#cam",{scale:1.12,x:-46.8,y:-82.1,duration:1.6,ease:"power2.inOut"},61.290);
+tl.to("#cam",{scale:1.1,x:-39.0,y:-38.0,duration:1.6,ease:"power2.inOut"},75.290);
+tl.to("#cam",{scale:1.14,x:-54.6,y:-159.6,duration:1.6,ease:"power2.inOut"},95.790);
+tl.to("#cam",{scale:1.0,x:-0.0,y:-0.0,duration:1.6,ease:"power2.inOut"},112.557);
+tl.to("#cam",{scale:1.12,x:-46.8,y:-109.4,duration:1.6,ease:"power2.inOut"},134.957);
+tl.to("#cam",{scale:1.12,x:-46.8,y:-100.3,duration:1.6,ease:"power2.inOut"},154.390);
+tl.to("#cam",{scale:1.12,x:-46.8,y:-63.8,duration:1.6,ease:"power2.inOut"},175.657);
+tl.to("#cam",{scale:1.0,x:-0.0,y:-0.0,duration:1.6,ease:"power2.inOut"},198.290);
+tl.to("#cam",{scale:1.12,x:-46.8,y:-91.2,duration:1.6,ease:"power2.inOut"},213.323);
+tl.to("#cam",{scale:1.1,x:-39.0,y:-45.6,duration:1.6,ease:"power2.inOut"},234.690);
+tl.to("#cam",{scale:1.1,x:-39.0,y:-45.6,duration:1.6,ease:"power2.inOut"},251.323);
+tl.to("#cam",{scale:1.08,x:-31.2,y:-73.0,duration:1.6,ease:"power2.inOut"},267.223);
+tl.to("#phone3d",{scale:.72,duration:1.2,ease:"power2.inOut"},234.590);
+tl.to("#phone3d",{scale:.86,duration:1.2,ease:"power2.inOut"},251.223);
+tl.to("#phone3d",{rotationY:-7,rotationX:3,duration:11.20,ease:"sine.inOut"},61.090);
+tl.to("#phone3d",{rotationY:6,rotationX:-2,duration:16.40,ease:"sine.inOut"},75.090);
+tl.to("#phone3d",{rotationY:-5,rotationX:-3,duration:13.41,ease:"sine.inOut"},95.590);
+tl.to("#phone3d",{rotationY:7,rotationX:2,duration:17.92,ease:"sine.inOut"},112.357);
+tl.to("#phone3d",{rotationY:-6,rotationX:2,duration:15.55,ease:"sine.inOut"},134.757);
+tl.to("#phone3d",{rotationY:5,rotationX:-3,duration:17.01,ease:"sine.inOut"},154.190);
+tl.to("#phone3d",{rotationY:-7,rotationX:3,duration:18.11,ease:"sine.inOut"},175.457);
+tl.to("#phone3d",{rotationY:6,rotationX:-2,duration:12.03,ease:"sine.inOut"},198.090);
+tl.to("#phone3d",{rotationY:-5,rotationX:-3,duration:17.09,ease:"sine.inOut"},213.123);
+tl.to("#phone3d",{rotationY:7,rotationX:2,duration:13.31,ease:"sine.inOut"},234.490);
+tl.to("#phone3d",{rotationY:-6,rotationX:2,duration:12.72,ease:"sine.inOut"},251.123);
+tl.to("#phone3d",{rotationY:5,rotationX:-3,duration:22.91,ease:"sine.inOut"},267.023);
+tl.fromTo("#bk0",{y:0,x:0},{y:-309,x:-33,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk1",{y:0,x:0},{y:-457,x:-56,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk2",{y:0,x:0},{y:-307,x:72,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk3",{y:0,x:0},{y:-532,x:79,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk4",{y:0,x:0},{y:-126,x:-71,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk5",{y:0,x:0},{y:-199,x:38,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk6",{y:0,x:0},{y:-257,x:-5,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk7",{y:0,x:0},{y:-329,x:24,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk8",{y:0,x:0},{y:-539,x:0,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk9",{y:0,x:0},{y:-438,x:-63,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk10",{y:0,x:0},{y:-356,x:-6,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk11",{y:0,x:0},{y:-282,x:-26,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk12",{y:0,x:0},{y:-208,x:21,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk13",{y:0,x:0},{y:-296,x:6,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk14",{y:0,x:0},{y:-156,x:-50,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk15",{y:0,x:0},{y:-176,x:39,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk16",{y:0,x:0},{y:-454,x:34,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk17",{y:0,x:0},{y:-333,x:-51,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk18",{y:0,x:0},{y:-285,x:71,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk19",{y:0,x:0},{y:-247,x:20,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk20",{y:0,x:0},{y:-538,x:-26,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk21",{y:0,x:0},{y:-305,x:-5,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk22",{y:0,x:0},{y:-282,x:69,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk23",{y:0,x:0},{y:-387,x:15,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk24",{y:0,x:0},{y:-381,x:67,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk25",{y:0,x:0},{y:-177,x:-1,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk26",{y:0,x:0},{y:-501,x:-40,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk27",{y:0,x:0},{y:-430,x:43,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk28",{y:0,x:0},{y:-373,x:-53,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk29",{y:0,x:0},{y:-136,x:-15,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk30",{y:0,x:0},{y:-296,x:-63,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk31",{y:0,x:0},{y:-173,x:-9,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk32",{y:0,x:0},{y:-209,x:-63,duration:TOTAL,ease:"none"},0);
+tl.fromTo("#bk33",{y:0,x:0},{y:-233,x:-69,duration:TOTAL,ease:"none"},0);
+
+window.__timelines["main"] = tl;
+</script>
+</body>
+</html>
