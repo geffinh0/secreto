@@ -312,14 +312,24 @@ class _RulesHelpDialog extends StatelessWidget {
               _HelpItem(
                 icon: Icons.filter_1_rounded,
                 title: 'Número no lugar de letra (leetspeak)',
-                body: '0→o, 1→i, 3→e, 4→a, 5→s, 7→t, 8→b, 9→g, @→a, \$→s, !→i. '
-                    '"g0z4" é reconhecido como "goza" automaticamente.',
+                body: '0→o, 1→i, 3→e, 4→a, 5→s, 7→t, 8→b, 9→g, @→a, \$→s, +→t, |→i. '
+                    '"g0z4" é reconhecido como "goza" automaticamente (uma regra só '
+                    '"goza" já cobre essa e outras grafias disfarçadas).',
               ),
               _HelpItem(
                 icon: Icons.format_underlined_rounded,
                 title: 'Letra esticada (ex: gozzzaaa)',
                 body: '3 ou mais da mesma letra em sequência colapsam pra 1 só '
                     'antes de comparar - "goooza" também é pego.',
+              ),
+              _HelpItem(
+                icon: Icons.pin_rounded,
+                title: 'Regra com número (ex: d4)',
+                body: 'Se a PALAVRA-CHAVE em si tem número/símbolo, ela vira '
+                    'literal: só pega quem digitar exatamente daquele jeito '
+                    '("d4"), e não vira automaticamente a palavra comum '
+                    'correspondente ("da"). Assim "d4" não baniria todo mundo '
+                    'que escreve "amei da live".',
               ),
               _HelpItem(
                 icon: Icons.science_outlined,

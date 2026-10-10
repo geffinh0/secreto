@@ -136,6 +136,21 @@ class LeetspeakAndStretchedLettersTests(unittest.TestCase):
         self.assertEqual(normalize("P4SS4 Z4P"), "passa zap")  # "ss" is only 2 - stays (3+ needed to collapse)
         self.assertEqual(normalize("gozzzaaa"), "goza")
 
+    def test_digit_keyword_matches_only_the_literal_digit_spelling(self):
+        # Regra escrita com numero ("d4") significa a grafia literal com
+        # numero, nao a traducao letra-a-letra ("da") - senao toda mensagem
+        # com a palavra comum "da" seria pega.
+        m = RuleMatcher(rules(("d4", "kick")))
+        self.assertIsNotNone(m.match("d4"))
+        self.assertIsNotNone(m.match("quero d4 com ela"))
+        self.assertIsNone(m.match("gostei da live"))
+        self.assertIsNone(m.match("amei da hora"))
+
+    def test_digit_keyword_still_collapses_stretching_and_case(self):
+        m = RuleMatcher(rules(("d4", "kick")))
+        self.assertIsNotNone(m.match("D4"))
+        self.assertIsNotNone(m.match("d444"))
+
 
 class AntiEvasionAndNewRulesTests(unittest.TestCase):
     def test_banned_username_w(self):

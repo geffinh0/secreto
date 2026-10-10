@@ -107,10 +107,25 @@ def is_banned_username(name: str) -> bool:
 # exclamation mark, and turning a trailing "!" into a letter breaks the
 # word-boundary check for everything that ends a sentence with one
 # ("palavrao!" -> "palavraoi" no longer ends the word "palavrao" at all).
-_LEETSPEAK_MAP = str.maketrans({
+_LEETSPEAK_SUBS = {
     "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t",
     "8": "b", "9": "g", "@": "a", "$": "s", "+": "t", "|": "i",
-})
+}
+_LEETSPEAK_MAP = str.maketrans(_LEETSPEAK_SUBS)
+
+
+def _strip_accents_and_case(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.casefold()
+
+
+def keyword_has_leetspeak_chars(text: str) -> bool:
+    """True if any character in [text] is itself one of the leetspeak
+    digits/symbols (after accent/case folding) - meaning a rule written
+    with it means that literal spelling, not "translate me back to a
+    letter" (see [normalize_literal])."""
+    return any(ch in _LEETSPEAK_SUBS for ch in _strip_accents_and_case(text))
 
 
 def normalize(text: str) -> str:
@@ -120,9 +135,19 @@ def normalize(text: str) -> str:
     is deliberate: plenty of real words have a legitimate double letter
     ("carro", "assado"), triple+ almost never does.
     """
-    text = unicodedata.normalize("NFKD", text or "")
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = text.casefold().translate(_LEETSPEAK_MAP)
+    text = _strip_accents_and_case(text).translate(_LEETSPEAK_MAP)
+    text = re.sub(r"(.)\1{2,}", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_literal(text: str) -> str:
+    """Same as [normalize] but WITHOUT the leetspeak digit/symbol
+    substitution - for rules whose own keyword contains a digit/symbol on
+    purpose, where the digit IS the point ("d4" for "de quatro") rather than
+    a disguise for a letter. Translating it away would turn "d4" into "da"
+    and make the rule match the extremely common word "da" too.
+    """
+    text = _strip_accents_and_case(text)
     text = re.sub(r"(.)\1{2,}", r"\1", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -142,7 +167,8 @@ class RuleMatcher:
         compiled = []
         for rule in rules:
             raw_keyword = rule["keyword"]
-            keyword = normalize(raw_keyword)
+            literal = keyword_has_leetspeak_chars(raw_keyword)
+            keyword = normalize_literal(raw_keyword) if literal else normalize(raw_keyword)
             prefix = keyword.endswith("*")
             keyword = keyword.rstrip("*").strip()
             if not keyword:
@@ -165,7 +191,7 @@ class RuleMatcher:
             regex = re.compile(pattern_str)
 
             condensed = re.sub(r"[\s\W_]+", "", keyword)
-            compiled.append((rule["action"], rule["keyword"], regex, condensed, prefix, " " in keyword))
+            compiled.append((rule["action"], rule["keyword"], regex, condensed, prefix, " " in keyword, literal))
 
         compiled.sort(key=lambda item: -ACTION_LEVEL.get(item[0], 0))
         self._rules = compiled
@@ -173,19 +199,23 @@ class RuleMatcher:
     def match(self, text: str):
         """Return ``(action, keyword)`` of the strongest matching rule, or None."""
         haystack = normalize(text)
+        haystack_literal = normalize_literal(text)
         condensed_haystack = re.sub(r"[\s\W_]+", "", haystack)
+        condensed_haystack_literal = re.sub(r"[\s\W_]+", "", haystack_literal)
 
-        for action, keyword, pattern, condensed_kw, prefix, is_multiword in self._rules:
+        for action, keyword, pattern, condensed_kw, prefix, is_multiword, literal in self._rules:
+            text_for_rule = haystack_literal if literal else haystack
+            condensed_for_rule = condensed_haystack_literal if literal else condensed_haystack
             # 1. Regex check (handles connected words and symbols between letters)
-            if pattern.search(haystack):
+            if pattern.search(text_for_rule):
                 return action, keyword
             # 2. Condensed anti-evasion fallback for multiword expressions or long keywords
-            if is_multiword and len(condensed_kw) >= 4 and len(condensed_haystack) >= len(condensed_kw):
+            if is_multiword and len(condensed_kw) >= 4 and len(condensed_for_rule) >= len(condensed_kw):
                 if prefix:
-                    if condensed_haystack.find(condensed_kw) >= 0:
+                    if condensed_for_rule.find(condensed_kw) >= 0:
                         return action, keyword
                 else:
-                    if condensed_kw in condensed_haystack:
+                    if condensed_kw in condensed_for_rule:
                         return action, keyword
 
         return None
