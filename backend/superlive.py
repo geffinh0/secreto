@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 
 import requests
@@ -40,6 +41,24 @@ def get_proxy_url() -> str:
 PROXY_URL = get_proxy_url()
 
 log = logging.getLogger("super_moderator.superlive")
+
+# All of this process' robot accounts share one egress IP (the VPS's own, or
+# the residential proxy behind it). SuperLive appears to reject two actions
+# that land at the exact same instant from the same IP - confirmed directly:
+# a message sent from a personal account's phone collided with the robot's
+# own message sent that same moment and was refused. So every outbound call
+# to SuperLive, from every account/session in this process, funnels through
+# one global queue (see SuperLiveClient.post below) with a minimum gap
+# between requests - never per-account, since the collision is per-IP.
+_GLOBAL_REQUEST_LOCK = asyncio.Lock()
+_global_last_request_at = 0.0
+
+
+def _request_spacing_seconds() -> float:
+    # Read live (not frozen at import time): whichever test module a combined
+    # run imports first would otherwise permanently bake in the default
+    # before a later module's env override had a chance to apply.
+    return float(os.getenv("SUPERLIVE_REQUEST_SPACING", "0.35"))
 
 
 class SuperLiveError(Exception):
@@ -146,7 +165,18 @@ class SuperLiveClient:
         return parsed if isinstance(parsed, dict) else {}
 
     async def post(self, path: str, body=None, auth: bool = True) -> dict:
-        return await asyncio.to_thread(self._post_sync, path, body or {}, auth)
+        global _global_last_request_at
+        # Holds the lock for the whole round-trip (not just the wait), so
+        # calls really run one at a time, in order - a queue, not just a
+        # spacing hint two requests could still both wiggle past.
+        async with _GLOBAL_REQUEST_LOCK:
+            wait = _request_spacing_seconds() - (time.monotonic() - _global_last_request_at)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            try:
+                return await asyncio.to_thread(self._post_sync, path, body or {}, auth)
+            finally:
+                _global_last_request_at = time.monotonic()
 
     # ── account ────────────────────────────────────────────────────────────
     async def register_device(self) -> str:

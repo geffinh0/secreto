@@ -2,9 +2,17 @@
 
 Run from backend/:  python -m unittest discover -s tests -v
 """
+import os
+
+# Must be set before `import superlive` - it reads this once, at import
+# time, into a module-level constant. Production wants every outbound
+# SuperLive call spaced out (see superlive.GLOBAL_REQUEST_SPACING_SECONDS);
+# these tests hit a local mock over loopback hundreds of times and don't
+# need that throttling, which would otherwise add tens of seconds to the run.
+os.environ.setdefault("SUPERLIVE_REQUEST_SPACING", "0")
+
 import hashlib
 import json
-import os
 import shutil
 import sqlite3
 import tempfile
