@@ -25,11 +25,16 @@ from superlive import SuperLiveClient, SuperLiveError
 
 _log_handlers = [logging.StreamHandler()]
 # Opt-in persistent log file (SM_LOG_FILE=path/to/file.log) - used for local
-# multi-account test runs (see start_local_test.bat), where the console
-# scrolls away but the whole session's activity needs reviewing afterwards.
-# Unset in production: console-only logging there is unchanged.
-if os.getenv("SM_LOG_FILE"):
-    _log_handlers.append(logging.FileHandler(os.environ["SM_LOG_FILE"], encoding="utf-8"))
+# multi-account test runs (see start_local_test.bat) and for a VPS test run
+# pointed at /data (the backend's persisted volume), so the log survives a
+# `docker compose up -d --build` recreating the container mid-test - plain
+# `docker logs` does not. Unset: console-only logging, unchanged from before.
+_log_file = os.getenv("SM_LOG_FILE")
+if _log_file:
+    log_dir = os.path.dirname(_log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    _log_handlers.append(logging.FileHandler(_log_file, encoding="utf-8"))
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",

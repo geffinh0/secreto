@@ -26,6 +26,13 @@ services:
       # next to this compose file, never committed; see DEPLOY.md. Empty =
       # the endpoint refuses every request, it never falls open.
       HEALTHBOT_API_KEY: "${HEALTHBOT_API_KEY:-}"
+      # Opt-in persistent log file (see main.py) - under /data so it
+      # survives a `docker compose up -d --build` recreating this
+      # container mid-test, unlike `docker logs`. Empty = console-only
+      # logging, same as before this existed. Set via .env when running a
+      # multi-account test that needs to be reviewed afterwards; unset it
+      # again once done so routine operation doesn't grow this file forever.
+      SM_LOG_FILE: "${SM_LOG_FILE:-}"
     volumes:
       - backend_data:/data
     networks:
