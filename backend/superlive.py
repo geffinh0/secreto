@@ -313,6 +313,53 @@ class SuperLiveClient:
         self.token = str(token)
         return self.token
 
+    async def send_email_otp_code(self, email: str, force_new: bool = False) -> int:
+        """Step 1 of e-mail-code login: ask SuperLive to e-mail a one-time code to
+        ``email``. Returns the ``email_otp_code_id`` needed for step 2.
+
+        Not the same thing as ``login()`` (``user/signup/email_signin``, password):
+        this is the flow the real app falls back to for an account that has no
+        password set on its e-mail (e.g. created via phone or Google/Apple login,
+        with the e-mail only linked afterwards) - confirmed in
+        ``SendEmailOtpCodeUseCase``/``UserSignUpApiService`` in the decompiled app.
+        Like the phone flow, we send only ``email``/``force_new`` - never a forged
+        ``app_check_token``/``re_token``/``recaptcha_token``; if SuperLive insists
+        on one, the error is surfaced as-is.
+        """
+        body = await self.post(
+            "user/signup/send_email_otp_code",
+            {"email": email, "force_new": force_new}, auth=False,
+        )
+        data = unwrap(body)
+        otp_code_id = data.get("email_otp_code_id")
+        if otp_code_id is None:
+            _log_unexpected_200("user/signup/send_email_otp_code", body)
+            raise SuperLiveError(
+                _server_message(body) or "O SuperLive não devolveu o identificador do código",
+                200, body,
+            )
+        return int(otp_code_id)
+
+    async def verify_email_otp_code(self, email_otp_code_id: int, code: str) -> str:
+        """Step 2 of e-mail-code login: confirm the code and obtain the session token."""
+        try:
+            code_int = int(str(code).strip())
+        except ValueError:
+            raise SuperLiveError("O código deve conter só números.", 0) from None
+        body = await self.post(
+            "user/signup/otp",
+            {"email_otp_code_id": email_otp_code_id, "code": code_int}, auth=False,
+        )
+        data = unwrap(body)
+        token = data.get("token")
+        if not token:
+            _log_unexpected_200("user/signup/otp", body)
+            raise SuperLiveError(
+                _server_message(body) or "Código inválido ou expirado", 200, body
+            )
+        self.token = str(token)
+        return self.token
+
     async def login(self, email: str, password: str) -> str:
         body = await self.post(
             "user/signup/email_signin", {"email": email, "password": password}, auth=False

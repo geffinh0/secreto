@@ -318,7 +318,7 @@ class RobotInfo {
   final String? id;
   final String nickname;
   final String? avatar;
-  final String authMode; // 'password' | 'token'
+  final String authMode; // 'password' | 'phone' | 'email_code' | 'token'
 
   /// The last livestream_id this robot was moderating, if any - lets the UI
   /// offer to resume right away instead of asking for the ID again.

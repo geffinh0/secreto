@@ -121,6 +121,56 @@ class BotProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Step 1 of e-mail-code login: ask SuperLive to e-mail a one-time code to
+  /// [email] - the fallback for an account whose e-mail has no password set
+  /// (created via phone or Google/Apple login, e-mail only linked after).
+  /// Returns whether the code was sent (see [error] on failure).
+  Future<bool> sendEmailCode(String email, {bool resend = false}) async {
+    _connectionState = BotConnectionState.connecting;
+    _error = null;
+    notifyListeners();
+
+    final result = await _api.post(
+      '/robot/connect/email-code/send',
+      {'email': email, 'resend': resend},
+      timeout: _robotTimeout,
+    );
+    if (_disposed) return false;
+    if (result['success'] == true) {
+      _connectionState = BotConnectionState.disconnected; // not connected yet, just the code was sent
+      notifyListeners();
+      return true;
+    }
+    _error = PortalApiService.errorMessage(result, 'Não foi possível enviar o código por e-mail.');
+    _connectionState = BotConnectionState.error;
+    notifyListeners();
+    return false;
+  }
+
+  /// Step 2 of e-mail-code login: confirm the code sent to [email].
+  Future<bool> connectRobotWithEmailCode(String email, String code) async {
+    _connectionState = BotConnectionState.connecting;
+    _error = null;
+    notifyListeners();
+
+    final result = await _api.post(
+      '/robot/connect/email-code/verify',
+      {'email': email, 'code': code},
+      timeout: _robotTimeout,
+    );
+    if (_disposed) return false;
+    if (result['success'] == true && result['data'] is Map) {
+      _apply(result['data'] as Map);
+      _loaded = true;
+      notifyListeners();
+      return true;
+    }
+    _error = PortalApiService.errorMessage(result, 'Código inválido ou expirado.');
+    _connectionState = BotConnectionState.error;
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> _connect(Map<String, dynamic> body) async {
     _connectionState = BotConnectionState.connecting;
     _error = null;

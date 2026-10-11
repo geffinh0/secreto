@@ -567,6 +567,88 @@ class PhoneLoginTests(RobotTestBase):
         self.assertEqual(len(mock.calls_to("user/logout")), 1)
 
 
+class EmailCodeLoginTests(RobotTestBase):
+    """E-mail-code login: for an account with no password set on its e-mail
+    (created via phone or Google/Apple login, e-mail only linked after) -
+    SuperLive mails a one-time code instead of accepting a password. Mirrors
+    PhoneLoginTests; no forged app_check/recaptcha tokens here either (see
+    superlive.send_email_otp_code)."""
+
+    def send_code(self, email=mock_superlive.GOOD_EMAIL_FOR_CODE, resend=False):
+        return api("POST", "/robot/connect/email-code/send",
+                   {"email": email, "resend": resend}, self.token)
+
+    def verify_code(self, email=mock_superlive.GOOD_EMAIL_FOR_CODE,
+                     code=mock_superlive.GOOD_EMAIL_CODE):
+        return api("POST", "/robot/connect/email-code/verify", {"email": email, "code": code}, self.token)
+
+    def test_send_then_verify_connects_the_robot(self):
+        status, body = self.send_code()
+        self.assertEqual(status, 200, body)
+        self.assertEqual(len(mock.calls_to("device/register")), 1)
+
+        status, body = self.verify_code()
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["connected"])
+        self.assertEqual(body["robot"]["auth_mode"], "email_code")
+        self.assertNotIn("tok-robot", json.dumps(body))
+
+    def test_invalid_email_format_is_rejected(self):
+        self.assertEqual(self.send_code(email="not-an-email")[0], 422)
+
+    def test_email_the_server_does_not_recognize_fails_cleanly(self):
+        status, body = self.send_code(email="unknown@x.com")
+        self.assertEqual(status, 400)
+        self.assertIn("invalid email", body["detail"])
+
+    def test_verify_without_sending_code_first_fails(self):
+        status, body = self.verify_code()
+        self.assertEqual(status, 400)
+        self.assertIn("Peça um novo código", body["detail"])
+
+    def test_wrong_code_can_be_retried_without_a_new_email(self):
+        self.send_code()
+        status, body = self.verify_code(code="000000")
+        self.assertEqual(status, 400)
+        self.assertIn("invalid code", body["detail"])
+        self.assertFalse(self.status()["connected"])
+
+        status, body = self.verify_code()  # same email_otp_code_id, now the right code
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["connected"])
+
+    def test_verifying_a_different_email_than_the_one_mailed_is_rejected(self):
+        self.send_code(email=mock_superlive.GOOD_EMAIL_FOR_CODE)
+        status, body = self.verify_code(email="other@x.com", code=mock_superlive.GOOD_EMAIL_CODE)
+        self.assertEqual(status, 400)
+        self.assertIn("Peça um novo código", body["detail"])
+
+    def test_resend_is_accepted(self):
+        self.send_code()
+        status, _ = self.send_code(resend=True)
+        self.assertEqual(status, 200)
+        self.assertEqual(len(mock.calls_to("user/signup/send_email_otp_code")), 2)
+
+    def test_same_anti_bot_gate_as_email_password_blocks_this_too(self):
+        mock.require_captcha = True
+        status, body = self.send_code()
+        self.assertEqual(status, 400)
+        self.assertIn("recaptcha required", body["detail"])
+
+    def test_cannot_start_an_email_code_login_while_a_session_is_running(self):
+        self.connect_robot()
+        self.start_live()
+        self.assertEqual(self.send_code()[0], 409)
+
+    def test_disconnect_logs_out_an_email_code_session_and_clears_pending_login(self):
+        self.send_code()
+        self.verify_code()
+        status, body = api("POST", "/robot/disconnect", token=self.token)
+        self.assertEqual(status, 200)
+        self.assertFalse(body["connected"])
+        self.assertEqual(len(mock.calls_to("user/logout")), 1)
+
+
 class LookupStreamerTests(RobotTestBase):
     """Resolve the public "ID: ..." shown on a creator's SuperLive profile (her
     `shared_id`) to her current livestream_id, the way the app's own profile screen

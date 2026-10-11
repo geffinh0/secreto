@@ -66,6 +66,22 @@ class _PendingPhoneLogin:
 
 _pending_phone_logins: dict[int, _PendingPhoneLogin] = {}
 
+# Same idea as phone login, but for an account whose e-mail has no password set
+# (see SuperLiveClient.send_email_otp_code) - SuperLive mails a one-time code
+# instead of asking for a password.
+EMAIL_CODE_TTL_SECONDS = 600
+
+
+@dataclass
+class _PendingEmailLogin:
+    device_id: str
+    email: str
+    otp_code_id: int
+    expires_at: float
+
+
+_pending_email_logins: dict[int, _PendingEmailLogin] = {}
+
 
 # ─── App setup ───────────────────────────────────────────────────────────────
 @asynccontextmanager
@@ -345,6 +361,40 @@ class RobotPhoneVerifyRequest(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("informe o código recebido por SMS")
+        return v
+
+
+class RobotEmailCodeSendRequest(BaseModel):
+    email: str = Field(max_length=200)
+    resend: bool = False
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        v = v.strip()
+        if not EMAIL_RE.match(v):
+            raise ValueError("e-mail inválido")
+        return v
+
+
+class RobotEmailCodeVerifyRequest(BaseModel):
+    email: str = Field(max_length=200)
+    code: str = Field(min_length=3, max_length=10)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        v = v.strip()
+        if not EMAIL_RE.match(v):
+            raise ValueError("e-mail inválido")
+        return v
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit():
+            raise ValueError("informe o código recebido por e-mail (só números)")
         return v
 
 
@@ -869,6 +919,63 @@ async def robot_connect_phone_verify(
     return _robot_payload(conn, user_id)
 
 
+@app.post("/robot/connect/email-code/send")
+async def robot_connect_email_code_send(
+    req: RobotEmailCodeSendRequest, current_user: dict = Depends(get_current_user),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Step 1 of e-mail-code login - for a robot account whose e-mail has no
+    password set (SuperLive mails a one-time code instead); see
+    SuperLiveClient.send_email_otp_code."""
+    user_id = current_user["id"]
+    _require_no_active_session(user_id)
+
+    client = _robot_device_client(conn, user_id)
+    try:
+        if not client.device_id:
+            await client.register_device()
+        otp_code_id = await client.send_email_otp_code(req.email, force_new=req.resend)
+    except SuperLiveError as exc:
+        raise _superlive_http_error(exc, "o envio do código por e-mail", login=True) from None
+
+    _pending_email_logins[user_id] = _PendingEmailLogin(
+        device_id=client.device_id,
+        email=req.email,
+        otp_code_id=otp_code_id,
+        expires_at=time.monotonic() + EMAIL_CODE_TTL_SECONDS,
+    )
+    return {"ok": True}
+
+
+@app.post("/robot/connect/email-code/verify")
+async def robot_connect_email_code_verify(
+    req: RobotEmailCodeVerifyRequest, current_user: dict = Depends(get_current_user),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Step 2 of e-mail-code login: confirm the code."""
+    user_id = current_user["id"]
+    _require_no_active_session(user_id)
+
+    pending = _pending_email_logins.get(user_id)
+    if pending is None or pending.expires_at < time.monotonic():
+        _pending_email_logins.pop(user_id, None)
+        raise HTTPException(400, "O código expirou ou não foi solicitado. Peça um novo código.")
+    if req.email != pending.email:
+        raise HTTPException(400, "Esse e-mail não é o que recebeu o código. Peça um novo código.")
+
+    client = SuperLiveClient(device_id=pending.device_id)
+    try:
+        await client.verify_email_otp_code(pending.otp_code_id, req.code)
+        profile = await client.own_profile()
+    except SuperLiveError as exc:
+        raise _superlive_http_error(exc, "a confirmação do código", login=True) from None
+
+    _pending_email_logins.pop(user_id, None)
+    _save_robot_account(conn, user_id, client, profile, "email_code")
+    db.log_activity(user_id, "robot_connected", "modo: email_code")
+    return _robot_payload(conn, user_id)
+
+
 @app.post("/robot/disconnect")
 async def robot_disconnect(current_user: dict = Depends(get_current_user),
                            conn: sqlite3.Connection = Depends(get_db)):
@@ -876,10 +983,12 @@ async def robot_disconnect(current_user: dict = Depends(get_current_user),
     await watchers.stop(user_id)
     await sessions.stop(user_id)
     _pending_phone_logins.pop(user_id, None)
+    _pending_email_logins.pop(user_id, None)
     robot = db.get_robot(conn, user_id)
-    # Only end the SuperLive session if we created it (password/phone login). A pasted
-    # token belongs to a session the user may still be using elsewhere.
-    if robot is not None and robot["auth_mode"] in ("password", "phone"):
+    # Only end the SuperLive session if we created it (password/phone/email-code
+    # login). A pasted token belongs to a session the user may still be using
+    # elsewhere.
+    if robot is not None and robot["auth_mode"] in ("password", "phone", "email_code"):
         try:
             await SuperLiveClient(robot["token"], robot["device_id"]).logout()
         except SuperLiveError:

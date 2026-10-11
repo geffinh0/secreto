@@ -25,6 +25,8 @@ OFFLINE_STREAMER_SHARED_ID = "555200"
 DECOY_USER_ID = "555100"
 GOOD_PHONE = "+5511999999999"
 GOOD_SMS_CODE = "123456"
+GOOD_EMAIL_FOR_CODE = "nopassword@x.com"
+GOOD_EMAIL_CODE = "654321"
 LOGGED_IN_FALSE_EMAIL = "existing@x.com"
 
 
@@ -37,6 +39,8 @@ class MockSuperLive:
         self.known_devices = set()   # ids handed out by device/register
         self.phone_codes = {}        # verification_id -> {"phone_number", "code"}
         self._next_phone_verification_id = 1
+        self.email_otp_codes = {}    # email_otp_code_id -> {"email", "code"}
+        self._next_email_otp_code_id = 1
         self.ws_auth_ok = True
         self.ws_connects = 0
         self.heartbeat_seconds = 1
@@ -179,6 +183,29 @@ class MockSuperLive:
                     return JSONResponse({"message": "invalid code"}, status_code=400)
                 del mock.phone_codes[body["phone_verification_id"]]
                 return {"token": ROBOT_TOKEN, "logged_in": True, "existed": True}
+
+            # For an account with no password set on its e-mail (see superlive.py's
+            # send_email_otp_code docstring) - mails a one-time code instead.
+            if path == "user/signup/send_email_otp_code":
+                if mock.require_captcha:
+                    return JSONResponse({"message": "recaptcha required"}, status_code=403)
+                if body.get("email") != GOOD_EMAIL_FOR_CODE:
+                    return JSONResponse({"message": "invalid email"}, status_code=400)
+                code_id = mock._next_email_otp_code_id
+                mock._next_email_otp_code_id += 1
+                mock.email_otp_codes[code_id] = {
+                    "email": body.get("email"), "code": int(GOOD_EMAIL_CODE),
+                }
+                return {"email_otp_code_id": code_id}
+
+            if path == "user/signup/otp":
+                entry = mock.email_otp_codes.get(body.get("email_otp_code_id"))
+                if entry is None:
+                    return JSONResponse({"message": "invalid or expired code"}, status_code=400)
+                if body.get("code") != entry["code"]:
+                    return JSONResponse({"message": "invalid code"}, status_code=400)
+                del mock.email_otp_codes[body["email_otp_code_id"]]
+                return {"success": True, "token": ROBOT_TOKEN, "extra_information_required": False}
 
             if headers.get("authorization") != f"Token {ROBOT_TOKEN}":
                 return JSONResponse({"message": "bad token"}, status_code=401)

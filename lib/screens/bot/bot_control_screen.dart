@@ -91,7 +91,7 @@ class _RobotConnectionCard extends StatefulWidget {
   State<_RobotConnectionCard> createState() => _RobotConnectionCardState();
 }
 
-enum _LoginMode { password, phone, token }
+enum _LoginMode { password, phone, emailCode, token }
 
 class _RobotConnectionCardState extends State<_RobotConnectionCard> {
   final _emailController = TextEditingController();
@@ -138,6 +138,8 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
     setState(() {
       if (mode == 'phone') {
         _mode = _LoginMode.phone;
+      } else if (mode == 'email_code') {
+        _mode = _LoginMode.emailCode;
       } else if (mode == 'password') {
         _mode = _LoginMode.password;
       }
@@ -252,6 +254,51 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
     });
   }
 
+  /// For an account whose e-mail has no password set (created via phone or
+  /// Google/Apple login, e-mail only linked after) - SuperLive mails a code
+  /// instead. Unlike phone, SuperLive doesn't tell us a resend cooldown here,
+  /// so there's no countdown: resend is just available right away.
+  Future<void> _sendEmailCode({bool resend = false}) async {
+    final bot = context.read<BotProvider>();
+    final email = _emailController.text.trim();
+    setState(() => _localError = null);
+    if (email.isEmpty) {
+      setState(() => _localError = 'Informe o e-mail da conta do robô.');
+      return;
+    }
+
+    final ok = await bot.sendEmailCode(email, resend: resend);
+    if (!mounted || !ok) return; // bot.error already carries the reason
+    setState(() => _codeSent = true);
+  }
+
+  Future<void> _verifyEmailCode() async {
+    final bot = context.read<BotProvider>();
+    final email = _emailController.text.trim();
+    final code = _codeController.text.trim();
+    setState(() => _localError = null);
+    if (code.isEmpty) {
+      setState(() => _localError = 'Informe o código recebido por e-mail.');
+      return;
+    }
+
+    final ok = await bot.connectRobotWithEmailCode(email, code);
+    if (!mounted) return;
+    if (ok) {
+      await _rememberLogin(mode: 'email_code', email: email);
+      _codeController.clear();
+      setState(() => _codeSent = false);
+    }
+  }
+
+  void _changeEmailForCode() {
+    _codeController.clear();
+    setState(() {
+      _codeSent = false;
+      _localError = null;
+    });
+  }
+
   Future<void> _disconnect() async {
     final bot = context.read<BotProvider>();
     if (bot.isRunning) {
@@ -337,6 +384,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                           ? switch (profile?.authMode) {
                               'token' => 'Conectado com token de sessão',
                               'phone' => 'Conectado com celular',
+                              'email_code' => 'Conectado com código por e-mail',
                               _ => 'Conectado com e-mail e senha',
                             }
                           : 'Configure a conta do robô',
@@ -366,6 +414,11 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   label: 'Celular',
                   selected: _mode == _LoginMode.phone,
                   onTap: () => _setMode(_LoginMode.phone),
+                ),
+                _ModeChip(
+                  label: 'Código por e-mail',
+                  selected: _mode == _LoginMode.emailCode,
+                  onTap: () => _setMode(_LoginMode.emailCode),
                 ),
                 _ModeChip(
                   label: 'Colar token',
@@ -460,6 +513,52 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   ],
                 ),
               ],
+            ] else if (_mode == _LoginMode.emailCode) ...[
+              Text(
+                _codeSent
+                    ? 'Digite o código recebido por e-mail em ${_emailController.text.trim()}.'
+                    : 'Para contas sem senha no e-mail (criadas por celular ou login '
+                        'social) - o SuperLive manda um código por e-mail em vez de pedir senha.',
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _emailController,
+                enabled: !_codeSent,
+                keyboardType: TextInputType.emailAddress,
+                onSubmitted: (_) => _codeSent ? null : _sendEmailCode(),
+                decoration: const InputDecoration(
+                  labelText: 'E-mail da conta do robô',
+                  prefixIcon: Icon(Icons.email_rounded),
+                ),
+              ),
+              if (_codeSent) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _codeController,
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (_) => _verifyEmailCode(),
+                  decoration: const InputDecoration(
+                    labelText: 'Código recebido por e-mail',
+                    prefixIcon: Icon(Icons.mail_lock_rounded),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: _changeEmailForCode,
+                      child: const Text('Usar outro e-mail'),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: isConnecting ? null : () => _sendEmailCode(resend: true),
+                      child: const Text('Reenviar código'),
+                    ),
+                  ],
+                ),
+              ],
             ] else ...[
               const Text(
                 'Se o login por senha for bloqueado pela verificação anti-robô do '
@@ -491,17 +590,23 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   : switch (_mode) {
                       _LoginMode.phone =>
                         _codeSent ? _verifyPhoneCode : _sendPhoneCode,
+                      _LoginMode.emailCode =>
+                        _codeSent ? _verifyEmailCode : _sendEmailCode,
                       _ => _connect,
                     },
               isLoading: isConnecting,
               label: switch (_mode) {
                 _LoginMode.phone =>
                   _codeSent ? 'Confirmar código' : 'Enviar código por SMS',
+                _LoginMode.emailCode =>
+                  _codeSent ? 'Confirmar código' : 'Enviar código por e-mail',
                 _ => 'Conectar Robô',
               },
-              icon: _mode == _LoginMode.phone && !_codeSent
-                  ? Icons.sms_rounded
-                  : Icons.link_rounded,
+              icon: switch (_mode) {
+                _LoginMode.phone when !_codeSent => Icons.sms_rounded,
+                _LoginMode.emailCode when !_codeSent => Icons.mail_lock_rounded,
+                _ => Icons.link_rounded,
+              },
             ),
             if (isConnecting) ...[
               const SizedBox(height: 10),
