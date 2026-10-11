@@ -10,6 +10,7 @@ Nothing here tries to defeat bot protection (App Check / reCAPTCHA). If the serv
 asks for it, the login simply fails with the server's own message.
 """
 import asyncio
+import itertools
 import json
 import logging
 import os
@@ -48,10 +49,27 @@ log = logging.getLogger("super_moderator.superlive")
 # a message sent from a personal account's phone collided with the robot's
 # own message sent that same moment and was refused. So every outbound call
 # to SuperLive, from every account/session in this process, funnels through
-# one global queue (see SuperLiveClient.post below) with a minimum gap
-# between requests - never per-account, since the collision is per-IP.
-_GLOBAL_REQUEST_LOCK = asyncio.Lock()
-_global_last_request_at = 0.0
+# one global priority queue (see SuperLiveClient.post / _dispatcher below)
+# instead of firing independently - never per-account, since the collision
+# is per-IP, not per-account.
+#
+# Two tiers, so a pile-up of low-stakes traffic (auto-messages, periodic
+# live-status polls) never makes an urgent mute/kick wait behind it: a mute
+# or kick jumps straight to the front of the line. Chat messages additionally
+# get their own, more generous cooldown (SUPERLIVE_MESSAGE_SPACING_SECONDS)
+# on top of the base anti-collision spacing every request respects - being
+# slow to re-send a promo message costs nothing; being slow to mute/kick does.
+PRIORITY_URGENT = 0   # mute, kick
+PRIORITY_NORMAL = 5   # everything else (chat messages, retrieve, settings, ...)
+
+_MESSAGE_PATH = "livestream/chat/send_text_message"
+# Keyed by the running event loop's id, not a single module-level singleton:
+# the app itself only ever has one loop for its whole lifetime, but a couple
+# of tests (and any one-off script) call `asyncio.run(...)`, which spins up
+# and tears down its own loop - an asyncio.Queue/Task is only ever safe to
+# use from the loop that created it, so reusing one across loops hangs.
+_dispatchers: "dict[int, tuple[asyncio.PriorityQueue, asyncio.Task]]" = {}
+_seq = itertools.count()
 
 
 def _request_spacing_seconds() -> float:
@@ -59,6 +77,60 @@ def _request_spacing_seconds() -> float:
     # run imports first would otherwise permanently bake in the default
     # before a later module's env override had a chance to apply.
     return float(os.getenv("SUPERLIVE_REQUEST_SPACING", "0.35"))
+
+
+def _message_spacing_seconds() -> float:
+    return float(os.getenv("SUPERLIVE_MESSAGE_SPACING_SECONDS", "3"))
+
+
+async def _dispatcher(queue: "asyncio.PriorityQueue") -> None:
+    """The only coroutine that actually sends anything to SuperLive for a
+    given event loop - every request, from every session, passes through
+    here one at a time, in priority order. Keeping it as a single
+    long-running consumer (rather than N callers racing for a lock) is
+    what makes "urgent jumps the queue" possible: asyncio.Lock wakes
+    waiters FIFO with no concept of priority; a PriorityQueue does.
+    """
+    last_any = 0.0
+    last_message = 0.0
+    while True:
+        _priority, _seq, fut, client, path, body, auth = await queue.get()
+        if fut.cancelled():
+            continue
+        now = time.monotonic()
+        wait = _request_spacing_seconds() - (now - last_any)
+        if path == _MESSAGE_PATH:
+            wait = max(wait, _message_spacing_seconds() - (now - last_message))
+        if wait > 0:
+            await asyncio.sleep(wait)
+        try:
+            result = await asyncio.to_thread(client._post_sync, path, body or {}, auth)
+        except Exception as exc:  # noqa: BLE001 - relayed to the caller via the future
+            if not fut.cancelled():
+                fut.set_exception(exc)
+        else:
+            if not fut.cancelled():
+                fut.set_result(result)
+        finally:
+            finished = time.monotonic()
+            last_any = finished
+            if path == _MESSAGE_PATH:
+                last_message = finished
+
+
+def _ensure_dispatcher() -> asyncio.PriorityQueue:
+    """Lazily creates (or reuses) the queue/dispatcher for the CURRENT
+    running loop. Module import happens before any loop exists, so this
+    can't be module-level setup."""
+    loop = asyncio.get_running_loop()
+    key = id(loop)
+    entry = _dispatchers.get(key)
+    if entry is None or entry[1].done():
+        queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        task = loop.create_task(_dispatcher(queue), name="superlive-dispatcher")
+        _dispatchers[key] = (queue, task)
+        return queue
+    return entry[0]
 
 
 class SuperLiveError(Exception):
@@ -164,19 +236,17 @@ class SuperLiveClient:
             )
         return parsed if isinstance(parsed, dict) else {}
 
-    async def post(self, path: str, body=None, auth: bool = True) -> dict:
-        global _global_last_request_at
-        # Holds the lock for the whole round-trip (not just the wait), so
-        # calls really run one at a time, in order - a queue, not just a
-        # spacing hint two requests could still both wiggle past.
-        async with _GLOBAL_REQUEST_LOCK:
-            wait = _request_spacing_seconds() - (time.monotonic() - _global_last_request_at)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            try:
-                return await asyncio.to_thread(self._post_sync, path, body or {}, auth)
-            finally:
-                _global_last_request_at = time.monotonic()
+    async def post(self, path: str, body=None, auth: bool = True,
+                    priority: int = PRIORITY_NORMAL) -> dict:
+        queue = _ensure_dispatcher()
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        await queue.put((priority, next(_seq), fut, self, path, body, auth))
+        try:
+            return await fut
+        except asyncio.CancelledError:
+            fut.cancel()
+            raise
 
     # ── account ────────────────────────────────────────────────────────────
     async def register_device(self) -> str:
@@ -346,13 +416,15 @@ class SuperLiveClient:
 
     async def mute(self, livestream_id: str, user_id: str) -> dict:
         return await self.post(
-            "livestream/chat/mute", {"livestream_id": livestream_id, "user_id": user_id}
+            "livestream/chat/mute", {"livestream_id": livestream_id, "user_id": user_id},
+            priority=PRIORITY_URGENT,
         )
 
     async def kick(self, livestream_id: str, user_id: str, permanent: bool = False) -> dict:
         return await self.post(
             "livestream/kick",
             {"livestream_id": livestream_id, "user_id": user_id, "permanent": bool(permanent)},
+            priority=PRIORITY_URGENT,
         )
 
 

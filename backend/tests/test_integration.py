@@ -4,12 +4,15 @@ Run from backend/:  python -m unittest discover -s tests -v
 """
 import os
 
-# Must be set before `import superlive` - it reads this once, at import
-# time, into a module-level constant. Production wants every outbound
-# SuperLive call spaced out (see superlive.GLOBAL_REQUEST_SPACING_SECONDS);
+# Production wants every outbound SuperLive call spaced out, and chat
+# messages extra-throttled on top of that (see superlive._dispatcher) -
 # these tests hit a local mock over loopback hundreds of times and don't
-# need that throttling, which would otherwise add tens of seconds to the run.
+# need either, which would otherwise add tens of seconds to minutes to
+# the run. Setting it this early (before `import superlive`) isn't load
+# -bearing anymore (both are read live, not frozen at import time) but
+# costs nothing and keeps the intent obvious.
 os.environ.setdefault("SUPERLIVE_REQUEST_SPACING", "0")
+os.environ.setdefault("SUPERLIVE_MESSAGE_SPACING_SECONDS", "0")
 
 import hashlib
 import json
