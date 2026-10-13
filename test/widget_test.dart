@@ -22,6 +22,7 @@ import 'package:atilas_client/screens/bot/bot_control_screen.dart';
 class FakeApi extends PortalApiService {
   final Map<String, List<Map<String, dynamic>>> script = {};
   final List<String> calls = [];
+  final Map<String, Map<String, dynamic>> postBodies = {};
 
   void on(String route, Map<String, dynamic> response) =>
       script.putIfAbsent(route, () => []).add(response);
@@ -45,8 +46,10 @@ class FakeApi extends PortalApiService {
   @override
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body,
           {bool requireAuth = true,
-          Duration timeout = const Duration(seconds: 15)}) async =>
-      _next('POST $path');
+          Duration timeout = const Duration(seconds: 15)}) async {
+    postBodies['POST $path'] = body;
+    return _next('POST $path');
+  }
 
   @override
   Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async =>
@@ -258,6 +261,34 @@ void main() {
       await auth.initialize();
       expect(auth.isAuthenticated, isTrue);
       expect(auth.user!.username, 'alice');
+    });
+
+    test('register sends the agency code and signs the creator in', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = FakeApi()
+        ..on('POST /auth/register', ok({
+          'access_token': 'tok',
+          'user': {
+            'id': 7, 'username': 'ana', 'email': 'ana@x.com', 'is_admin': false,
+            'created_at': '2026-10-13T00:00:00.000Z',
+          },
+        }));
+      final auth = AuthProvider(api: api);
+      final done = await auth.register('ana', 'ana@x.com', 'senha-forte-1', 'Ana', 'ab3k-9xq2');
+      expect(done, isTrue);
+      expect(api.postBodies['POST /auth/register']?['agency_code'], 'ab3k-9xq2');
+      expect(auth.isAuthenticated, isTrue);
+    });
+
+    test('register surfaces the server message for a wrong agency code', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = FakeApi()
+        ..on('POST /auth/register',
+            fail(400, {'detail': 'Código de agência inválido. Peça o código à sua agência.'}));
+      final auth = AuthProvider(api: api);
+      final done = await auth.register('ana', 'ana@x.com', 'senha-forte-1', 'Ana', 'ZZZZ-ZZZZ');
+      expect(done, isFalse);
+      expect(auth.error, contains('Código de agência inválido'));
     });
 
     test('keeps the saved session when the server is unreachable', () async {
@@ -761,6 +792,77 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('@geffinho'), findsOneWidget);
       expect(find.text('Moderando ao vivo'), findsOneWidget);
+    });
+
+    testWidgets('admin agencies tab: counts per agency, capacity, and creating one shows its code',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({AppConstants.keyAdminToken: 'admin-tok'});
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1200, 2400);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final api = FakeAdminApi()
+        ..on('GET /admin/users', ok([
+          {
+            'id': 1, 'username': 'ana', 'email': 'a@x.com', 'display_name': 'Ana',
+            'is_admin': false, 'created_at': '2026-02-01T00:00:00+00:00',
+            'agency_id': 1, 'agency_name': 'Agência Sol',
+            'robot': null, 'robot_status': 'não configurado', 'session_state': null,
+            'session_livestream_id': null, 'watch_active': false,
+            'watch_nickname': null, 'rules_count': 0, 'messages_count': 0,
+          },
+        ]))
+        ..on('GET /admin/sessions', ok([]))
+        ..on('GET /admin/agencies', ok({
+          'agencies': [
+            {
+              'id': 1, 'name': 'Agência Sol', 'code': 'AB3K-9XQ2', 'active': true,
+              'users_total': 50, 'with_robot': 31, 'watching': 28, 'running_now': 4,
+            },
+          ],
+          'no_agency': {'users_total': 0, 'with_robot': 0, 'watching': 0, 'running_now': 0},
+        }))
+        ..on('GET /admin/capacity', ok({
+          'egress_count': 3, 'active_sessions': 4, 'max_sessions': 75,
+          'suggested_max_sessions': 75, 'unassigned_users': 0,
+          'slots': [
+            {'slot': 0, 'users': 17, 'watches': 17, 'queue_depth': 2, 'poll_interval_seconds': 111},
+          ],
+        }))
+        ..on('POST /admin/agencies', ok({'id': 2, 'name': 'Agência Lua', 'code': 'QW7M-2ZPD', 'active': true}));
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AdminProvider>(
+                create: (_) => AdminProvider(api: api)..restoreSession()),
+          ],
+          child: MaterialApp(theme: AppTheme.darkTheme, home: const AdminScreen()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+
+      expect(find.text('Agências (1)'), findsOneWidget);
+      expect(find.text('Agência Sol'), findsWidgets); // user card fact + (later) the agency tab
+      await tester.tap(find.text('Agências (1)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('AB3K-9XQ2'), findsOneWidget);
+      expect(find.text('50'), findsOneWidget);   // cadastradas
+      expect(find.text('31'), findsOneWidget);   // com robô conectado
+      expect(find.text('4'), findsWidgets);      // moderando agora
+      expect(find.text('até 111s'), findsOneWidget);
+      expect(find.text('4 / 75'), findsOneWidget);
+
+      await tester.tap(find.text('Nova agência'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'Agência Lua');
+      await tester.tap(find.text('Criar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Agência criada'), findsOneWidget);
+      expect(find.text('QW7M-2ZPD'), findsOneWidget);
     });
   });
 }

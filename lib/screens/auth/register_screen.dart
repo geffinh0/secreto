@@ -19,6 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _displayNameController = TextEditingController();
+  final _agencyCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePass = true;
@@ -44,6 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     _usernameController.dispose();
     _emailController.dispose();
     _displayNameController.dispose();
+    _agencyCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -57,6 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       _emailController.text.trim(),
       _passwordController.text,
       _displayNameController.text.trim(),
+      _agencyCodeController.text.trim(),
     );
     if (success && mounted) {
       context.go('/dashboard');
@@ -132,6 +135,18 @@ class _RegisterScreenState extends State<RegisterScreen>
                     key: _formKey,
                     child: Column(
                       children: [
+                        TextFormField(
+                          controller: _agencyCodeController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Código da agência',
+                            prefixIcon: Icon(Icons.vpn_key_rounded),
+                            hintText: 'Ex: AB3K-9XQ2 (peça à sua agência)',
+                          ),
+                          validator: (v) =>
+                              (v?.trim().isEmpty ?? true) ? 'Informe o código da sua agência' : null,
+                        ),
+                        const SizedBox(height: 14),
                         TextFormField(
                           controller: _displayNameController,
                           decoration: const InputDecoration(

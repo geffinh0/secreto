@@ -725,6 +725,8 @@ class AdminUserSummary {
   final String? watchNickname;
   final int rulesCount;
   final int messagesCount;
+  final int? agencyId;
+  final String? agencyName;
 
   const AdminUserSummary({
     required this.id,
@@ -741,6 +743,8 @@ class AdminUserSummary {
     this.watchNickname,
     this.rulesCount = 0,
     this.messagesCount = 0,
+    this.agencyId,
+    this.agencyName,
   });
 
   factory AdminUserSummary.fromJson(Map<String, dynamic> json) => AdminUserSummary(
@@ -760,7 +764,77 @@ class AdminUserSummary {
         watchNickname: json['watch_nickname'] as String?,
         rulesCount: asInt(json['rules_count']),
         messagesCount: asInt(json['messages_count']),
+        agencyId: json['agency_id'] == null ? null : asInt(json['agency_id']),
+        agencyName: json['agency_name'] as String?,
       );
+}
+
+/// One agency with how many of its creators signed up, have a robot connected,
+/// have the live watch on, and are being moderated right now.
+class AdminAgency {
+  final int id;
+  final String name;
+  final String code;
+  final bool active;
+  final int usersTotal;
+  final int withRobot;
+  final int watching;
+  final int runningNow;
+
+  const AdminAgency({
+    required this.id,
+    required this.name,
+    this.code = '',
+    this.active = true,
+    this.usersTotal = 0,
+    this.withRobot = 0,
+    this.watching = 0,
+    this.runningNow = 0,
+  });
+
+  factory AdminAgency.fromJson(Map<String, dynamic> json) => AdminAgency(
+        id: asInt(json['id']),
+        name: json['name'] as String? ?? '',
+        code: json['code'] as String? ?? '',
+        active: json['active'] == null ? true : asBool(json['active']),
+        usersTotal: asInt(json['users_total']),
+        withRobot: asInt(json['with_robot']),
+        watching: asInt(json['watching']),
+        runningNow: asInt(json['running_now']),
+      );
+}
+
+/// Is the SuperLive egress keeping up? Shown on the Agências tab.
+class AdminCapacity {
+  final int egressCount;
+  final int activeSessions;
+  final int maxSessions;
+  final int suggestedMaxSessions;
+  final int deepestQueue;
+  final int slowestPollSeconds;
+
+  const AdminCapacity({
+    this.egressCount = 1,
+    this.activeSessions = 0,
+    this.maxSessions = 0,
+    this.suggestedMaxSessions = 0,
+    this.deepestQueue = 0,
+    this.slowestPollSeconds = 30,
+  });
+
+  factory AdminCapacity.fromJson(Map<String, dynamic> json) {
+    final slots = (json['slots'] as List? ?? const []).whereType<Map>().toList();
+    int maxOf(String key) =>
+        slots.fold<int>(0, (m, s) => asInt(s[key]) > m ? asInt(s[key]) : m);
+    return AdminCapacity(
+      egressCount: asInt(json['egress_count']),
+      activeSessions: asInt(json['active_sessions']),
+      maxSessions: asInt(json['max_sessions']),
+      suggestedMaxSessions: asInt(json['suggested_max_sessions']),
+      deepestQueue: maxOf('queue_depth'),
+      slowestPollSeconds: maxOf('poll_interval_seconds'),
+    );
+  }
 }
 
 class AdminSessionSummary {

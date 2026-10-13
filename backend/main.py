@@ -1,10 +1,13 @@
+import asyncio
 import logging
 import hmac
 import os
 import re
+import secrets
 import sqlite3
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Literal, Optional
@@ -22,7 +25,8 @@ from db import row_to_dict
 from engine import (
     IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
 )
-from superlive import SuperLiveClient, SuperLiveError
+from engine import client_for_user, watch_poll_interval
+from superlive import SuperLiveClient, SuperLiveError, get_proxy_pool, queue_depths
 
 _log_handlers = [logging.StreamHandler()]
 # Opt-in persistent log file (SM_LOG_FILE=path/to/file.log) - used for local
@@ -48,6 +52,16 @@ watchers = WatchManager(sessions)
 # real client IP is trusted (FORWARDED_ALLOW_IPS) it may be one bucket for everyone.
 LOGIN_IP_MAX_FAILURES = int(os.getenv("SM_LOGIN_IP_MAX", "50"))
 throttle = security.LoginThrottle(ip_max_failures=LOGIN_IP_MAX_FAILURES)
+# Wrong agency codes per client IP (guessing a code = signing up for free):
+# the code space is ~10^12 so this only has to stop scripted guessing.
+REGISTER_IP_MAX_FAILURES = int(os.getenv("SM_REGISTER_IP_MAX", "20"))
+register_throttle = security.LoginThrottle(
+    ip_max_failures=REGISTER_IP_MAX_FAILURES, window_seconds=600)
+# Resending a login code costs SuperLive an SMS/e-mail to a third party, so the
+# server enforces what the app only hints at: a minimum gap and a daily cap.
+CODE_SEND_MIN_GAP_SECONDS = int(os.getenv("SM_CODE_SEND_MIN_GAP", "60"))
+CODE_SEND_DAILY_MAX = int(os.getenv("SM_CODE_SEND_DAILY_MAX", "10"))
+_code_sends: dict = {}  # user_id -> [monotonic timestamps of sends in the last 24h]
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -99,11 +113,17 @@ _pending_email_logins: dict[int, _PendingEmailLogin] = {}
 # ─── App setup ───────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Default executor is cpu+4 threads; every SuperLive egress parks one thread
+    # per in-flight request and SQLite calls from the engine share the same pool.
+    asyncio.get_running_loop().set_default_executor(
+        ThreadPoolExecutor(max_workers=int(os.getenv("SM_THREADS", "64")),
+                           thread_name_prefix="sm"))
     db.init_db()
     conn = db.connect()
     try:
         for watch in db.all_active_watches(conn):
-            watchers.start(watch["user_id"])
+            # jitter: hundreds of watchers must not all poll in the same second
+            watchers.start(watch["user_id"], jitter=True)
         _bootstrap_admin_account(conn)
     finally:
         conn.close()
@@ -150,6 +170,7 @@ _FIELD_LABELS = {
     "livestream_id": "ID da live",
     "display_name": "Nome", "token": "Token", "user_id": "user_id",
     "phone_number": "Telefone", "code": "Código", "shared_id": "ID público",
+    "agency_code": "Código da agência", "name": "Nome da agência",
 }
 
 
@@ -249,6 +270,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str = Field(min_length=8, max_length=128)
     display_name: Optional[str] = Field(default=None, max_length=60)
+    agency_code: str = Field(min_length=1, max_length=40)
 
     @field_validator("username")
     @classmethod
@@ -468,9 +490,18 @@ class RobotWatchRequest(BaseModel):
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
 @app.post("/auth/register")
-def register(req: RegisterRequest, conn: sqlite3.Connection = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, conn: sqlite3.Connection = Depends(get_db)):
     if os.getenv("SM_ALLOW_REGISTRATION", "1") != "1":
         raise HTTPException(403, "Cadastro de novas contas está temporariamente desativado.")
+    ip_key = f"ip:{request.client.host if request.client else 'unknown'}"
+    if register_throttle.is_blocked(ip_key):
+        raise HTTPException(429, "Muitas tentativas de cadastro. Aguarde alguns minutos.")
+    # Same answer for "no such code" and "agency switched off", so the message
+    # can't be used to tell which codes exist.
+    agency = db.get_agency_by_code(conn, req.agency_code)
+    if agency is None or not agency["active"]:
+        register_throttle.record_failure(ip_key)
+        raise HTTPException(400, "Código de agência inválido. Peça o código à sua agência.")
     existing = conn.execute(
         "SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)",
         (req.username, req.email),
@@ -480,9 +511,10 @@ def register(req: RegisterRequest, conn: sqlite3.Connection = Depends(get_db)):
 
     try:
         cursor = conn.execute(
-            "INSERT INTO users (username, email, display_name, password_hash) VALUES (?, ?, ?, ?)",
+            "INSERT INTO users (username, email, display_name, password_hash, agency_id) "
+            "VALUES (?, ?, ?, ?, ?)",
             (req.username, req.email, req.display_name or req.username,
-             security.hash_password(req.password)),
+             security.hash_password(req.password), agency["id"]),
         )
         conn.commit()
     except sqlite3.IntegrityError:
@@ -492,7 +524,7 @@ def register(req: RegisterRequest, conn: sqlite3.Connection = Depends(get_db)):
 
     token = create_session(conn, user_id)
     user = public_user(conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
-    db.log_activity(user_id, "account_created", f"usuário {req.username}")
+    db.log_activity(user_id, "account_created", f"usuário {req.username} (agência {agency['name']})")
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 
@@ -822,6 +854,24 @@ def _robot_payload(conn, user_id: int) -> dict:
 
 
 def _save_robot_account(conn, user_id: int, client: SuperLiveClient, profile: dict, mode: str) -> None:
+    sl_user_id = str(profile.get("id") or profile.get("user_id") or "") or None
+    if sl_user_id and not db.shared_robot_allowed():
+        taken = conn.execute(
+            "SELECT user_id FROM robot_accounts WHERE sl_user_id = ? AND user_id != ?",
+            (sl_user_id, user_id)).fetchone()
+        if taken is not None:
+            raise HTTPException(
+                409, "Essa conta do SuperLive já está conectada a outra usuária do portal.")
+    try:
+        _write_robot_account(conn, user_id, client, profile, mode, sl_user_id)
+    except sqlite3.IntegrityError:
+        conn.rollback()  # lost a race with the unique index on sl_user_id
+        raise HTTPException(
+            409, "Essa conta do SuperLive já está conectada a outra usuária do portal.") from None
+
+
+def _write_robot_account(conn, user_id: int, client: SuperLiveClient, profile: dict, mode: str,
+                         sl_user_id) -> None:
     conn.execute(
         "INSERT INTO robot_accounts (user_id, sl_user_id, nickname, avatar, token, device_id, auth_mode) "
         "VALUES (?, ?, ?, ?, ?, ?, ?) "
@@ -830,7 +880,7 @@ def _save_robot_account(conn, user_id: int, client: SuperLiveClient, profile: di
         "device_id = excluded.device_id, auth_mode = excluded.auth_mode",
         (
             user_id,
-            str(profile.get("id") or profile.get("user_id") or "") or None,
+            sl_user_id,
             profile.get("nickname") or profile.get("name") or profile.get("username")
             or "Atila's Client",
             profile.get("avatar") or profile.get("profile_picture") or profile.get("picture_url"),
@@ -846,10 +896,32 @@ def _require_no_active_session(user_id: int) -> None:
         raise HTTPException(409, "Pare a sessão do robô antes de trocar a conta.")
 
 
+def _client(conn, user_id: int, token=None, device_id=None) -> SuperLiveClient:
+    """Every SuperLive call for a user leaves through that user's fixed egress."""
+    return client_for_user(conn, user_id, token, device_id)
+
+
 def _robot_device_client(conn, user_id: int) -> SuperLiveClient:
     """A client reusing the robot's already-registered device id, if any."""
     existing = db.get_robot(conn, user_id, with_token=False)
-    return SuperLiveClient(device_id=existing["device_id"] if existing else None)
+    return _client(conn, user_id, device_id=existing["device_id"] if existing else None)
+
+
+def _check_code_send_allowed(user_id: int, min_gap: float) -> None:
+    """429 unless the last code was sent at least ``min_gap`` seconds ago and
+    fewer than CODE_SEND_DAILY_MAX were sent in the last 24h."""
+    now = time.monotonic()
+    sends = [t for t in _code_sends.get(user_id, ()) if now - t < 86400]
+    _code_sends[user_id] = sends
+    if sends and now - sends[-1] < min_gap:
+        wait = int(min_gap - (now - sends[-1])) + 1
+        raise HTTPException(429, f"Aguarde {wait}s para pedir um novo código.")
+    if len(sends) >= CODE_SEND_DAILY_MAX:
+        raise HTTPException(429, "Limite diário de códigos atingido. Tente amanhã.")
+
+
+def _record_code_send(user_id: int) -> None:
+    _code_sends.setdefault(user_id, []).append(time.monotonic())
 
 
 @app.post("/robot/connect")
@@ -897,6 +969,7 @@ async def robot_connect_phone_send_code(
     """
     user_id = current_user["id"]
     _require_no_active_session(user_id)
+    _check_code_send_allowed(user_id, CODE_SEND_MIN_GAP_SECONDS)
 
     client = _robot_device_client(conn, user_id)
     try:
@@ -905,6 +978,7 @@ async def robot_connect_phone_send_code(
         result = await client.send_phone_code(req.phone_number, is_retry=req.resend)
     except SuperLiveError as exc:
         raise _superlive_http_error(exc, "o envio do código por SMS", login=True) from None
+    _record_code_send(user_id)
 
     # A resend keeps whatever attempt budget was already spent - it is a new
     # code from SuperLive, not a way to reset how many guesses are left.
@@ -941,7 +1015,7 @@ async def robot_connect_phone_verify(
     # verify requests can't both read "attempts < MAX" before either writes.
     pending.attempts += 1
 
-    client = SuperLiveClient(device_id=pending.device_id)
+    client = _client(conn, user_id, device_id=pending.device_id)
     try:
         await client.verify_phone_code(pending.verification_id, pending.phone_number, req.code)
         profile = await client.own_profile()
@@ -964,6 +1038,7 @@ async def robot_connect_email_code_send(
     SuperLiveClient.send_email_otp_code."""
     user_id = current_user["id"]
     _require_no_active_session(user_id)
+    _check_code_send_allowed(user_id, CODE_SEND_MIN_GAP_SECONDS)
 
     client = _robot_device_client(conn, user_id)
     try:
@@ -972,6 +1047,7 @@ async def robot_connect_email_code_send(
         otp_code_id = await client.send_email_otp_code(req.email, force_new=req.resend)
     except SuperLiveError as exc:
         raise _superlive_http_error(exc, "o envio do código por e-mail", login=True) from None
+    _record_code_send(user_id)
 
     previous_attempts = _pending_email_logins.get(user_id)
     _pending_email_logins[user_id] = _PendingEmailLogin(
@@ -1004,7 +1080,7 @@ async def robot_connect_email_code_verify(
         raise HTTPException(400, "Número de tentativas excedido. Peça um novo código.")
     pending.attempts += 1
 
-    client = SuperLiveClient(device_id=pending.device_id)
+    client = _client(conn, user_id, device_id=pending.device_id)
     try:
         await client.verify_email_otp_code(pending.otp_code_id, req.code)
         profile = await client.own_profile()
@@ -1034,7 +1110,7 @@ async def robot_disconnect(current_user: dict = Depends(get_current_user),
     if robot is not None and robot["auth_mode"] in ("password", "phone", "email_code"):
         try:
             token = db.get_robot(conn, user_id)["token"]
-            await SuperLiveClient(token, robot["device_id"]).logout()
+            await _client(conn, user_id, token, robot["device_id"]).logout()
         except (SuperLiveError, security.RobotKeyUnavailable):
             pass
     conn.execute("DELETE FROM robot_accounts WHERE user_id = ?", (user_id,))
@@ -1065,7 +1141,7 @@ async def robot_watch_set(req: RobotWatchRequest, current_user: dict = Depends(g
     if robot is None:
         raise HTTPException(400, "Conecte a conta do robô primeiro.")
 
-    client = SuperLiveClient(robot["token"], robot["device_id"])
+    client = _client(conn, user_id, robot["token"], robot["device_id"])
     try:
         found = await client.find_live_by_shared_id(req.shared_id)
     except SuperLiveError as exc:
@@ -1172,7 +1248,7 @@ async def robot_lookup_streamer(
     robot = db.get_robot(conn, user_id)
     if robot is None:
         raise HTTPException(400, "Conecte a conta do robô primeiro.")
-    client = SuperLiveClient(robot["token"], robot["device_id"])
+    client = _client(conn, user_id, robot["token"], robot["device_id"])
     try:
         return await client.find_live_by_shared_id(req.shared_id)
     except SuperLiveError as exc:
@@ -1186,7 +1262,7 @@ async def robot_start(req: RobotStartRequest, current_user: dict = Depends(get_c
     robot = db.get_robot(conn, user_id)
     if robot is None:
         raise HTTPException(400, "Conecte a conta do robô primeiro.")
-    client = SuperLiveClient(robot["token"], robot["device_id"])
+    client = _client(conn, user_id, robot["token"], robot["device_id"])
     try:
         await sessions.start(user_id, client, robot["sl_user_id"], req.livestream_id,
                              ws_url_override=os.getenv("SUPERLIVE_WS_URL") or None)
@@ -1360,19 +1436,28 @@ def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Con
     """One row per portal user: account info + robot/session/rule counts.
     Never includes password_hash, robot token or device_id - same "secrets
     never leave the server" rule as every other endpoint, just also enforced
-    here for an admin looking at OTHER people's accounts."""
-    rows = conn.execute("SELECT * FROM users ORDER BY id ASC").fetchall()
+    here for an admin looking at OTHER people's accounts.
+
+    A handful of bulk queries instead of four per user: with hundreds of
+    creators the old per-user loop meant thousands of queries per refresh."""
+    users = conn.execute(
+        "SELECT u.*, a.name AS agency_name FROM users u "
+        "LEFT JOIN agencies a ON a.id = u.agency_id ORDER BY u.id ASC").fetchall()
+    robots = {r["user_id"]: r for r in conn.execute(
+        "SELECT user_id, nickname, auth_mode FROM robot_accounts")}
+    watches = {r["user_id"]: r for r in conn.execute(
+        "SELECT user_id, active, nickname FROM streamer_watch")}
+    rule_counts = {r["user_id"]: r["n"] for r in conn.execute(
+        "SELECT user_id, COUNT(*) AS n FROM moderation_rules GROUP BY user_id")}
+    message_counts = {r["user_id"]: r["n"] for r in conn.execute(
+        "SELECT user_id, COUNT(*) AS n FROM auto_messages GROUP BY user_id")}
     result = []
-    for row in rows:
+    for row in users:
         u = row_to_dict(row)
         uid = u["id"]
-        robot = db.get_robot(conn, uid, with_token=False)
+        robot = robots.get(uid)
         session = sessions.get(uid)
-        watch = db.get_watch(conn, uid)
-        rules_count = conn.execute(
-            "SELECT COUNT(*) AS n FROM moderation_rules WHERE user_id = ?", (uid,)).fetchone()["n"]
-        messages_count = conn.execute(
-            "SELECT COUNT(*) AS n FROM auto_messages WHERE user_id = ?", (uid,)).fetchone()["n"]
+        watch = watches.get(uid)
         result.append({
             "id": uid,
             "username": u["username"],
@@ -1380,6 +1465,9 @@ def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Con
             "display_name": u["display_name"],
             "is_admin": bool(u["is_admin"]),
             "created_at": u["created_at"],
+            "agency_id": u["agency_id"],
+            "agency_name": u["agency_name"],
+            "egress_slot": u["egress_slot"],
             "robot": None if robot is None else {
                 "nickname": robot["nickname"],
                 "auth_mode": robot["auth_mode"],
@@ -1388,11 +1476,137 @@ def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Con
             "session_state": session.state if session else None,
             "session_livestream_id": session.livestream_id if session else None,
             "watch_active": bool(watch and watch["active"]),
-            "watch_nickname": watch.get("nickname") if watch else None,
-            "rules_count": rules_count,
-            "messages_count": messages_count,
+            "watch_nickname": watch["nickname"] if watch else None,
+            "rules_count": rule_counts.get(uid, 0),
+            "messages_count": message_counts.get(uid, 0),
         })
     return result
+
+
+class AdminAgencyCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if len(v) < 2:
+            raise ValueError("nome muito curto")
+        return v
+
+
+class AdminAgencyActive(BaseModel):
+    active: bool
+
+
+@app.post("/admin/agencies")
+def admin_create_agency(req: AdminAgencyCreate, admin: dict = Depends(get_current_admin),
+                        conn: sqlite3.Connection = Depends(get_db)):
+    """Creates an agency and returns its signup code. The code is generated
+    here (random, unguessable), never chosen by the admin."""
+    agency = db.create_agency(conn, req.name)
+    logging.getLogger("super_moderator.main").info(
+        "admin %s created agency %s", admin.get("username"), agency["id"])
+    return agency
+
+
+@app.get("/admin/agencies")
+def admin_list_agencies(admin: dict = Depends(get_current_admin),
+                        conn: sqlite3.Connection = Depends(get_db)):
+    """Per agency: creators registered, with a robot connected, with the live
+    watch on, and with a moderation session running right now. Creators who
+    signed up before agencies existed are counted under ``no_agency``."""
+    running_by_user = {uid for uid, s in sessions.all_sessions().items() if s.state == "running"}
+    agency_of = {r["id"]: r["agency_id"] for r in conn.execute("SELECT id, agency_id FROM users")}
+    running = {}
+    for uid in running_by_user:
+        key = agency_of.get(uid)
+        running[key] = running.get(key, 0) + 1
+
+    agencies = db.list_agencies_with_counts(conn)
+    for a in agencies:
+        a["running_now"] = running.get(a["id"], 0)
+    legacy = conn.execute("""
+        SELECT COUNT(u.id) AS users_total,
+               COALESCE(SUM(CASE WHEN r.user_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_robot,
+               COALESCE(SUM(CASE WHEN w.active = 1 THEN 1 ELSE 0 END), 0) AS watching
+        FROM users u
+        LEFT JOIN robot_accounts r ON r.user_id = u.id
+        LEFT JOIN streamer_watch w ON w.user_id = u.id
+        WHERE u.agency_id IS NULL
+    """).fetchone()
+    no_agency = dict(legacy)
+    no_agency["running_now"] = running.get(None, 0)
+    return {"agencies": agencies, "no_agency": no_agency}
+
+
+@app.post("/admin/agencies/{agency_id}/active")
+def admin_set_agency_active(agency_id: int, req: AdminAgencyActive,
+                            admin: dict = Depends(get_current_admin),
+                            conn: sqlite3.Connection = Depends(get_db)):
+    """Switch an agency's code on/off for NEW signups. Creators already
+    registered under it are untouched."""
+    if db.get_agency(conn, agency_id) is None:
+        raise HTTPException(404, "Agência não encontrada")
+    conn.execute("UPDATE agencies SET active = ? WHERE id = ?", (1 if req.active else 0, agency_id))
+    conn.commit()
+    return {"success": True}
+
+
+@app.post("/admin/agencies/{agency_id}/rotate_code")
+def admin_rotate_agency_code(agency_id: int, admin: dict = Depends(get_current_admin),
+                             conn: sqlite3.Connection = Depends(get_db)):
+    """New code for an agency whose code leaked. The old one stops working for
+    signups at once; creators already registered are untouched."""
+    agency = db.get_agency(conn, agency_id)
+    if agency is None:
+        raise HTTPException(404, "Agência não encontrada")
+    for _ in range(10):
+        code = "".join(secrets.choice(db.CODE_ALPHABET) for _ in range(db.CODE_LENGTH))
+        try:
+            conn.execute("UPDATE agencies SET code = ? WHERE id = ?", (code, agency_id))
+            conn.commit()
+            break
+        except sqlite3.IntegrityError:
+            conn.rollback()
+    else:
+        raise HTTPException(500, "Não foi possível gerar um novo código")
+    return {"code": db.format_agency_code(code)}
+
+
+@app.get("/admin/capacity")
+def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Connection = Depends(get_db)):
+    """Is the SuperLive egress keeping up? Per egress slot: creators pinned to
+    it, watches on, requests waiting in its queue, and the poll interval the
+    watcher is currently using. A queue that stays long means that egress needs
+    more IPs (SUPERLIVE_PROXY_URLS) or fewer creators."""
+    pool = get_proxy_pool()
+    depths = queue_depths()
+    per_slot = []
+    for slot, proxy in enumerate(pool):
+        users_n = conn.execute(
+            "SELECT COUNT(*) AS n FROM users WHERE egress_slot = ?", (slot,)).fetchone()["n"]
+        watch_n = conn.execute(
+            "SELECT COUNT(*) AS n FROM streamer_watch w JOIN users u ON u.id = w.user_id "
+            "WHERE w.active = 1 AND u.egress_slot = ?", (slot,)).fetchone()["n"]
+        per_slot.append({
+            "slot": slot,
+            "users": users_n,
+            "watches": watch_n,
+            "queue_depth": depths.get(proxy, 0),
+            "poll_interval_seconds": round(watch_poll_interval(watch_n)),
+        })
+    active = sum(1 for s in sessions.all_sessions().values() if s.is_active)
+    return {
+        "egress_count": len(pool),
+        "slots": per_slot,
+        "unassigned_users": conn.execute(
+            "SELECT COUNT(*) AS n FROM users WHERE egress_slot IS NULL").fetchone()["n"],
+        "active_sessions": active,
+        "max_sessions": int(os.getenv("SM_MAX_SESSIONS", "0") or 0),
+        # about 25 live sessions per egress IP is what its request budget sustains
+        "suggested_max_sessions": 25 * len(pool),
+    }
 
 
 @app.get("/admin/sessions")

@@ -1,10 +1,15 @@
 import asyncio
+import os
+import shutil
+import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
 import security
 from engine import BotSession, RuleMatcher, SessionManager, normalize
-from superlive import DEFAULT_BASE_URL, SuperLiveClient, build_ws_url, heartbeat_message, enter_message
+from superlive import DEFAULT_BASE_URL, PRIORITY_LOW, PRIORITY_URGENT, SuperLiveClient, SuperLiveError, build_ws_url, heartbeat_message, enter_message
 import json
 
 
@@ -453,6 +458,224 @@ class SessionManagerRaceTests(unittest.IsolatedAsyncioTestCase):
                 await sessions.start(1, None, None, "live_new")
 
         self.assertIs(sessions.get(1), previous)
+
+    async def test_cancelled_start_frees_the_slot(self):
+        """A CancelledError (client disconnect, shutdown) is not an Exception;
+        it used to leave the slot stuck in "starting" until a restart."""
+        sessions = SessionManager()
+
+        async def hanging_start(self):
+            await asyncio.Event().wait()
+
+        with mock.patch.object(BotSession, "start", hanging_start):
+            task = asyncio.create_task(sessions.start(1, None, None, "live1"))
+            await asyncio.sleep(0)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
+        self.assertIsNone(sessions.get(1))
+
+    async def test_global_session_cap(self):
+        sessions = SessionManager()
+
+        async def ok_start(self):
+            self.state = "running"
+
+        with mock.patch.object(BotSession, "start", ok_start),                 mock.patch.dict("os.environ", {"SM_MAX_SESSIONS": "2"}):
+            await sessions.start(1, None, None, "a")
+            await sessions.start(2, None, None, "b")
+            with self.assertRaises(RuntimeError):
+                await sessions.start(3, None, None, "c")
+        self.assertIsNone(sessions.get(3))
+
+
+class Dispatcher429Tests(unittest.IsolatedAsyncioTestCase):
+    async def test_429_pauses_the_whole_queue_without_retrying(self):
+        calls = []
+
+        def fake_post(self, path, body, auth):
+            calls.append((path, time.monotonic()))
+            if len(calls) == 1:
+                raise SuperLiveError("slow down", 429, None, retry_after=0.3)
+            return {}
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post),                 mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0"}):
+            client = SuperLiveClient("tok", "dev")
+            with self.assertRaises(SuperLiveError):
+                await client.post("a", {})
+            await client.post("b", {}, priority=PRIORITY_URGENT)
+
+        self.assertEqual([c[0] for c in calls], ["a", "b"])  # "a" not retried
+        self.assertGreaterEqual(calls[1][1] - calls[0][1], 0.28)
+
+
+class EgressPoolTests(unittest.IsolatedAsyncioTestCase):
+    """Scale: one serial queue PER egress IP (the SuperLive collision rule is per IP),
+    background polling shed first, and a fixed least-loaded egress per user."""
+
+    async def test_each_egress_has_its_own_queue(self):
+        def slow_post(self, path, body, auth):
+            time.sleep(0.05)
+            return {}
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", slow_post), \
+                mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0.3"}):
+            a = SuperLiveClient("t", "d", proxy_url="socks5h://egress-a:1080")
+            b = SuperLiveClient("t", "d", proxy_url="socks5h://egress-b:1080")
+            await a.post("warmup", {})
+            await b.post("warmup", {})
+            await asyncio.sleep(0.35)   # let every egress's spacing window expire
+            start = time.monotonic()
+            await asyncio.gather(a.post("x", {}), b.post("x", {}))      # different IPs: in parallel
+            parallel = time.monotonic() - start
+            await asyncio.sleep(0.35)
+            start = time.monotonic()
+            await asyncio.gather(a.post("x", {}), a.post("y", {}))      # same IP: one after the other
+            serial = time.monotonic() - start
+        self.assertLess(parallel, 0.25)
+        self.assertGreaterEqual(serial, 0.3)
+
+    async def test_background_polling_is_shed_when_the_line_is_long(self):
+        release = threading.Event()
+
+        def blocking_post(self, path, body, auth):
+            release.wait(5)
+            return {}
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", blocking_post), \
+                mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0",
+                                               "SUPERLIVE_LOW_QUEUE_MAX": "2"}):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-shed:1080")
+            busy = [asyncio.create_task(c.post("a", {})) for _ in range(4)]
+            await asyncio.sleep(0.1)  # 1 in flight, 3 waiting
+            with self.assertRaises(SuperLiveError):
+                await c.post("poll", {}, priority=PRIORITY_LOW)
+            urgent = asyncio.create_task(c.post("mute", {}, priority=PRIORITY_URGENT))  # never shed
+            release.set()
+            await asyncio.gather(*busy, urgent)
+
+    async def test_shared_id_is_resolved_once_then_polled_with_one_request(self):
+        import superlive
+        superlive._shared_id_cache.clear()
+        seen = []
+
+        def fake_post(self, path, body, auth):
+            seen.append(path)
+            if path == "users/search":
+                return {"items": [{"shared_id": "123", "user_id": "u9", "name": "S"}]}
+            return {"user": {"user_id": "u9", "name": "S", "livestream_id": "live7"}}
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), \
+                mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0"}):
+            c = SuperLiveClient("t", "d", proxy_url="")
+            first = await c.find_live_by_shared_id("123")
+            second = await c.find_live_by_shared_id("123")
+        self.assertEqual(seen, ["users/search", "users/profile", "users/profile"])
+        self.assertEqual(first["livestream_id"], second["livestream_id"])
+
+    def test_pool_parsing_and_wraparound(self):
+        import superlive
+        with mock.patch.dict("os.environ", {"SUPERLIVE_PROXY_URLS": " socks5h://a:1 , socks5h://b:1 ,"}):
+            self.assertEqual(superlive.get_proxy_pool(), ["socks5h://a:1", "socks5h://b:1"])
+            self.assertEqual(superlive.proxy_for_slot(1), "socks5h://b:1")
+            self.assertEqual(superlive.proxy_for_slot(5), "socks5h://b:1")   # pool shrank: wraps
+            self.assertEqual(superlive.proxy_for_slot(None), "socks5h://a:1")
+        with mock.patch.dict("os.environ", {"SUPERLIVE_PROXY_URLS": "", "SUPERLIVE_PROXY_URL": "socks5h://old:1"}):
+            self.assertEqual(superlive.get_proxy_pool(), ["socks5h://old:1"])
+
+    def test_poll_interval_grows_with_watchers_per_egress(self):
+        from engine import watch_poll_interval
+        with mock.patch.dict("os.environ", {"SM_POLL_BUDGET_RPS": "1.5"}):
+            self.assertEqual(watch_poll_interval(0), 30)
+            self.assertEqual(watch_poll_interval(20), 30)            # small: stays at the floor
+            self.assertAlmostEqual(watch_poll_interval(150), 100)    # 150 / 1.5
+            self.assertAlmostEqual(watch_poll_interval(500), 500 / 1.5)
+        with mock.patch.dict("os.environ", {"SM_POLL_BUDGET_RPS": "junk"}):
+            self.assertGreaterEqual(watch_poll_interval(10), 30)
+
+
+class EgressSlotAssignmentTests(unittest.TestCase):
+    def setUp(self):
+        import db
+        self.db = db
+        self.old_path = db.DB_PATH
+        self.tmp = tempfile.mkdtemp(prefix="sm-slot-")
+        db.DB_PATH = os.path.join(self.tmp, "t.db")
+        db.init_db()
+        self.conn = db.connect()
+        for i in range(1, 10):
+            self.conn.execute("INSERT INTO users (username, email, password_hash) VALUES (?, ?, 'x')",
+                              (f"u{i}", f"u{i}@x.com"))
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.db.DB_PATH = self.old_path
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_spreads_evenly_and_never_moves_a_user(self):
+        slots = [self.db.get_or_assign_egress_slot(self.conn, uid, 3) for uid in range(1, 10)]
+        self.assertEqual(sorted(slots), [0, 0, 0, 1, 1, 1, 2, 2, 2])
+        again = [self.db.get_or_assign_egress_slot(self.conn, uid, 3) for uid in range(1, 10)]
+        self.assertEqual(slots, again)
+
+    def test_single_egress_keeps_everyone_on_slot_zero(self):
+        self.assertEqual({self.db.get_or_assign_egress_slot(self.conn, uid, 1) for uid in range(1, 10)}, {0})
+
+    def test_new_proxy_added_later_gets_the_next_users_only(self):
+        for uid in range(1, 5):
+            self.db.get_or_assign_egress_slot(self.conn, uid, 1)          # 4 users on the only IP
+        later = [self.db.get_or_assign_egress_slot(self.conn, uid, 2) for uid in range(5, 9)]
+        self.assertEqual(later, [1, 1, 1, 1])                              # the empty IP fills first
+        self.assertEqual([self.db.get_or_assign_egress_slot(self.conn, uid, 2) for uid in range(1, 5)],
+                         [0, 0, 0, 0])                                     # existing users keep their IP
+
+    def test_existing_robot_owners_are_migrated_to_slot_zero(self):
+        self.conn.execute("DELETE FROM users WHERE id > 2")
+        self.conn.execute("INSERT INTO robot_accounts (user_id, sl_user_id, token, device_id) "
+                          "VALUES (1, '555', 't', 'd')")
+        self.conn.execute("UPDATE users SET egress_slot = NULL")
+        self.conn.execute("ALTER TABLE users DROP COLUMN egress_slot")
+        self.conn.commit()
+        self.db.init_db()
+        row = {r["id"]: r["egress_slot"] for r in self.conn.execute("SELECT id, egress_slot FROM users")}
+        self.assertEqual(row[1], 0)       # had a robot: stays on the original IP
+        self.assertIsNone(row[2])         # no robot yet: assigned on first use
+
+
+class ProxyOutageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_dead_proxy_does_not_burn_the_websocket_failure_budget(self):
+        import engine
+        client = _FakeClient()
+        client.proxy_url = "socks5h://dead:1080"
+        session = BotSession(1, client, "r1", "live1")
+        session.state = "running"
+        session._ws_url = "wss://unused"
+        calls = []
+        real_sleep = asyncio.sleep
+
+        async def dead_proxy(url, proxy_url=None, **kwargs):
+            calls.append(proxy_url)
+            raise ConnectionRefusedError("socks proxy down")
+
+        async def fast_sleep(_seconds):
+            await real_sleep(0)
+
+        with mock.patch.object(engine, "_ws_connect", dead_proxy), \
+                mock.patch("engine.asyncio.sleep", fast_sleep):
+            task = asyncio.create_task(session._ws_loop())
+            for _ in range(500):
+                if len(calls) > engine.MAX_WS_FAILURES + 5:
+                    break
+                await real_sleep(0.001)
+            self.assertGreater(len(calls), engine.MAX_WS_FAILURES + 5)
+            self.assertTrue(session.is_active)                  # a dead proxy is not a dead session
+            self.assertIn("proxy", session.ws_error)
+            self.assertEqual(calls[0], "socks5h://dead:1080")   # the user's own egress, not a global one
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
 
 
 if __name__ == "__main__":

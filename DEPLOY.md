@@ -283,3 +283,49 @@ conta na primeira vez que `admin_accounts` estiver vazia.
 - **Limites de login**: usuário = 8 falhas/5 min; IP = 50 (`SM_LOGIN_IP_MAX`). Sem o IP do cata em `FORWARDED_ALLOW_IPS` o balde de IP é um só para todos, então 50 falhas de qualquer origem travam o login de todos por 5 min; com ele configurado, pode baixar `SM_LOGIN_IP_MAX` para 10-15.
 - **Backups antigos**: os feitos antes desta versão ainda contêm tokens de sessão em claro (e o token do robô). Apague-os depois de validar o primeiro deploy.
 - **Ler a chave depois do 1o deploy**: `secrets/sm_token_key` passa a pertencer ao uid do container (modo 400). Para copiá-la: `docker run --rm -v "$PWD/secrets:/s:ro" --entrypoint cat nginx:alpine /s/sm_token_key` (ou `sudo cat`).
+
+## 11. Agências, cadastro por código e capacidade (10 agências / 500 criadoras)
+
+**Cadastro.** `SM_ALLOW_REGISTRATION` agora vem ligado (`1`), mas ninguém se cadastra sem um
+**código de agência**. No painel admin, aba **Agências → Nova agência**: o servidor gera o código
+(8 caracteres, ex. `AB3K-9XQ2`); você manda para a agência e cada criadora digita no cadastro.
+Por agência o painel mostra: cadastradas, com robô conectado, com a "favorita" ligada e
+**moderando agora**. Pausar uma agência (chave) só bloqueia cadastros novos; as já cadastradas
+seguem. "Gerar novo código" invalida o antigo se ele vazar. Quem se cadastrou antes aparece em
+"Sem agência". Chutar códigos é limitado (`SM_REGISTER_IP_MAX`, 20 erros/10 min por IP) e o erro é o
+mesmo para código inexistente e agência pausada. Fechar de vez: `SM_ALLOW_REGISTRATION=0` no `.env`.
+
+**Uma conta SuperLive = uma criadora do portal.** Conectar uma conta que já está ligada a outra
+criadora devolve 409 (`SM_ALLOW_SHARED_ROBOT=1` desliga a regra, só para testes).
+
+**Códigos por SMS/e-mail.** Mínimo de 60 s entre envios e 10 por dia por criadora
+(`SM_CODE_SEND_MIN_GAP`, `SM_CODE_SEND_DAILY_MAX`).
+
+**Capacidade: o limite é o IP de saída, não o servidor.** Cada IP de saída (hoje só o do
+notebook) aguenta ~2,8 requisições/s e 20 mensagens de chat/min (a SuperLive recusa duas ações no
+mesmo instante vindas do mesmo IP, por isso a fila é serial por IP). O que isso permite:
+
+| IPs de saída | Lives moderadas ao mesmo tempo | Quanto demora para o robô perceber que a criadora entrou ao vivo (500 criadoras) |
+|---|---|---|
+| 1 (hoje) | ~25 | até ~5,5 min |
+| 3 | ~75 | até ~1,9 min |
+| 5 | ~125 | até ~1,1 min |
+
+Como crescer: some proxies à lista `SUPERLIVE_PROXY_URLS` no `.env` (o **primeiro** tem de ser o
+atual, `socks5h://172.28.0.1:1080`; quem já tem robô continua nele) e suba `SM_MAX_SESSIONS`
+(25 por IP). Cada criadora é fixada num IP quando conecta o robô (o menos carregado) e nunca é
+trocada, porque a SuperLive amarra o token ao IP. A aba Agências mostra IPs, lives agora,
+fila mais longa e o tempo de detecção. Fila longa ou "lives agora" colado no máximo = hora de
+pôr outro IP. Sem pool nada muda: tudo sai pelo proxy único, e o intervalo de verificação
+das favoritas passa a crescer sozinho (`SM_POLL_BUDGET_RPS`, 1,5 req/s por IP) em vez de a fila
+explodir.
+
+**nginx do web.** Lê o IP real do visitante (`X-Forwarded-For` só da rede docker) e limita
+`/api/auth/*` e `/api/admin/login` (5 req/s por IP, rajada 20) e `/api/robot/connect*` (1 req/s,
+rajada 10), com resposta 429. Antes todo mundo parecia vir do proxy e dividia um único balde de
+falhas de login.
+
+**Healthbot.** Além de "porta 1080 aberta", testa uma requisição HTTPS de verdade pela saída
+(`HEALTHBOT_SOCKS_PROXIES`, lista `host:porta`; `HEALTHBOT_EGRESS_URL`). Se o notebook cair, o
+robô não encerra a sessão em 3 min: fica tentando por ~1 h mostrando "saída de rede (proxy)
+indisponível".

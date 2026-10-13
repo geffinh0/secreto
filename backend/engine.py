@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 import time
 import unicodedata
@@ -24,17 +25,30 @@ from websockets.exceptions import InvalidStatus
 import db
 import security
 from superlive import (
-    USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
-    get_proxy_url, heartbeat_message, leave_message,
+    PRIORITY_LOW, USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
+    get_proxy_pool, get_proxy_url, heartbeat_message, leave_message, proxy_for_slot,
 )
 
 
-async def _ws_connect(url: str, **kwargs):
+def client_for_user(conn, user_id: int, token=None, device_id=None) -> SuperLiveClient:
+    """A SuperLive client that leaves through this user's fixed egress (proxy)."""
+    pool = get_proxy_pool()
+    slot = db.get_or_assign_egress_slot(conn, user_id, len(pool))
+    return SuperLiveClient(token, device_id, proxy_url=pool[slot])
+
+
+class _EgressError(Exception):
+    """Could not open the tunnel to SuperLive through the proxy (as opposed to
+    SuperLive itself dropping or refusing the socket)."""
+
+
+async def _ws_connect(url: str, proxy_url=None, **kwargs):
     """Same as ``websockets.connect(url, **kwargs)``, but through proxy
     (SOCKS5, SOCKS4 or HTTP) when configured - see superlive.get_proxy_url.
     Handles TLS/HTTPS properly for wss:// endpoints.
     """
-    proxy_url = get_proxy_url()
+    if proxy_url is None:
+        proxy_url = get_proxy_url()
     if not proxy_url:
         return websockets.connect(url, **kwargs)
 
@@ -79,6 +93,9 @@ ACTION_SPACING_SECONDS = 0.5   # pause between moderation calls (API courtesy)
 CONFIG_TTL_SECONDS = 5         # how often rules/settings are re-read from the DB
 MAX_QUEUED_ACTIONS = 200
 MAX_WS_FAILURES = 12
+# A dead proxy/tunnel is not the session's fault and usually comes back (the
+# notebook rebooting, Wi-Fi blip): keep retrying ~1h instead of giving up in 3 min.
+MAX_PROXY_FAILURES = 120
 ACTION_LEVEL = {"mute": 1, "kick": 2}
 # "Live ended" inferred from polling (not from the stream's own end frame) must be
 # seen this many times in a row, spaced LIVE_END_RECHECK_SECONDS apart, before the
@@ -267,6 +284,7 @@ class BotSession:
         self.stop_reason = None
         self.last_error = None           # moderation / message / auth problems
         self.ws_error = None             # transient connection problems (cleared on reconnect)
+        self.proxy_failures = 0          # consecutive failures to open the egress tunnel
         # Set by WatchManager while this (stopped) session's own livestream_id is
         # still what the favourited-streamer lookup resolves to - i.e. genuinely
         # waiting for her to go live under a NEW id before auto-restarting, not
@@ -495,15 +513,24 @@ class BotSession:
                 backoff, failures = 1, 0
 
             connected_at = time.monotonic()
+            egress_down = False
             try:
                 self.ws_state = "connecting"
-                async with await _ws_connect(
-                    self._ws_url, user_agent_header=USER_AGENT, open_timeout=15,
-                    ping_interval=60, ping_timeout=30, close_timeout=3, max_size=2 ** 22,
-                ) as ws:
+                try:
+                    connector = await _ws_connect(
+                        self._ws_url, getattr(self.client, "proxy_url", None),
+                        user_agent_header=USER_AGENT, open_timeout=15,
+                        ping_interval=60, ping_timeout=30, close_timeout=3, max_size=2 ** 22,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - SOCKS/HTTP proxy could not reach SuperLive
+                    raise _EgressError(str(exc) or type(exc).__name__) from exc
+                async with connector as ws:
                     self._ws = ws
                     self.ws_state = "connected"
                     self.ws_error = None
+                    self.proxy_failures = 0
 
                     if self._connected_livestream_id != self.livestream_id:
                         self._connected_livestream_id = self.livestream_id
@@ -540,6 +567,12 @@ class BotSession:
                         heartbeat.cancel()
             except asyncio.CancelledError:
                 raise
+            except _EgressError as exc:
+                egress_down = True
+                self.proxy_failures += 1
+                self.ws_error = "Saída de rede (proxy) indisponível; reconectando automaticamente."
+                log.warning("session %s: egress proxy unavailable (%d in a row) - %s",
+                            self.user_id, self.proxy_failures, exc)
             except InvalidStatus as exc:
                 status = exc.response.status_code
                 if status in (401, 403):
@@ -562,6 +595,16 @@ class BotSession:
                 return
             if self.livestream_id is None:
                 continue  # the live ended again (or ended mid-connect); go back to waiting
+            if egress_down:
+                # Not SuperLive's doing and not worth a status lookup (it would go
+                # through the same dead proxy): wait it out without burning the
+                # normal 12-failure budget.
+                if self.proxy_failures >= MAX_PROXY_FAILURES:
+                    self._fail("A saída de rede (proxy) ficou indisponível por muito tempo.")
+                    return
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+                continue
 
             # Check if live ended or switched to a new ID before blindly reconnecting to the old one
             try:
@@ -1097,8 +1140,9 @@ class BotSession:
             ok, detail = False, str(exc)
             self.actions_failed += 1
         try:
-            db.log_action(self.user_id, queued_for, entry.user_id, entry.name, action,
-                          keyword, entry.text, ok, detail)
+            await asyncio.to_thread(
+                db.log_action, self.user_id, queued_for, entry.user_id, entry.name, action,
+                keyword, entry.text, ok, detail)
         except Exception:  # noqa: BLE001
             log.exception("could not write moderation log")
         self.recent_actions.append(ActionEntry(
@@ -1180,6 +1224,13 @@ IDLE_SNAPSHOT = {
 }
 
 
+def _max_sessions() -> int:
+    try:
+        return max(0, int(os.getenv("SM_MAX_SESSIONS", "0")))
+    except ValueError:
+        return 0
+
+
 class SessionManager:
     """Keeps at most one live session per portal user."""
 
@@ -1200,6 +1251,13 @@ class SessionManager:
         previous = self._sessions.get(user_id)
         if previous is not None and previous.state in ("starting", "running", "stopping"):
             raise RuntimeError("Já existe uma sessão do robô em andamento")
+        # Every session shares one egress IP and one serial request queue (see
+        # superlive._dispatcher), so past a point each new robot only makes all
+        # the others slower. 0 = no cap.
+        cap = _max_sessions()
+        if cap and sum(1 for s in self._sessions.values()
+                       if s.state in ("starting", "running", "stopping")) >= cap:
+            raise RuntimeError("Capacidade de robôs simultâneos atingida; tente mais tarde.")
         session = BotSession(user_id, client, robot_sl_id, livestream_id, ws_url_override)
         # Registered before the await below (not after) so a second, concurrent
         # call sees this "starting" session immediately and is rejected by the
@@ -1211,7 +1269,7 @@ class SessionManager:
         self._sessions[user_id] = session
         try:
             await session.start()  # may raise SuperLiveError
-        except Exception:
+        except BaseException:  # CancelledError too, or the slot stays stuck in "starting"
             if self._sessions.get(user_id) is session:
                 if previous is not None:
                     self._sessions[user_id] = previous
@@ -1234,7 +1292,21 @@ class SessionManager:
         self._sessions.clear()
 
 
-WATCH_POLL_INTERVAL_SECONDS = 30  # how often a favourited streamer is checked
+WATCH_POLL_INTERVAL_SECONDS = 30  # how often a favourited streamer is checked (floor)
+
+
+def watch_poll_interval(watchers_on_egress: float) -> float:
+    """Seconds between checks of ONE watched streamer, given how many watchers
+    share her egress IP. Each egress sends ~2.8 requests/s in total (see
+    superlive._dispatcher) and chat/moderation need most of that, so polling
+    gets a fixed share (SM_POLL_BUDGET_RPS, default 1.5 req/s per IP): the more
+    creators on an IP, the slower each is polled, instead of the queue growing
+    without bound."""
+    try:
+        budget = float(os.getenv("SM_POLL_BUDGET_RPS", "1.5"))
+    except ValueError:
+        budget = 1.5
+    return max(float(WATCH_POLL_INTERVAL_SECONDS), watchers_on_egress / max(budget, 0.1))
 
 
 class WatchManager:
@@ -1250,18 +1322,20 @@ class WatchManager:
     def __init__(self, sessions: SessionManager):
         self._sessions = sessions
         self._tasks: dict[int, asyncio.Task] = {}
+        self._egress: dict[int, str] = {}  # user_id -> egress proxy its watch polls through
 
     def is_watching(self, user_id: int) -> bool:
         task = self._tasks.get(user_id)
         return task is not None and not task.done()
 
-    def start(self, user_id: int) -> None:
+    def start(self, user_id: int, jitter: bool = False) -> None:
         if self.is_watching(user_id):
             return
         self._tasks[user_id] = asyncio.create_task(
-            self._watch_loop(user_id), name=f"watch-{user_id}")
+            self._watch_loop(user_id, jitter), name=f"watch-{user_id}")
 
     async def stop(self, user_id: int) -> None:
+        self._egress.pop(user_id, None)
         task = self._tasks.pop(user_id, None)
         if task is not None:
             task.cancel()
@@ -1275,12 +1349,43 @@ class WatchManager:
             *(self.stop(uid) for uid in list(self._tasks)), return_exceptions=True,
         )
 
-    async def _watch_loop(self, user_id: int) -> None:
+    @staticmethod
+    def _read_watch_state(user_id: int):
+        conn = db.connect()
+        try:
+            watch = db.get_watch(conn, user_id)
+            robot = db.get_robot(conn, user_id)
+            slot = db.get_or_assign_egress_slot(conn, user_id, len(get_proxy_pool())) if robot else 0
+            return watch, robot, slot
+        finally:
+            conn.close()
+
+    def _poll_interval(self, proxy: str) -> float:
+        on_egress = sum(1 for p in self._egress.values() if p == proxy)
+        # +-10%: keeps hundreds of loops that started together from staying in lockstep
+        return watch_poll_interval(on_egress) * random.uniform(0.9, 1.1)
+
+    async def _watch_loop(self, user_id: int, jitter: bool = False) -> None:
+        """Supervisor: any unexpected error (SQLite locked, a bad frame...) must
+        not silently end this creator's watch - nobody would restart it."""
         while True:
-            conn = db.connect()
             try:
-                watch = db.get_watch(conn, user_id)
-                robot = db.get_robot(conn, user_id)
+                await self._watch_loop_once(user_id, jitter)
+                return  # watch switched off / robot removed: normal end
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                log.exception("watch %s: unexpected error, retrying", user_id)
+                jitter = False
+                await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
+
+    async def _watch_loop_once(self, user_id: int, jitter: bool = False) -> None:
+        if jitter:
+            per_egress = len(self._tasks) / max(1, len(get_proxy_pool()))
+            await asyncio.sleep(random.uniform(0, watch_poll_interval(per_egress)))
+        while True:
+            try:
+                watch, robot, slot = await asyncio.to_thread(self._read_watch_state, user_id)
             except security.RobotKeyUnavailable as exc:
                 # Not a reason to give up watching: the key file can be fixed
                 # without losing the watch, and the next poll picks it up.
@@ -1289,18 +1394,20 @@ class WatchManager:
                 key_missing = True
             else:
                 key_missing = False
-            finally:
-                conn.close()
             if key_missing:
                 await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
                 continue
             if watch is None or not watch["active"] or robot is None:
                 self._tasks.pop(user_id, None)
+                self._egress.pop(user_id, None)
                 return
 
-            client = SuperLiveClient(robot["token"], robot["device_id"])
+            proxy = proxy_for_slot(slot)
+            self._egress[user_id] = proxy
+            client = SuperLiveClient(robot["token"], robot["device_id"], proxy_url=proxy)
             try:
-                result = await client.find_live_by_shared_id(watch["shared_id"])
+                # lowest priority: never makes a mute/kick/chat message wait
+                result = await client.find_live_by_shared_id(watch["shared_id"], PRIORITY_LOW)
             except SuperLiveError:
                 result = None
 
@@ -1331,8 +1438,8 @@ class WatchManager:
                             # identical to the watch loop simply not running -
                             # that ambiguity is the exact bug this guard exists
                             # to make visible.
-                            db.log_activity(
-                                user_id, "watch_stuck",
+                            await asyncio.to_thread(
+                                db.log_activity, user_id, "watch_stuck",
                                 f"aguardando novo livestream_id (live anterior: {current_live_id})",
                             )
                     else:
@@ -1381,4 +1488,4 @@ class WatchManager:
                     log.info("session %s: watch detected streamer is offline, live ended", user_id)
                     await session.on_live_ended()
 
-            await asyncio.sleep(WATCH_POLL_INTERVAL_SECONDS)
+            await asyncio.sleep(self._poll_interval(proxy))

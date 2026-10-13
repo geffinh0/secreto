@@ -56,6 +56,8 @@ def setUpModule():
     engine.MIN_INTERVAL_SECONDS = 1
     engine.LIVE_END_RECHECK_SECONDS = 0.2   # keep the end-of-live confirmation fast in tests
     engine.ACTION_SPACING_SECONDS = 0.05
+    main.CODE_SEND_MIN_GAP_SECONDS = 0   # the login-code tests resend back to back
+    _agency.clear()
     mock.start(MOCK_PORT)
     superlive.BASE_URL = mock.base_url
     config = uvicorn.Config(main.app, host="127.0.0.1", port=API_PORT, log_level="error")
@@ -105,11 +107,26 @@ def api(method, path, body=None, token=None, headers=None):
 _counter = [0]
 
 
+_agency = {}
+
+
+def agency_code():
+    """One agency for every test user (the signup code is mandatory)."""
+    if "code" not in _agency:
+        conn = db.connect()
+        try:
+            _agency["code"] = db.create_agency(conn, "Agência Teste")["code"]
+        finally:
+            conn.close()
+    return _agency["code"]
+
+
 def new_user(prefix="user"):
     _counter[0] += 1
     name = f"{prefix}{_counter[0]}"
     status, body = api("POST", "/auth/register", {
         "username": name, "email": f"{name}@example.com", "password": "senha-forte-1",
+        "agency_code": agency_code(),
     })
     assert status == 200, body
     return name, body["access_token"], body["user"]["id"]
@@ -135,7 +152,8 @@ class AuthAndApiTests(unittest.TestCase):
     def test_register_duplicate_is_case_insensitive(self):
         name, _, _ = new_user("dup")
         status, _ = api("POST", "/auth/register", {
-            "username": name.upper(), "email": "other@example.com", "password": "senha-forte-1"})
+            "username": name.upper(), "email": "other@example.com", "password": "senha-forte-1",
+            "agency_code": agency_code()})
         self.assertEqual(status, 400)
 
     def test_registration_can_be_locked_down(self):
@@ -144,7 +162,8 @@ class AuthAndApiTests(unittest.TestCase):
         os.environ["SM_ALLOW_REGISTRATION"] = "0"
         try:
             status, body = api("POST", "/auth/register", {
-                "username": "lockedout", "email": "lockedout@example.com", "password": "senha-forte-1"})
+                "username": "lockedout", "email": "lockedout@example.com", "password": "senha-forte-1",
+                "agency_code": agency_code()})
             self.assertEqual(status, 403)
             self.assertIn("desativado", body["detail"])
             # login for accounts that already existed is unaffected
@@ -806,6 +825,13 @@ class LookupStreamerTests(RobotTestBase):
         correct result for the same streamer, and never see each other's
         session/robot data.
         """
+        # this scenario IS two portal users on one SuperLive account, which is
+        # off by default (see OneSuperLiveAccountPerCreatorTests) - opt in here
+        os.environ["SM_ALLOW_SHARED_ROBOT"] = "1"
+        self.addCleanup(os.environ.pop, "SM_ALLOW_SHARED_ROBOT", None)
+        sql("DROP INDEX IF EXISTS idx_robot_sl_user")
+        self.addCleanup(sql, "CREATE UNIQUE INDEX IF NOT EXISTS idx_robot_sl_user "
+                             "ON robot_accounts(sl_user_id) WHERE sl_user_id IS NOT NULL")
         self.connect_robot()
         name_b, token_b, uid_b = new_user("robot_b")
         self.addCleanup(lambda: api("POST", "/robot/disconnect", token=token_b))
@@ -1685,6 +1711,200 @@ class AdminPanelTests(RobotTestBase):
     def test_admin_endpoints_still_require_a_valid_token(self):
         self.assertEqual(api("GET", "/admin/users")[0], 401)
         self.assertEqual(api("GET", "/admin/sessions")[0], 401)
+
+
+# ── agencies, one-account-per-creator, code cooldown ─────────────────────────
+def make_admin_token():
+    """Same idea as AdminPanelTests.make_admin: a real admin_accounts row, then a real login."""
+    _admin_counter[0] += 1
+    username = f"agadmin{_admin_counter[0]}"
+    sql("INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
+        (username, security.hash_password("admin-senha-forte-1"), "Admin"))
+    status, body = api("POST", "/admin/login", {"username": username, "password": "admin-senha-forte-1"})
+    assert status == 200, body
+    return body["access_token"]
+
+
+def register_with(code, name=None):
+    _counter[0] += 1
+    name = name or f"ag{_counter[0]}"
+    return api("POST", "/auth/register", {
+        "username": name, "email": f"{name}@example.com", "password": "senha-forte-1",
+        "agency_code": code})
+
+
+class AgencyTests(unittest.TestCase):
+    def setUp(self):
+        self.admin = make_admin_token()
+        main.register_throttle.clear()
+
+    def new_agency(self, name="Agência Nova"):
+        status, body = api("POST", "/admin/agencies", {"name": name}, self.admin)
+        self.assertEqual(status, 200, body)
+        return body
+
+    def agency_row(self, agency_id):
+        status, body = api("GET", "/admin/agencies", token=self.admin)
+        self.assertEqual(status, 200, body)
+        return next(a for a in body["agencies"] if a["id"] == agency_id)
+
+    def test_register_requires_an_agency_code(self):
+        status, body = api("POST", "/auth/register", {
+            "username": "nocode1", "email": "nocode1@example.com", "password": "senha-forte-1"})
+        self.assertEqual(status, 422)
+        self.assertIn("campo obrigatório", body["detail"])
+
+    def test_codes_are_random_and_formatted(self):
+        a, b = self.new_agency("Agência A"), self.new_agency("Agência B")
+        self.assertRegex(a["code"], r"^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$")
+        self.assertNotEqual(a["code"], b["code"])
+
+    def test_signup_links_the_agency_and_ignores_case_and_dashes(self):
+        agency = self.new_agency()
+        sloppy = agency["code"].lower().replace("-", " ")
+        status, body = register_with(sloppy)
+        self.assertEqual(status, 200, body)
+        uid = body["user"]["id"]
+        row = self.agency_row(agency["id"])
+        self.assertEqual(row["users_total"], 1)
+        users = api("GET", "/admin/users", token=self.admin)[1]
+        mine = next(u for u in users if u["id"] == uid)
+        self.assertEqual(mine["agency_id"], agency["id"])
+        self.assertEqual(mine["agency_name"], "Agência Nova")
+
+    def test_wrong_and_switched_off_codes_get_the_same_answer(self):
+        agency = self.new_agency()
+        s1, b1 = register_with("ZZZZ-ZZZZ")
+        self.assertEqual(api("POST", f"/admin/agencies/{agency['id']}/active",
+                             {"active": False}, self.admin)[0], 200)
+        s2, b2 = register_with(agency["code"])
+        self.assertEqual((s1, s2), (400, 400))
+        self.assertEqual(b1, b2)  # cannot tell "no such code" from "agency off"
+        api("POST", f"/admin/agencies/{agency['id']}/active", {"active": True}, self.admin)
+        self.assertEqual(register_with(agency["code"])[0], 200)
+
+    def test_switching_an_agency_off_keeps_existing_creators(self):
+        agency = self.new_agency()
+        _, body = register_with(agency["code"], "stays1")
+        api("POST", f"/admin/agencies/{agency['id']}/active", {"active": False}, self.admin)
+        status, _ = api("POST", "/auth/login", {"username": "stays1", "password": "senha-forte-1"})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.agency_row(agency["id"])["users_total"], 1)
+
+    def test_rotating_the_code_kills_the_old_one(self):
+        agency = self.new_agency()
+        status, body = api("POST", f"/admin/agencies/{agency['id']}/rotate_code", token=self.admin)
+        self.assertEqual(status, 200, body)
+        self.assertNotEqual(body["code"], agency["code"])
+        self.assertEqual(register_with(agency["code"])[0], 400)
+        self.assertEqual(register_with(body["code"])[0], 200)
+
+    def test_guessing_codes_is_throttled_per_ip(self):
+        old = main.register_throttle.ip_max_failures
+        main.register_throttle.ip_max_failures = 3
+        try:
+            codes = [register_with(f"BAD{i}-AAAA")[0] for i in range(3)]
+            self.assertEqual(codes, [400, 400, 400])
+            self.assertEqual(register_with("BAD9-AAAA")[0], 429)
+            agency = self.new_agency()
+            self.assertEqual(register_with(agency["code"])[0], 429)  # blocked even with a good code
+        finally:
+            main.register_throttle.ip_max_failures = old
+            main.register_throttle.clear()
+
+    def test_admin_counts_robots_and_running_sessions_per_agency(self):
+        agency = self.new_agency("Contagem")
+        _, body = register_with(agency["code"], "counted1")
+        token = body["access_token"]
+        row = self.agency_row(agency["id"])
+        self.assertEqual((row["users_total"], row["with_robot"], row["running_now"]), (1, 0, 0))
+
+        self.assertEqual(api("POST", "/robot/connect", {"email": "robot@x.com", "password": "good"},
+                             token)[0], 200)
+        row = self.agency_row(agency["id"])
+        self.assertEqual((row["with_robot"], row["running_now"]), (1, 0))
+
+        self.assertEqual(api("POST", "/robot/start", {"livestream_id": "live1"}, token)[0], 200)
+        try:
+            wait_for(lambda: self.agency_row(agency["id"])["running_now"] == 1, 6, "never counted as running")
+        finally:
+            api("POST", "/robot/stop", token=token)
+            api("POST", "/robot/disconnect", token=token)
+
+    def test_creators_without_agency_are_counted_separately(self):
+        sql("INSERT INTO users (username, email, password_hash) VALUES ('legacy1', 'legacy1@x.com', 'x')")
+        status, body = api("GET", "/admin/agencies", token=self.admin)
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(body["no_agency"]["users_total"], 1)
+
+    def test_agency_endpoints_need_the_admin_login(self):
+        self.assertEqual(api("GET", "/admin/agencies")[0], 401)
+        self.assertEqual(api("POST", "/admin/agencies", {"name": "x1"})[0], 401)
+        _, token, _ = new_user("notadmin")
+        self.assertEqual(api("GET", "/admin/agencies", token=token)[0], 401)
+
+    def test_capacity_endpoint_reports_the_egress_pool(self):
+        status, body = api("GET", "/admin/capacity", token=self.admin)
+        self.assertEqual(status, 200, body)
+        self.assertGreaterEqual(body["egress_count"], 1)
+        self.assertEqual(len(body["slots"]), body["egress_count"])
+        self.assertIn("poll_interval_seconds", body["slots"][0])
+        self.assertNotIn("socks", json.dumps(body))  # proxy URLs (may hold credentials) never leave
+
+
+class OneSuperLiveAccountPerCreatorTests(RobotTestBase):
+    def test_a_second_creator_cannot_take_the_same_superlive_account(self):
+        self.connect_robot()
+        _, other_token, other_uid = new_user("thief")
+        try:
+            status, body = api("POST", "/robot/connect",
+                               {"email": "robot@x.com", "password": "good"}, other_token)
+            self.assertEqual(status, 409, body)
+            self.assertIn("outra usuária", body["detail"])
+            self.assertFalse(api("GET", "/robot/status", token=other_token)[1]["connected"])
+        finally:
+            api("POST", "/robot/disconnect", token=other_token)
+
+    def test_reconnecting_your_own_account_still_works(self):
+        self.connect_robot()
+        self.connect_robot()
+
+
+class CodeSendCooldownTests(RobotTestBase):
+    def setUp(self):
+        super().setUp()
+        self.old_gap = main.CODE_SEND_MIN_GAP_SECONDS
+        main.CODE_SEND_MIN_GAP_SECONDS = 60
+        main._code_sends.clear()
+
+    def tearDown(self):
+        main.CODE_SEND_MIN_GAP_SECONDS = self.old_gap
+        super().tearDown()
+
+    def send(self, resend=False):
+        return api("POST", "/robot/connect/phone/send_code",
+                   {"phone_number": mock_superlive.GOOD_PHONE, "resend": resend}, self.token)
+
+    def test_a_resend_inside_the_gap_is_refused_without_calling_superlive(self):
+        self.assertEqual(self.send()[0], 200)
+        sent = len(mock.calls_to("phone"))
+        status, body = self.send(resend=True)
+        self.assertEqual(status, 429, body)
+        self.assertIn("Aguarde", body["detail"])
+        self.assertEqual(len(mock.calls_to("phone")), sent)  # no second SMS
+
+    def test_daily_cap(self):
+        main.CODE_SEND_MIN_GAP_SECONDS = 0
+        old = main.CODE_SEND_DAILY_MAX
+        main.CODE_SEND_DAILY_MAX = 2
+        try:
+            self.assertEqual(self.send()[0], 200)
+            self.assertEqual(self.send(resend=True)[0], 200)
+            status, body = self.send(resend=True)
+            self.assertEqual(status, 429)
+            self.assertIn("Limite diário", body["detail"])
+        finally:
+            main.CODE_SEND_DAILY_MAX = old
 
 
 class AdminBootstrapTests(unittest.TestCase):

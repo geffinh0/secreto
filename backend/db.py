@@ -1,6 +1,7 @@
 """SQLite access + schema/migrations for the Atila's Client backend."""
 import logging
 import os
+import secrets
 import sqlite3
 
 import security
@@ -37,6 +38,12 @@ _SETTINGS_COLUMNS = (
     "id, user_id, auto_messages_enabled, message_interval_seconds, "
     "moderation_enabled, kick_permanent, diamond_immunity_enabled, diamond_immunity_threshold"
 )
+
+
+def shared_robot_allowed() -> bool:
+    """SM_ALLOW_SHARED_ROBOT=1 lets several portal users connect the SAME
+    SuperLive account (off by default: they would fight over one token)."""
+    return os.getenv("SM_ALLOW_SHARED_ROBOT", "0") == "1"
 
 
 def connect() -> sqlite3.Connection:
@@ -220,7 +227,42 @@ def init_db():
             )
         """)
 
+        # Agencies: each new portal user signs up with one agency's code, so the
+        # admin can see how many creators every agency has (and how many are
+        # actually running a robot). `code` is the only secret: random, 8 chars.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS agencies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                code TEXT UNIQUE NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
         # ---- additive migrations for databases created by older versions ----
+        if "agency_id" not in _columns(conn, "users"):
+            c.execute("ALTER TABLE users ADD COLUMN agency_id INTEGER REFERENCES agencies(id)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_users_agency ON users(agency_id)")
+        if "egress_slot" not in _columns(conn, "users"):
+            c.execute("ALTER TABLE users ADD COLUMN egress_slot INTEGER")
+            # Everyone who already has a robot connected got their token through the
+            # one egress that existed then (slot 0): keep them on that IP.
+        # every startup (idempotent): a crash between the ALTER and this UPDATE must
+        # not leave a robot owner unassigned, or she'd be moved to another IP later
+        c.execute("UPDATE users SET egress_slot = 0 WHERE egress_slot IS NULL "
+                  "AND id IN (SELECT user_id FROM robot_accounts)")
+        if shared_robot_allowed():
+            c.execute("DROP INDEX IF EXISTS idx_robot_sl_user")
+        else:
+            try:
+                # one SuperLive account = one portal user (two users driving the same
+                # account would fight over its token and double-moderate)
+                c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_robot_sl_user "
+                          "ON robot_accounts(sl_user_id) WHERE sl_user_id IS NOT NULL")
+            except sqlite3.IntegrityError:
+                log.warning("robot_accounts already has duplicate sl_user_id rows; "
+                            "unique index NOT created - resolve the duplicates and restart")
         if "expires_at" not in _columns(conn, "sessions"):
             c.execute("ALTER TABLE sessions ADD COLUMN expires_at TEXT")
         c.execute(
@@ -268,6 +310,93 @@ def init_db():
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
         conn.close()
+
+
+# ─── Agencies / egress slots ─────────────────────────────────────────────────
+# No 0/O/1/I: codes get read out loud and typed from chat messages.
+CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+CODE_LENGTH = 8
+
+
+def normalize_agency_code(raw) -> str:
+    """Upper-case, without spaces or dashes ('ab12-cd34' == 'AB12CD34')."""
+    return "".join(ch for ch in str(raw or "").upper() if ch.isalnum())
+
+
+def format_agency_code(code: str) -> str:
+    return f"{code[:4]}-{code[4:]}" if len(code) == CODE_LENGTH else code
+
+
+def create_agency(conn, name: str) -> dict:
+    for _ in range(10):
+        code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+        try:
+            cur = conn.execute("INSERT INTO agencies (name, code) VALUES (?, ?)", (name, code))
+            conn.commit()
+            agency = get_agency(conn, cur.lastrowid)
+            agency["code"] = format_agency_code(agency["code"])
+            return agency
+        except sqlite3.IntegrityError:
+            conn.rollback()  # code collision (astronomically unlikely): draw another
+    raise RuntimeError("não foi possível gerar um código de agência único")
+
+
+def get_agency(conn, agency_id: int):
+    return row_to_dict(conn.execute("SELECT * FROM agencies WHERE id = ?", (agency_id,)).fetchone())
+
+
+def get_agency_by_code(conn, raw_code):
+    code = normalize_agency_code(raw_code)
+    if len(code) != CODE_LENGTH:
+        return None
+    return row_to_dict(conn.execute("SELECT * FROM agencies WHERE code = ?", (code,)).fetchone())
+
+
+def list_agencies_with_counts(conn) -> list:
+    """One row per agency with its creators: registered, with a robot connected,
+    and with the live watch switched on (the in-memory 'running now' count is
+    added by the caller - it lives in the session manager, not here)."""
+    rows = conn.execute("""
+        SELECT a.id, a.name, a.code, a.active, a.created_at,
+               COUNT(u.id) AS users_total,
+               COALESCE(SUM(CASE WHEN r.user_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_robot,
+               COALESCE(SUM(CASE WHEN w.active = 1 THEN 1 ELSE 0 END), 0) AS watching
+        FROM agencies a
+        LEFT JOIN users u ON u.agency_id = a.id
+        LEFT JOIN robot_accounts r ON r.user_id = u.id
+        LEFT JOIN streamer_watch w ON w.user_id = u.id
+        GROUP BY a.id
+        ORDER BY a.id
+    """).fetchall()
+    result = []
+    for row in rows:
+        d = row_to_dict(row)
+        d["code"] = format_agency_code(d["code"])
+        result.append(d)
+    return result
+
+
+def get_or_assign_egress_slot(conn, user_id: int, pool_size: int) -> int:
+    """The user's fixed egress (proxy) slot. Assigned once, to the least loaded
+    slot, then never changed: SuperLive ties a token to the IP it was issued
+    from, so moving an account between IPs would invite a re-login/ban."""
+    pool_size = max(1, pool_size)
+    row = conn.execute("SELECT egress_slot FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        return 0
+    if row["egress_slot"] is not None:
+        return row["egress_slot"] % pool_size
+    load = {i: 0 for i in range(pool_size)}
+    for r in conn.execute("SELECT egress_slot, COUNT(*) AS n FROM users "
+                          "WHERE egress_slot IS NOT NULL GROUP BY egress_slot"):
+        if r["egress_slot"] in load:
+            load[r["egress_slot"]] = r["n"]
+    chosen = min(load, key=lambda i: (load[i], i))
+    conn.execute("UPDATE users SET egress_slot = ? WHERE id = ? AND egress_slot IS NULL",
+                 (chosen, user_id))
+    conn.commit()
+    row = conn.execute("SELECT egress_slot FROM users WHERE id = ?", (user_id,)).fetchone()
+    return (row["egress_slot"] if row["egress_slot"] is not None else chosen) % pool_size
 
 
 # ─── Settings / rules / messages helpers (also used by the moderation engine) ───

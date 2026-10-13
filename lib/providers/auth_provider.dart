@@ -59,8 +59,8 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
-  Future<bool> register(
-      String username, String email, String password, String displayName) async {
+  Future<bool> register(String username, String email, String password,
+      String displayName, String agencyCode) async {
     return _authenticate(
       '/auth/register',
       {
@@ -68,6 +68,7 @@ class AuthProvider extends ChangeNotifier {
         'email': email,
         'password': password,
         'display_name': displayName,
+        'agency_code': agencyCode,
       },
       fallbackError: 'Erro ao criar conta',
     );

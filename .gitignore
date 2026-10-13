@@ -69,3 +69,4 @@ backend/tests/__pycache__/
 
 # Docker secret files (robot-token encryption key) - live only on the VPS
 secrets/
+.tribunal/

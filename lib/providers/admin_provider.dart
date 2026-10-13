@@ -16,6 +16,9 @@ class AdminProvider extends ChangeNotifier {
   String? _adminUsername;
   List<AdminUserSummary> _users = [];
   List<AdminSessionSummary> _sessions = [];
+  List<AdminAgency> _agencies = [];
+  AdminAgency? _noAgency;
+  AdminCapacity? _capacity;
   bool _isLoading = false;
   bool _isLoggingIn = false;
   String? _error;
@@ -25,6 +28,11 @@ class AdminProvider extends ChangeNotifier {
   String? get adminUsername => _adminUsername;
   List<AdminUserSummary> get users => _users;
   List<AdminSessionSummary> get sessions => _sessions;
+  List<AdminAgency> get agencies => _agencies;
+
+  /// Creators who signed up before agencies existed (no agency code).
+  AdminAgency? get noAgency => _noAgency;
+  AdminCapacity? get capacity => _capacity;
   bool get isLoading => _isLoading;
   bool get isLoggingIn => _isLoggingIn;
   String? get error => _error;
@@ -78,7 +86,73 @@ class AdminProvider extends ChangeNotifier {
     _adminUsername = null;
     _users = [];
     _sessions = [];
+    _agencies = [];
+    _noAgency = null;
+    _capacity = null;
     notifyListeners();
+  }
+
+  /// Creates an agency; returns its signup code, or null (see [error]).
+  Future<String?> createAgency(String name) async {
+    final result = await _api.post('/admin/agencies', {'name': name});
+    if (result['success'] == true && result['data'] is Map) {
+      final code = (result['data'] as Map)['code'] as String?;
+      await _loadAgencies();
+      notifyListeners();
+      return code;
+    }
+    _error = AdminApiService.errorMessage(result, 'Não foi possível criar a agência.');
+    notifyListeners();
+    return null;
+  }
+
+  /// Turns an agency's code on/off for NEW signups (existing creators stay).
+  Future<bool> setAgencyActive(int agencyId, bool active) async {
+    final result = await _api.post('/admin/agencies/$agencyId/active', {'active': active});
+    if (result['success'] != true) {
+      _error = AdminApiService.errorMessage(result, 'Não foi possível alterar a agência.');
+      notifyListeners();
+      return false;
+    }
+    await _loadAgencies();
+    notifyListeners();
+    return true;
+  }
+
+  /// New code for an agency whose code leaked; returns it, or null.
+  Future<String?> rotateAgencyCode(int agencyId) async {
+    final result = await _api.post('/admin/agencies/$agencyId/rotate_code', {});
+    if (result['success'] == true && result['data'] is Map) {
+      final code = (result['data'] as Map)['code'] as String?;
+      await _loadAgencies();
+      notifyListeners();
+      return code;
+    }
+    _error = AdminApiService.errorMessage(result, 'Não foi possível gerar um novo código.');
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> _loadAgencies() async {
+    final result = await _api.get('/admin/agencies');
+    if (result['success'] == true && result['data'] is Map) {
+      final data = (result['data'] as Map).cast<String, dynamic>();
+      _agencies = (data['agencies'] as List? ?? const [])
+          .whereType<Map>()
+          .map((e) => AdminAgency.fromJson(e.cast<String, dynamic>()))
+          .toList();
+      final legacy = data['no_agency'];
+      _noAgency = legacy is Map
+          ? AdminAgency.fromJson({...legacy.cast<String, dynamic>(), 'id': 0, 'name': 'Sem agência'})
+          : null;
+    }
+  }
+
+  Future<void> _loadCapacity() async {
+    final result = await _api.get('/admin/capacity');
+    if (result['success'] == true && result['data'] is Map) {
+      _capacity = AdminCapacity.fromJson((result['data'] as Map).cast<String, dynamic>());
+    }
   }
 
   Future<void> load() async {
@@ -117,6 +191,12 @@ class AdminProvider extends ChangeNotifier {
           .toList();
     } else if (usersOk) {
       _error = AdminApiService.errorMessage(sessionsResult, 'Erro ao carregar sessões');
+    }
+
+    if (usersOk) {
+      // best effort: the users list is what decides "logged in", these only decorate
+      await _loadAgencies();
+      await _loadCapacity();
     }
 
     return usersOk;

@@ -23,6 +23,13 @@ HEALTHBOT_API_KEY = os.environ.get("HEALTHBOT_API_KEY", "")
 
 OK_VALUES = {"up", "active", "ouvindo", 200}
 
+# End-to-end egress check: a listening SOCKS port only proves the local ssh
+# process is alive, not that the notebook behind the tunnel can reach the
+# internet. One probe per egress proxy (comma-separated host:port list).
+EGRESS_PROXIES = [p.strip() for p in
+                  os.environ.get("HEALTHBOT_SOCKS_PROXIES", "172.28.0.1:1080").split(",") if p.strip()]
+EGRESS_PROBE_URL = os.environ.get("HEALTHBOT_EGRESS_URL", "https://api.sprlv-api.com/")
+
 
 def _run(cmd: str) -> str:
     try:
@@ -39,6 +46,17 @@ def _container_status(name: str) -> str:
 
 def _port_listening(port: str) -> str:
     return "ouvindo" if port in _run("ss -tln") else "fechada"
+
+
+def _egress_check(proxy: str) -> int | str:
+    """200 when an HTTPS request really leaves through this proxy and gets ANY
+    answer from SuperLive (even a 404 proves the path works); else a reason."""
+    code = _run(
+        f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 8 "
+        f"--socks5-hostname {proxy} {EGRESS_PROBE_URL}")
+    if code.isdigit() and code != "000":
+        return 200
+    return "sem saída (túnel/notebook fora?)"
 
 
 def _http_status(url: str) -> int | str:
@@ -58,6 +76,7 @@ def check_all() -> dict:
         "tunel_notebook (systemd)": _run("systemctl is-active atila-notebook-proxy"),
         "tunel_notebook (porta 2222)": _port_listening("2222"),
         "proxy_socks5 (porta 1080)": _port_listening("1080"),
+        **{f"saida_real_superlive ({proxy})": _egress_check(proxy) for proxy in EGRESS_PROXIES},
         "atilaclient.tech": _http_status("https://atilaclient.tech"),
         "atilaclient.tech/api/health": _http_status("https://atilaclient.tech/api/health"),
         "catapobre.com.br": _http_status("https://catapobre.com.br"),

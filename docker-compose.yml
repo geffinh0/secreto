@@ -8,10 +8,12 @@ services:
     container_name: atilas_client_backend
     restart: unless-stopped
     environment:
-      # Only the accounts created so far (+ whatever's imported by hand) can
-      # log in; the public sign-up form is off for now. Set to "1" (or drop
-      # the line - "1" is the default) to open registration back up.
-      SM_ALLOW_REGISTRATION: "0"
+      # Sign-up is open but gated: every new creator must type an AGENCY CODE
+      # (created in the admin panel, "Agências" tab) or the request is refused.
+      # Set SM_ALLOW_REGISTRATION=0 in .env to close it completely.
+      SM_ALLOW_REGISTRATION: "${SM_ALLOW_REGISTRATION:-1}"
+      # Wrong agency codes allowed per client IP per 10 minutes (guessing).
+      SM_REGISTER_IP_MAX: "${SM_REGISTER_IP_MAX:-20}"
       # SuperLive flags this VPS's own IP as a datacenter/VPN address on some
       # endpoints (e.g. the public search behind "buscar por ID"). Routing
       # through a SOCKS5 proxy that exits via a residential connection (see
@@ -21,7 +23,16 @@ services:
       # tunnel that only this host's loopback can open (deploy/notebook-proxy/
       # systemd unit) - never exposed outside the Docker bridge.
       SUPERLIVE_PROXY_URL: "socks5h://172.28.0.1:1080"
-      # Shared secret the Telegram healthbot sends to read /robot/live_status
+      # SCALE: more egress IPs = more robots. Comma-separated proxy URLs; the
+      # FIRST must stay the one above (accounts connected before the pool
+      # existed keep that IP). Every creator is pinned to one entry when her
+      # robot first connects, balanced across the list, and each entry gets its
+      # own request queue (one IP = ~2.8 requests/s and 20 chat messages/min).
+      # Empty = only the single proxy above. Capacity guide: DEPLOY.md.
+      SUPERLIVE_PROXY_URLS: "${SUPERLIVE_PROXY_URLS:-}"
+      # Share of each egress's request budget (req/s) given to "is she live yet?"
+      # polling; the more creators per IP, the slower each is polled.
+      SM_POLL_BUDGET_RPS: "${SM_POLL_BUDGET_RPS:-1.5}"      # Shared secret the Telegram healthbot sends to read /robot/live_status
       # (no portal login of its own - see main.py). Comes from a .env file
       # next to this compose file, never committed; see DEPLOY.md. Empty =
       # the endpoint refuses every request, it never falls open.
@@ -61,6 +72,10 @@ services:
       # the backend; with FORWARDED_ALLOW_IPS listing the cata-pobre proxy (it
       # does, pinned at 172.19.0.3) 10-15 is reasonable. Set it in .env.
       SM_LOGIN_IP_MAX: "${SM_LOGIN_IP_MAX:-50}"
+      # Max robots running at once across ALL creators (0 = no cap). Each egress
+      # IP sustains roughly 25 live sessions (backend/superlive.py: serial queue,
+      # ~2.8 req/s); raise this by 25 for every proxy added to SUPERLIVE_PROXY_URLS.
+      SM_MAX_SESSIONS: "${SM_MAX_SESSIONS:-25}"
       # The robot's SuperLive token is encrypted at rest with the key in this
       # file (a Docker secret, below) - a path, not the key itself, so
       # `docker inspect` shows nothing useful. Missing/unreadable key = the robot

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/models.dart';
@@ -57,7 +58,7 @@ class _AdminPanelScaffoldState extends State<_AdminPanelScaffold>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -111,6 +112,7 @@ class _AdminPanelScaffoldState extends State<_AdminPanelScaffold>
           labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
           tabs: [
             Tab(text: 'Usuárias (${admin.users.length})'),
+            Tab(text: 'Agências (${admin.agencies.length})'),
             Tab(text: 'Sessões ativas (${admin.sessions.length})'),
           ],
         ),
@@ -120,7 +122,7 @@ class _AdminPanelScaffoldState extends State<_AdminPanelScaffold>
           constraints: const BoxConstraints(maxWidth: AppSpacing.maxContentWidth),
           child: TabBarView(
             controller: _tabController,
-            children: const [_UsersTab(), _SessionsTab()],
+            children: const [_UsersTab(), _AgenciesTab(), _SessionsTab()],
           ),
         ),
       ),
@@ -277,8 +279,29 @@ class _AdminLoginScreenState extends State<_AdminLoginScreen> {
   }
 }
 
-class _UsersTab extends StatelessWidget {
+class _UsersTab extends StatefulWidget {
   const _UsersTab();
+
+  @override
+  State<_UsersTab> createState() => _UsersTabState();
+}
+
+class _UsersTabState extends State<_UsersTab> {
+  String _query = '';
+
+  /// -1 = todas, 0 = sem agência, >0 = id da agência
+  int _agencyFilter = -1;
+
+  bool _matches(AdminUserSummary u) {
+    if (_agencyFilter == 0 && u.agencyId != null) return false;
+    if (_agencyFilter > 0 && u.agencyId != _agencyFilter) return false;
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return u.username.toLowerCase().contains(q) ||
+        u.email.toLowerCase().contains(q) ||
+        (u.displayName ?? '').toLowerCase().contains(q) ||
+        (u.robot?.nickname ?? '').toLowerCase().contains(q);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -297,15 +320,60 @@ class _UsersTab extends StatelessWidget {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => context.read<AdminProvider>().load(),
-      color: AppTheme.primary,
-      backgroundColor: AppTheme.bgCard,
-      child: ListView.builder(
-        padding: AppSpacing.page(context),
-        itemCount: admin.users.length,
-        itemBuilder: (context, i) => _UserCard(user: admin.users[i]),
-      ),
+    final shown = admin.users.where(_matches).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    prefixIcon: Icon(Icons.search_rounded, size: 20),
+                    hintText: 'Buscar por nome, usuário, e-mail ou robô',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<int>(
+                value: _agencyFilter,
+                dropdownColor: AppTheme.bgCard,
+                underline: const SizedBox.shrink(),
+                items: [
+                  const DropdownMenuItem(value: -1, child: Text('Todas as agências')),
+                  const DropdownMenuItem(value: 0, child: Text('Sem agência')),
+                  for (final a in admin.agencies) DropdownMenuItem(value: a.id, child: Text(a.name)),
+                ],
+                onChanged: (v) => setState(() => _agencyFilter = v ?? -1),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('${shown.length} de ${admin.users.length} usuárias',
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => context.read<AdminProvider>().load(),
+            color: AppTheme.primary,
+            backgroundColor: AppTheme.bgCard,
+            child: ListView.builder(
+              padding: AppSpacing.page(context),
+              itemCount: shown.length,
+              itemBuilder: (context, i) => _UserCard(user: shown[i]),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -414,6 +482,7 @@ class _UserCard extends StatelessWidget {
             spacing: 20,
             runSpacing: 10,
             children: [
+              _MiniFact(label: 'Agência', value: user.agencyName ?? 'sem agência'),
               _MiniFact(label: 'Robô', value: user.robot?.nickname ?? '—'),
               _MiniFact(
                 label: 'Favoritada',
@@ -447,6 +516,306 @@ class _MiniFact extends StatelessWidget {
         Text(value,
             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+/// Agencies: create one (its signup code is generated by the server), see how
+/// many creators each has and how many are actually running a robot, switch
+/// an agency's code off for new signups, rotate a leaked code.
+class _AgenciesTab extends StatelessWidget {
+  const _AgenciesTab();
+
+  Future<void> _copy(BuildContext context, String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Código copiado')));
+    }
+  }
+
+  Future<void> _showCode(BuildContext context, String title, String code) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgCard,
+        title: Text(title, style: const TextStyle(color: AppTheme.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Envie este código para a agência. Cada criadora o digita ao se cadastrar.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            const SizedBox(height: 16),
+            Center(
+              child: SelectableText(code,
+                  style: const TextStyle(
+                      color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 3)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () => _copy(ctx, code),
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            label: const Text('Copiar'),
+          ),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Fechar')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _create(BuildContext context) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _NewAgencyDialog(),
+    );
+    if (name == null || name.length < 2 || !context.mounted) return;
+    final provider = context.read<AdminProvider>();
+    final code = await provider.createAgency(name);
+    if (!context.mounted) return;
+    if (code != null) {
+      await _showCode(context, 'Agência criada', code);
+    } else if (provider.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(provider.error!)));
+    }
+  }
+
+  Future<void> _rotate(BuildContext context, AdminAgency agency) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgCard,
+        title: const Text('Gerar novo código?', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text(
+            'O código atual de ${agency.name} deixa de funcionar para novos cadastros. '
+            'As criadoras já cadastradas não são afetadas.',
+            style: const TextStyle(color: AppTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Gerar novo')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final code = await context.read<AdminProvider>().rotateAgencyCode(agency.id);
+    if (code != null && context.mounted) {
+      await _showCode(context, 'Novo código de ${agency.name}', code);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final admin = context.watch<AdminProvider>();
+    final cap = admin.capacity;
+    final legacy = admin.noAgency;
+    final total = admin.agencies.fold<int>(0, (s, a) => s + a.usersTotal) + (legacy?.usersTotal ?? 0);
+
+    return RefreshIndicator(
+      onRefresh: () => context.read<AdminProvider>().load(),
+      color: AppTheme.primary,
+      backgroundColor: AppTheme.bgCard,
+      child: ListView(
+        padding: AppSpacing.page(context),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('$total criadoras em ${admin.agencies.length} agências',
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+              FilledButton.icon(
+                onPressed: () => _create(context),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Nova agência'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (cap != null) _CapacityCard(capacity: cap),
+          if (admin.agencies.isEmpty && (legacy?.usersTotal ?? 0) == 0)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: _EmptyState(
+                icon: Icons.apartment_rounded,
+                text: 'Nenhuma agência ainda. Crie uma e envie o código para ela: '
+                    'só quem tiver um código consegue se cadastrar.',
+              ),
+            ),
+          for (final a in admin.agencies) _AgencyCard(
+            agency: a,
+            onCopy: () => _copy(context, a.code),
+            onRotate: () => _rotate(context, a),
+            onActive: (v) => context.read<AdminProvider>().setAgencyActive(a.id, v),
+          ),
+          if (legacy != null && legacy.usersTotal > 0)
+            _AgencyCard(agency: legacy, readOnly: true),
+        ],
+      ),
+    );
+  }
+}
+
+/// Owns its TextEditingController: disposing one from the caller, right after
+/// showDialog returns, breaks the dialog's exit animation.
+class _NewAgencyDialog extends StatefulWidget {
+  const _NewAgencyDialog();
+
+  @override
+  State<_NewAgencyDialog> createState() => _NewAgencyDialogState();
+}
+
+class _NewAgencyDialogState extends State<_NewAgencyDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.bgCard,
+      title: const Text('Nova agência', style: TextStyle(color: AppTheme.textPrimary)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 80,
+        decoration: const InputDecoration(labelText: 'Nome da agência'),
+        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        FilledButton(
+            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+            child: const Text('Criar')),
+      ],
+    );
+  }
+}
+
+class _CapacityCard extends StatelessWidget {
+  final AdminCapacity capacity;
+  const _CapacityCard({required this.capacity});
+
+  @override
+  Widget build(BuildContext context) {
+    final overloaded = capacity.deepestQueue > 20 ||
+        (capacity.maxSessions > 0 && capacity.activeSessions >= capacity.maxSessions);
+    final color = overloaded ? AppTheme.warning : AppTheme.success;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Wrap(
+        spacing: 20,
+        runSpacing: 10,
+        children: [
+          _MiniFact(label: 'Saídas (IPs)', value: '${capacity.egressCount}'),
+          _MiniFact(
+            label: 'Lives agora',
+            value: capacity.maxSessions > 0
+                ? '${capacity.activeSessions} / ${capacity.maxSessions}'
+                : '${capacity.activeSessions}',
+          ),
+          _MiniFact(label: 'Sugerido (máx.)', value: '${capacity.suggestedMaxSessions}'),
+          _MiniFact(label: 'Fila mais longa', value: '${capacity.deepestQueue}'),
+          _MiniFact(label: 'Detecção de live', value: 'até ${capacity.slowestPollSeconds}s'),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgencyCard extends StatelessWidget {
+  final AdminAgency agency;
+  final bool readOnly;
+  final VoidCallback? onCopy;
+  final VoidCallback? onRotate;
+  final ValueChanged<bool>? onActive;
+  const _AgencyCard({
+    required this.agency,
+    this.readOnly = false,
+    this.onCopy,
+    this.onRotate,
+    this.onActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.apartment_rounded, color: AppTheme.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(agency.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+              if (!readOnly) ...[
+                Text(agency.active ? 'aceita cadastros' : 'pausada',
+                    style: TextStyle(
+                        color: agency.active ? AppTheme.success : AppTheme.textMuted, fontSize: 12)),
+                Switch(value: agency.active, onChanged: onActive),
+              ],
+            ],
+          ),
+          if (!readOnly) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                SelectableText(agency.code,
+                    style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2)),
+                IconButton(
+                    onPressed: onCopy,
+                    tooltip: 'Copiar código',
+                    icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.textSecondary)),
+                IconButton(
+                    onPressed: onRotate,
+                    tooltip: 'Gerar novo código',
+                    icon: const Icon(Icons.autorenew_rounded, size: 18, color: AppTheme.textSecondary)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          const Divider(color: AppTheme.border, height: 1),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 24,
+            runSpacing: 10,
+            children: [
+              _MiniFact(label: 'Cadastradas', value: '${agency.usersTotal}'),
+              _MiniFact(label: 'Com robô conectado', value: '${agency.withRobot}'),
+              _MiniFact(label: 'Favorita ligada', value: '${agency.watching}'),
+              _MiniFact(label: 'Moderando agora', value: '${agency.runningNow}'),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
