@@ -14,6 +14,8 @@ import 'package:atilas_client/providers/admin_provider.dart';
 import 'package:atilas_client/providers/auth_provider.dart';
 import 'package:atilas_client/providers/auto_message_provider.dart';
 import 'package:atilas_client/providers/bot_provider.dart';
+import 'package:atilas_client/providers/moderation_provider.dart';
+import 'package:atilas_client/screens/settings/import_config_card.dart';
 import 'package:atilas_client/screens/admin/admin_screen.dart';
 import 'package:atilas_client/screens/auth/change_password_screen.dart' show passwordRuleError;
 import 'package:atilas_client/screens/auth/login_screen.dart';
@@ -939,6 +941,96 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Agência criada'), findsOneWidget);
       expect(find.text('QW7M-2ZPD'), findsOneWidget);
+    });
+  });
+  group('import config card', () {
+    Widget host(FakeApi api) => MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>(create: (_) => AuthProvider(api: api)),
+            ChangeNotifierProvider<ModerationProvider>(create: (_) => ModerationProvider(api: api)),
+            ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: Scaffold(body: SingleChildScrollView(child: ImportConfigCard(api: api))),
+          ),
+        );
+
+    const backup = '{"format":"atilas-config","version":1,"rules":[{"keyword":"golpe","action":"kick"}],'
+        '"messages":[{"content":"oi"}]}';
+
+    Map<String, dynamic> answer({required bool dry, int rules = 1, int messages = 1, int skipped = 0}) => ok({
+          'dry_run': dry,
+          'rules': {'created': rules, 'skipped': skipped, 'invalid': 0, 'invalid_items': []},
+          'messages': {'created': messages, 'skipped': 0, 'invalid': 0, 'invalid_items': []},
+        });
+
+    testWidgets('checks the file first, then imports it, then reloads the lists', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(900, 1600);
+      addTearDown(tester.view.resetPhysicalSize);
+      final api = FakeApi()
+        ..on('POST /config/import?dry_run=true', answer(dry: true))
+        ..on('POST /config/import', answer(dry: false));
+      await tester.pumpWidget(host(api));
+
+      // nothing can be imported before the file was checked
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('import_confirm_button'))).onPressed, isNull);
+
+      await tester.enterText(find.byKey(const ValueKey('import_config_field')), backup);
+      await tester.tap(find.byKey(const ValueKey('import_check_button')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('O que vai acontecer'), findsOneWidget);
+      expect(find.textContaining('1 serão adicionadas'), findsNWidgets(2));
+      expect(api.calls.where((c) => c == 'POST /config/import'), isEmpty);   // the preview wrote nothing
+
+      await tester.tap(find.byKey(const ValueKey('import_confirm_button')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Importação concluída'), findsOneWidget);
+      expect(api.postBodies['POST /config/import']!['format'], 'atilas-config');
+    });
+
+    testWidgets('text that is not a backup is explained without calling the server', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(900, 1600);
+      addTearDown(tester.view.resetPhysicalSize);
+      final api = FakeApi();
+      await tester.pumpWidget(host(api));
+      await tester.enterText(find.byKey(const ValueKey('import_config_field')), 'isto nao e json');
+      await tester.tap(find.byKey(const ValueKey('import_check_button')));
+      await tester.pump();
+      expect(find.textContaining('não parece um arquivo de backup'), findsOneWidget);
+      expect(api.calls, isEmpty);
+    });
+
+    testWidgets('the server refusal is shown and nothing can be confirmed', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(900, 1600);
+      addTearDown(tester.view.resetPhysicalSize);
+      final api = FakeApi()
+        ..on('POST /config/import?dry_run=true',
+            fail(422, {'detail': "Arquivo inválido: não é um backup de configurações do Atila's Client."}));
+      await tester.pumpWidget(host(api));
+      await tester.enterText(find.byKey(const ValueKey('import_config_field')), '{"format":"outra","version":1}');
+      await tester.tap(find.byKey(const ValueKey('import_check_button')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('não é um backup'), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('import_confirm_button'))).onPressed, isNull);
+    });
+
+    test('password rules in the app match the server: 8 characters, one uppercase, one special', () {
+      expect(passwordRuleError('Abc!defg'), isNull);
+      expect(passwordRuleError('Ab!defg'), isNotNull);        // 7 characters
+      expect(passwordRuleError('abc!defgh'), isNotNull);      // no uppercase
+      expect(passwordRuleError('Abcdefgh1'), isNotNull);      // no special
+      expect(passwordRuleError('Abcdefg h'), isNotNull);      // a space is not special
+      expect(passwordRuleError('Ação-forte'), isNull);
     });
   });
 }

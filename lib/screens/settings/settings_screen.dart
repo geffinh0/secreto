@@ -11,6 +11,7 @@ import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
 import '../../widgets/common/gradient_button.dart';
+import 'import_config_card.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -57,6 +58,10 @@ class SettingsScreen extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+
+          // Import a backup of moderation words + auto messages into this account
+          const ImportConfigCard(),
           const SizedBox(height: 24),
 
           // Robot account section

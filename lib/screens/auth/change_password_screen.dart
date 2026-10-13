@@ -9,10 +9,18 @@ import '../../widgets/common/gradient_button.dart';
 /// Same rules the server enforces (backend/security.py password_problems); the server
 /// stays the authority, this only saves a round trip for the obvious mistakes.
 String? passwordRuleError(String password) {
-  if (password.length < 10) return 'Use pelo menos 10 caracteres';
-  final hasLetter = password.runes.any((r) => String.fromCharCode(r).toLowerCase() != String.fromCharCode(r).toUpperCase());
-  final hasDigit = password.runes.any((r) => r >= 0x30 && r <= 0x39);
-  if (!hasLetter || !hasDigit) return 'Misture letras e números';
+  if (password.length < 8) return 'Use pelo menos 8 caracteres';
+  final hasUpper = password.runes.any((r) {
+    final ch = String.fromCharCode(r);
+    return ch != ch.toLowerCase() && ch == ch.toUpperCase();
+  });
+  if (!hasUpper) return 'Use pelo menos uma letra maiúscula';
+  final hasSpecial = password.runes.any((r) {
+    final ch = String.fromCharCode(r);
+    final isLetterOrDigit = ch.toLowerCase() != ch.toUpperCase() || (r >= 0x30 && r <= 0x39);
+    return !isLetterOrDigit && ch.trim().isNotEmpty;
+  });
+  if (!hasSpecial) return r'Use pelo menos um caractere especial (como ! @ # $ % & *)';
   return null;
 }
 
@@ -136,7 +144,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         decoration: const InputDecoration(
                           labelText: 'Nova senha',
                           prefixIcon: Icon(Icons.lock_rounded),
-                          helperText: 'Mínimo 10 caracteres, com letras e números. '
+                          helperText: 'Mínimo 8 caracteres, com uma letra maiúscula e um caractere especial. '
                               'Não use seu usuário, nome ou senhas comuns.',
                           helperMaxLines: 3,
                         ),

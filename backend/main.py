@@ -237,6 +237,8 @@ def _describe_validation_error(err: dict) -> str:
     msg = str(err.get("msg", "valor inválido")).removeprefix("Value error, ")
     if msg.startswith("senha fraca"):  # raised by a model-level validator: no field name
         return "Senha fraca" + msg.removeprefix("senha fraca")
+    if field == "body":  # any other model-level validator: the message stands on its own
+        return msg
     return f"{label}: {msg}"
 
 
@@ -766,6 +768,134 @@ def create_rules_bulk(req: ModerationBulkCreate, current_user: dict = Depends(ge
         db.log_activity(req.user_id, "rule_created",
                          f"{len(created)} palavras adicionadas em lote ({req.action})")
     return {"created": created, "skipped": skipped}
+
+
+# ─── Import configuration (rules + auto messages from a backup file) ────────
+CONFIG_FORMAT = "atilas-config"
+CONFIG_VERSION = 1
+CONFIG_MAX_RULES = 5000
+CONFIG_MAX_MESSAGES = 500
+CONFIG_INVALID_SHOWN = 20  # how many rejected items the answer spells out
+
+
+class ConfigImportRequest(BaseModel):
+    """The backup file as sent by the app. Only these four keys are read: nothing in the
+    file can name a user, a robot, a token or a setting - the import always writes to the
+    logged-in user. Items are checked one by one (a bad line must not sink the whole file)."""
+    format: str
+    version: int
+    rules: list = Field(default_factory=list, max_length=CONFIG_MAX_RULES)          # items are checked one by one
+    messages: list = Field(default_factory=list, max_length=CONFIG_MAX_MESSAGES)
+
+    @model_validator(mode="after")
+    def _known_file(self):
+        if self.format != CONFIG_FORMAT:
+            raise ValueError("Arquivo inválido: não é um backup de configurações do Atila's Client.")
+        if self.version != CONFIG_VERSION:
+            raise ValueError(f"Versão {self.version} do arquivo não é suportada por este app.")
+        return self
+
+
+def _import_rule_item(raw) -> tuple:
+    if not isinstance(raw, dict):
+        raise ValueError("item não é um objeto")
+    keyword, action = raw.get("keyword"), raw.get("action")
+    if not isinstance(keyword, str):
+        raise ValueError("palavra ausente")
+    keyword = _clean_keyword(keyword)
+    if len(keyword) > 60:
+        raise ValueError("palavra com mais de 60 caracteres")
+    if action not in ("mute", "kick"):
+        raise ValueError("ação deve ser mute ou kick")
+    return keyword, action, bool(raw.get("is_active", True))
+
+
+def _import_message_item(raw) -> tuple:
+    if not isinstance(raw, dict):
+        raise ValueError("item não é um objeto")
+    content = raw.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("mensagem vazia")
+    content = content.strip()
+    if len(content) > 500:
+        raise ValueError("mensagem com mais de 500 caracteres")
+    order = raw.get("sort_order")
+    if not isinstance(order, int) or isinstance(order, bool) or order < 0:
+        order = None
+    return content, order, bool(raw.get("is_active", True))
+
+
+@app.post("/config/import")
+def import_config(req: ConfigImportRequest, dry_run: bool = False,
+                  current_user: dict = Depends(get_current_user),
+                  conn: sqlite3.Connection = Depends(get_db)):
+    """Adds the rules and auto messages of a backup file to the logged-in user's own.
+
+    Merge, never replace: a keyword already on that list (same action, same normalisation
+    as the manual form) and a message already there are skipped, so importing twice is
+    harmless. All-or-nothing in one transaction. ``dry_run=true`` only reports what
+    would happen."""
+    user_id = current_user["id"]
+    existing_rules = {"mute": set(), "kick": set()}
+    for row in conn.execute("SELECT keyword, action FROM moderation_rules WHERE user_id = ?", (user_id,)):
+        existing_rules[row["action"]].add(normalize(row["keyword"]))
+    existing_messages = {
+        " ".join(row["content"].lower().split())
+        for row in conn.execute("SELECT content FROM auto_messages WHERE user_id = ?", (user_id,))}
+    next_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM auto_messages WHERE user_id = ?", (user_id,)).fetchone()[0]
+
+    new_rules, rules_skipped, rules_invalid = [], 0, []
+    for index, raw in enumerate(req.rules):
+        try:
+            keyword, action, active = _import_rule_item(raw)
+        except ValueError as exc:
+            rules_invalid.append({"index": index, "reason": str(exc)})
+            continue
+        target = normalize(keyword)
+        if target in existing_rules[action]:
+            rules_skipped += 1
+            continue
+        existing_rules[action].add(target)
+        new_rules.append((user_id, keyword, action, int(active)))
+
+    parsed_messages, messages_skipped, messages_invalid = [], 0, []
+    for index, raw in enumerate(req.messages):
+        try:
+            content, order, active = _import_message_item(raw)
+        except ValueError as exc:
+            messages_invalid.append({"index": index, "reason": str(exc)})
+            continue
+        key = " ".join(content.lower().split())
+        if key in existing_messages:
+            messages_skipped += 1
+            continue
+        existing_messages.add(key)
+        parsed_messages.append((order if order is not None else index, index, content, int(active)))
+    # keep the file's own order, placed after whatever messages she already has
+    parsed_messages.sort(key=lambda item: (item[0], item[1]))
+    new_messages = [(user_id, content, next_order + position, active)
+                    for position, (_o, _i, content, active) in enumerate(parsed_messages)]
+
+    if not dry_run and (new_rules or new_messages):
+        try:
+            conn.executemany(
+                "INSERT INTO moderation_rules (user_id, keyword, action, is_active) VALUES (?, ?, ?, ?)", new_rules)
+            conn.executemany(
+                "INSERT INTO auto_messages (user_id, content, sort_order, is_active) VALUES (?, ?, ?, ?)", new_messages)
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+            raise HTTPException(500, "Não foi possível importar. Nada foi alterado.") from None
+        db.log_activity(user_id, "config_imported",
+                        f"{len(new_rules)} palavras e {len(new_messages)} mensagens importadas")
+    return {
+        "dry_run": dry_run,
+        "rules": {"created": len(new_rules), "skipped": rules_skipped, "invalid": len(rules_invalid),
+                  "invalid_items": rules_invalid[:CONFIG_INVALID_SHOWN]},
+        "messages": {"created": len(new_messages), "skipped": messages_skipped, "invalid": len(messages_invalid),
+                     "invalid_items": messages_invalid[:CONFIG_INVALID_SHOWN]},
+    }
 
 
 @app.post("/moderation/test")

@@ -125,7 +125,7 @@ def new_user(prefix="user"):
     _counter[0] += 1
     name = f"{prefix}{_counter[0]}"
     status, body = api("POST", "/auth/register", {
-        "username": name, "email": f"{name}@example.com", "password": "pw-teste-4821x",
+        "username": name, "email": f"{name}@example.com", "password": "Pw-teste-4821x",
         "agency_code": agency_code(),
     })
     assert status == 200, body
@@ -152,7 +152,7 @@ class AuthAndApiTests(unittest.TestCase):
     def test_register_duplicate_is_case_insensitive(self):
         name, _, _ = new_user("dup")
         status, _ = api("POST", "/auth/register", {
-            "username": name.upper(), "email": "other@example.com", "password": "pw-teste-4821x",
+            "username": name.upper(), "email": "other@example.com", "password": "Pw-teste-4821x",
             "agency_code": agency_code()})
         self.assertEqual(status, 400)
 
@@ -162,13 +162,13 @@ class AuthAndApiTests(unittest.TestCase):
         os.environ["SM_ALLOW_REGISTRATION"] = "0"
         try:
             status, body = api("POST", "/auth/register", {
-                "username": "lockedout", "email": "lockedout@example.com", "password": "pw-teste-4821x",
+                "username": "lockedout", "email": "lockedout@example.com", "password": "Pw-teste-4821x",
                 "agency_code": agency_code()})
             self.assertEqual(status, 403)
             self.assertIn("desativado", body["detail"])
             # login for accounts that already existed is unaffected
             self.assertEqual(
-                api("POST", "/auth/login", {"username": name, "password": "pw-teste-4821x"})[0], 200)
+                api("POST", "/auth/login", {"username": name, "password": "Pw-teste-4821x"})[0], 200)
         finally:
             if old is None:
                 os.environ.pop("SM_ALLOW_REGISTRATION", None)
@@ -179,7 +179,7 @@ class AuthAndApiTests(unittest.TestCase):
         name, _, _ = new_user("login")
         status, bad = api("POST", "/auth/login", {"username": name, "password": "errada"})
         self.assertEqual(status, 401)
-        status, ok = api("POST", "/auth/login", {"username": name, "password": "pw-teste-4821x"})
+        status, ok = api("POST", "/auth/login", {"username": name, "password": "Pw-teste-4821x"})
         self.assertEqual(status, 200)
         self.assertIs(ok["user"]["is_admin"], False)
         status, me = api("GET", "/auth/me", token=ok["access_token"])
@@ -217,7 +217,7 @@ class AuthAndApiTests(unittest.TestCase):
         try:
             for _ in range(8):
                 api("POST", "/auth/login", {"username": name, "password": "x"})
-            self.assertEqual(api("POST", "/auth/login", {"username": name, "password": "pw-teste-4821x"})[0], 429)
+            self.assertEqual(api("POST", "/auth/login", {"username": name, "password": "Pw-teste-4821x"})[0], 429)
         finally:
             main.throttle.clear()
 
@@ -1604,7 +1604,7 @@ class ActivityLogTests(RobotTestBase):
         self.assertGreater(len(self.activity()), 0)
 
     def test_login_is_recorded(self):
-        api("POST", "/auth/login", {"username": self.name, "password": "pw-teste-4821x"})
+        api("POST", "/auth/login", {"username": self.name, "password": "Pw-teste-4821x"})
         self.assertEqual(self.activity()[0]["action"], "login")
 
 
@@ -1620,7 +1620,7 @@ class AdminPanelTests(RobotTestBase):
     confirm nobody's password hash or robot token/device_id ever appears in
     the response, and that the data shown is real."""
 
-    def make_admin(self, password="admin-pw-teste-4821x"):
+    def make_admin(self, password="admin-Pw-teste-4821x"):
         """Inserts an admin_accounts row directly (mirrors how the real
         startup bootstrap creates the first one from env vars - there is no
         public /admin/register) and logs in through the real endpoint to get
@@ -1719,8 +1719,8 @@ def make_admin_token():
     _admin_counter[0] += 1
     username = f"agadmin{_admin_counter[0]}"
     sql("INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
-        (username, security.hash_password("admin-pw-teste-4821x"), "Admin"))
-    status, body = api("POST", "/admin/login", {"username": username, "password": "admin-pw-teste-4821x"})
+        (username, security.hash_password("admin-Pw-teste-4821x"), "Admin"))
+    status, body = api("POST", "/admin/login", {"username": username, "password": "admin-Pw-teste-4821x"})
     assert status == 200, body
     return body["access_token"]
 
@@ -1729,7 +1729,7 @@ def register_with(code, name=None):
     _counter[0] += 1
     name = name or f"ag{_counter[0]}"
     return api("POST", "/auth/register", {
-        "username": name, "email": f"{name}@example.com", "password": "pw-teste-4821x",
+        "username": name, "email": f"{name}@example.com", "password": "Pw-teste-4821x",
         "agency_code": code})
 
 
@@ -1750,7 +1750,7 @@ class AgencyTests(unittest.TestCase):
 
     def test_register_requires_an_agency_code(self):
         status, body = api("POST", "/auth/register", {
-            "username": "nocode1", "email": "nocode1@example.com", "password": "pw-teste-4821x"})
+            "username": "nocode1", "email": "nocode1@example.com", "password": "Pw-teste-4821x"})
         self.assertEqual(status, 422)
         self.assertIn("campo obrigatório", body["detail"])
 
@@ -1787,7 +1787,7 @@ class AgencyTests(unittest.TestCase):
         agency = self.new_agency()
         _, body = register_with(agency["code"], "stays1")
         api("POST", f"/admin/agencies/{agency['id']}/active", {"active": False}, self.admin)
-        status, _ = api("POST", "/auth/login", {"username": "stays1", "password": "pw-teste-4821x"})
+        status, _ = api("POST", "/auth/login", {"username": "stays1", "password": "Pw-teste-4821x"})
         self.assertEqual(status, 200)
         self.assertEqual(self.agency_row(agency["id"])["users_total"], 1)
 
@@ -2065,11 +2065,133 @@ class MigrationTests(unittest.TestCase):
         conn.close()
 
 
+class ConfigImportTests(unittest.TestCase):
+    """"Importar configurações": rules + auto messages from a backup file go into the
+    logged-in user's own lists, merged, validated item by item, all or nothing."""
+
+    def setUp(self):
+        self.name, self.token, self.uid = new_user("imp")
+
+    def payload(self, rules=(), messages=(), **extra):
+        return {"format": "atilas-config", "version": 1, "rules": list(rules),
+                "messages": list(messages), **extra}
+
+    def do_import(self, body, dry_run=False, token=None):
+        path = "/config/import" + ("?dry_run=true" if dry_run else "")
+        return api("POST", path, body, token or self.token)
+
+    def rules(self, token=None, uid=None):
+        return api("GET", f"/moderation/rules?user_id={uid or self.uid}", token=token or self.token)[1]
+
+    def messages(self, token=None, uid=None):
+        return api("GET", f"/messages?user_id={uid or self.uid}", token=token or self.token)[1]
+
+    def test_imports_rules_and_messages_keeping_the_file_order(self):
+        status, out = self.do_import(self.payload(
+            rules=[{"keyword": "Golpe", "action": "kick", "is_active": True},
+                   {"keyword": "palavrão", "action": "mute", "is_active": False},
+                   {"keyword": "gz", "action": "kick"}],            # short words are legitimate (cm, gz, d4)
+            messages=[{"content": "Siga a live!", "sort_order": 5, "is_active": True},
+                      {"content": "Bem-vindos 💜", "sort_order": 2, "is_active": False}]))
+        self.assertEqual(status, 200, out)
+        self.assertEqual(out["rules"]["created"], 3)
+        self.assertEqual(out["messages"]["created"], 2)
+        got = {(r["keyword"], r["action"], bool(r["is_active"])) for r in self.rules()}
+        self.assertEqual(got, {("golpe", "kick", True), ("palavrão", "mute", False), ("gz", "kick", True)})
+        texts = [m["content"] for m in self.messages()]
+        self.assertEqual(texts, ["Bem-vindos 💜", "Siga a live!"])      # by the file's sort_order, accents intact
+
+    def test_dry_run_reports_without_writing(self):
+        body = self.payload(rules=[{"keyword": "golpe", "action": "kick"}], messages=[{"content": "oi"}])
+        status, out = self.do_import(body, dry_run=True)
+        self.assertEqual(status, 200)
+        self.assertTrue(out["dry_run"])
+        self.assertEqual((out["rules"]["created"], out["messages"]["created"]), (1, 1))
+        self.assertEqual(self.rules(), [])
+        self.assertEqual(self.messages(), [])
+
+    def test_importing_twice_is_harmless_and_never_duplicates(self):
+        body = self.payload(rules=[{"keyword": "golpe", "action": "kick"}], messages=[{"content": "oi"}])
+        self.do_import(body)
+        status, again = self.do_import(body)
+        self.assertEqual(status, 200)
+        self.assertEqual((again["rules"]["created"], again["rules"]["skipped"]), (0, 1))
+        self.assertEqual((again["messages"]["created"], again["messages"]["skipped"]), (0, 1))
+        self.assertEqual(len(self.rules()), 1)
+        self.assertEqual(len(self.messages()), 1)
+
+    def test_same_word_in_mute_and_kick_is_imported_to_both_lists(self):
+        _, out = self.do_import(self.payload(rules=[{"keyword": "spam", "action": "mute"},
+                                                    {"keyword": "SPAM", "action": "kick"},
+                                                    {"keyword": "spam", "action": "mute"}]))
+        self.assertEqual((out["rules"]["created"], out["rules"]["skipped"]), (2, 1))   # the 3rd repeats the 1st
+
+    def test_bad_items_are_reported_and_do_not_sink_the_rest(self):
+        status, out = self.do_import(self.payload(
+            rules=[{"keyword": "ok", "action": "kick"}, {"keyword": "   ", "action": "kick"},
+                   {"keyword": "x" * 61, "action": "kick"}, {"keyword": "a", "action": "ban"}, "texto solto", 7],
+            messages=[{"content": "boa"}, {"content": ""}, {"content": "m" * 501}, {"nada": 1}]))
+        self.assertEqual(status, 200, out)
+        self.assertEqual((out["rules"]["created"], out["rules"]["invalid"]), (1, 5))
+        self.assertEqual((out["messages"]["created"], out["messages"]["invalid"]), (1, 3))
+        self.assertEqual([i["index"] for i in out["rules"]["invalid_items"]], [1, 2, 3, 4, 5])
+        self.assertEqual(len(self.rules()), 1)
+
+    def test_nothing_in_the_file_can_aim_at_another_user_or_a_robot_setting(self):
+        other_name, other_token, other_uid = new_user("victim")
+        body = self.payload(rules=[{"keyword": "golpe", "action": "kick", "user_id": other_uid}],
+                            messages=[{"content": "oi", "user_id": other_uid}],
+                            user_id=other_uid, settings={"moderation_enabled": False},
+                            robot={"token": "x"}, bot_settings={"kick_permanent": True})
+        status, _ = self.do_import(body)
+        self.assertEqual(status, 200)
+        self.assertEqual(len(self.rules()), 1)                      # landed on the logged-in user
+        self.assertEqual(self.rules(other_token, other_uid), [])
+        self.assertEqual(self.messages(other_token, other_uid), [])
+        self.assertTrue(api("GET", "/settings?user_id=%d" % other_uid, token=other_token)[1]["moderation_enabled"])
+
+    def test_wrong_files_are_refused_with_a_clear_message(self):
+        status, body = self.do_import({"format": "outra-coisa", "version": 1, "rules": []})
+        self.assertEqual(status, 422)
+        self.assertIn("não é um backup", body["detail"])
+        status, body = self.do_import({"format": "atilas-config", "version": 99})
+        self.assertEqual(status, 422)
+        self.assertIn("Versão 99", body["detail"])
+        self.assertEqual(self.do_import({"rules": []})[0], 422)
+
+    def test_needs_a_login_and_a_normal_session(self):
+        self.assertEqual(api("POST", "/config/import", self.payload())[0], 401)
+        self.assertEqual(api("POST", "/config/import", self.payload(), "token-falso")[0], 401)
+
+    def test_a_huge_file_is_refused_before_anything_is_written(self):
+        many = [{"keyword": f"palavra{i}", "action": "kick"} for i in range(5001)]
+        status, _ = self.do_import(self.payload(rules=many))
+        self.assertEqual(status, 422)
+        self.assertEqual(self.rules(), [])
+
+    def test_a_big_legitimate_file_imports_fast(self):
+        def word(i):  # letters only and genuinely distinct: the app's normalisation turns digits into letters
+            letters = "bcdfghjklmnpqrstvwxz"
+            return "".join(letters[(i // len(letters) ** k) % len(letters)] for k in range(4)) + "ar"
+
+        many = [{"keyword": word(i), "action": "kick" if i % 2 else "mute"} for i in range(5000)]
+        started = time.time()
+        status, out = self.do_import(self.payload(rules=many, messages=[{"content": f"msg {i}"} for i in range(500)]))
+        self.assertEqual(status, 200)
+        # the app's normalisation collapses repeated letters, so a few generated words are
+        # (correctly) treated as duplicates; what matters is that all 5000 were processed
+        self.assertEqual(out["rules"]["created"] + out["rules"]["skipped"], 5000)
+        self.assertEqual(out["rules"]["invalid"], 0)
+        self.assertGreater(out["rules"]["created"], 4500)
+        self.assertEqual(out["messages"]["created"], 500)
+        self.assertLess(time.time() - started, 10)
+
+
 class AccountSecurityTests(unittest.TestCase):
     """Sign-up without e-mail, strong passwords, unique usernames, and the
     admin-released one-time password that must be replaced before anything else."""
 
-    GOOD = "pw-teste-4821x"
+    GOOD = "Pw-teste-4821x"
 
     def register(self, username, password=GOOD, **extra):
         body = {"username": username, "password": password, "agency_code": agency_code(), **extra}
@@ -2079,8 +2201,8 @@ class AccountSecurityTests(unittest.TestCase):
         _admin_counter[0] += 1
         username = f"secadmin{_admin_counter[0]}"
         sql("INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
-            (username, security.hash_password("admin-pw-teste-4821x"), "Admin"))
-        status, body = api("POST", "/admin/login", {"username": username, "password": "admin-pw-teste-4821x"})
+            (username, security.hash_password("admin-Pw-teste-4821x"), "Admin"))
+        status, body = api("POST", "/admin/login", {"username": username, "password": "admin-Pw-teste-4821x"})
         assert status == 200, body
         return body["access_token"]
 
@@ -2109,7 +2231,12 @@ class AccountSecurityTests(unittest.TestCase):
     def test_weak_passwords_are_refused_with_a_reason_in_portuguese(self):
         _counter[0] += 1
         name = f"weak{_counter[0]}"
-        for weak in ("curta1", "somenteletrasaqui", "1234567890", "senhasenha1", f"{name}-2026-x", "aaaaaaaaaa1"):
+        for weak in ("Ab!defg",             # 7 caracteres
+                     "Abcdefgh1",           # sem caractere especial
+                     "abcdefg!1",           # sem maiuscula
+                     "Senha@123456",        # senha comum
+                     f"{name.upper()}!2026",  # contem o usuario
+                     "Aaaaaaaa!"):          # caracteres repetidos demais
             status, body = self.register(name, password=weak)
             self.assertEqual(status, 422, (weak, body))
             self.assertTrue(body["detail"].startswith("Senha fraca"), body)
@@ -2117,7 +2244,7 @@ class AccountSecurityTests(unittest.TestCase):
 
     def test_the_display_name_cannot_be_the_password(self):
         _counter[0] += 1
-        status, body = self.register(f"disp{_counter[0]}", password="Fulana-de-Tal1", display_name="Fulana de Tal")
+        status, body = self.register(f"disp{_counter[0]}", password="Fulana-de-Tal!", display_name="Fulana de Tal")
         self.assertEqual(status, 422, body)
 
     # ── unique usernames ──
@@ -2179,7 +2306,7 @@ class AccountSecurityTests(unittest.TestCase):
         self.assertEqual(api("POST", "/auth/change-password",
                              {"current_password": "errada", "new_password": "Nova-senha-9271"}, forced)[0], 400)
         self.assertEqual(api("POST", "/auth/change-password",
-                             {"current_password": temp, "new_password": "curta1"}, forced)[0], 422)
+                             {"current_password": temp, "new_password": "curta1!"}, forced)[0], 422)
         self.assertEqual(api("POST", "/auth/change-password",
                              {"current_password": temp, "new_password": temp}, forced)[0], 400)
         status, done = api("POST", "/auth/change-password",

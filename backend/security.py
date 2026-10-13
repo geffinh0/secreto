@@ -39,7 +39,7 @@ def verify_password(password: str, stored: str):
     return ok, ok
 
 
-PASSWORD_MIN_LENGTH = 10
+PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
 # Passwords people actually pick; compared lowercase and with digits/symbols stripped,
 # so "Senha@123" and "senha1234" are both caught. Kept short on purpose: the length +
@@ -57,16 +57,19 @@ superlive moderator moderador atilas atilasclient
 def password_problems(password: str, username: str = "", display_name: str = "") -> list:
     """Why ``password`` is too weak, in Portuguese (empty list = accepted).
 
-    Length and mixing letters with digits do most of the work; the rest blocks the
-    cheap guesses an agency staff member could try (their own name, the username,
-    the usual "senha123")."""
+    The required shape is: at least 8 characters, one uppercase letter and one special
+    character (anything that is not a letter, digit or space). The rest blocks the cheap
+    guesses an agency staff member could try (their own name, the username, the usual
+    "Senha@123")."""
     problems = []
     if len(password) < PASSWORD_MIN_LENGTH:
         problems.append(f"use pelo menos {PASSWORD_MIN_LENGTH} caracteres")
     if len(password) > PASSWORD_MAX_LENGTH:
         problems.append(f"use no máximo {PASSWORD_MAX_LENGTH} caracteres")
-    if not any(ch.isalpha() for ch in password) or not any(ch.isdigit() for ch in password):
-        problems.append("misture letras e números")
+    if not any(ch.isupper() for ch in password):
+        problems.append("use pelo menos uma letra maiúscula")
+    if not any(not ch.isalnum() and not ch.isspace() for ch in password):
+        problems.append("use pelo menos um caractere especial (como ! @ # $ % & *)")
     lowered = password.lower()
 
     def squeeze(text: str) -> str:  # letters and digits only: "Fulana-de_Tal" == "fulana de tal"

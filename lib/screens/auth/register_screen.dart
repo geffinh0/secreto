@@ -176,7 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                           decoration: InputDecoration(
                             labelText: 'Senha',
                             prefixIcon: const Icon(Icons.lock_rounded),
-                            hintText: 'Mínimo 10 caracteres, com letras e números',
+                            hintText: 'Mínimo 8 caracteres, 1 maiúscula e 1 especial',
                             suffixIcon: IconButton(
                               icon: Icon(_obscurePass
                                   ? Icons.visibility_rounded

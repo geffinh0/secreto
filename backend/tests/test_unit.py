@@ -538,16 +538,20 @@ class ThrottleAwarePollingTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PasswordRulesTests(unittest.TestCase):
-    def test_accepts_a_long_password_with_letters_and_digits(self):
-        self.assertEqual(security.password_problems("Bolo-de-cenoura-42", "maria", "Maria Souza"), [])
+    def test_accepts_exactly_the_required_shape(self):
+        # 8+ characters, one uppercase, one special
+        self.assertEqual(security.password_problems("Bolo!cen", "maria", "Maria Souza"), [])
+        self.assertEqual(security.password_problems("Bolo-de-cenoura", "maria", "Maria Souza"), [])
+        self.assertEqual(security.password_problems("Pa$$w0rdx", "x"), [])      # digits are optional, not required
 
     def test_each_rule_reports_its_own_reason(self):
-        self.assertTrue(any("pelo menos" in p for p in security.password_problems("abc123")))
-        self.assertTrue(any("letras e números" in p for p in security.password_problems("abcdefghijkl")))
-        self.assertTrue(any("nome de usuário" in p for p in security.password_problems("xx-Maria.Souza-91", "maria.souza")))
+        self.assertTrue(any("pelo menos 8" in p for p in security.password_problems("Ab!defg")))
+        self.assertTrue(any("maiúscula" in p for p in security.password_problems("abcdefg!1")))
+        self.assertTrue(any("especial" in p for p in security.password_problems("Abcdefgh1")))
+        self.assertTrue(any("especial" in p for p in security.password_problems("Abcdefg h")))  # a space is not "special"
+        self.assertTrue(any("nome de usuário" in p for p in security.password_problems("xx-Maria.Souza-91!", "maria.souza")))
         self.assertTrue(any("nome de exibição" in p for p in security.password_problems("Fulana_de_Tal-77", "u1", "Fulana de Tal")))
         self.assertTrue(any("comum" in p for p in security.password_problems("Senha@123456")))
-        self.assertTrue(any("sequências" in p for p in security.password_problems("1234567890")))
 
     def test_temporary_passwords_are_random_and_unambiguous(self):
         seen = {security.generate_temp_password() for _ in range(50)}
