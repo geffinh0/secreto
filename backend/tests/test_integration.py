@@ -711,6 +711,46 @@ class LookupStreamerTests(RobotTestBase):
         self.start_live(found["livestream_id"])
         self.assertTrue(self.status()["session"]["running"])
 
+    def test_two_different_portal_users_independently_resolve_the_same_live_streamer(self):
+        """Regression for a real report: a creator being moderated by one portal
+        user/robot appeared "offline" when looked up from a second portal
+        user/robot. Every call in /robot/lookup_streamer builds a fresh
+        SuperLiveClient from THAT user's own stored credentials (see
+        main.py's robot_lookup_streamer) - there is no cache or cross-user
+        state anywhere in the path, so two users must always see the same,
+        correct result for the same streamer, and never see each other's
+        session/robot data.
+        """
+        self.connect_robot()
+        name_b, token_b, uid_b = new_user("robot_b")
+        self.addCleanup(lambda: api("POST", "/robot/disconnect", token=token_b))
+        status, body_b = api("POST", "/robot/connect", {"email": "robot@x.com", "password": "good"}, token_b)
+        self.assertEqual(status, 200, body_b)
+
+        status_a, lookup_a = self.lookup(mock_superlive.STREAMER_SHARED_ID)
+        status_b, lookup_b = api("POST", "/robot/lookup_streamer",
+                                 {"shared_id": mock_superlive.STREAMER_SHARED_ID}, token_b)
+
+        self.assertEqual((status_a, status_b), (200, 200))
+        self.assertEqual(lookup_a, lookup_b)
+        self.assertTrue(lookup_a["live"])
+        self.assertEqual(lookup_a["livestream_id"], "live1")
+
+        # Each user's own device/credentials were used - never shared or reused.
+        device_a = sqlite3.connect(db.DB_PATH).execute(
+            "SELECT device_id FROM robot_accounts WHERE user_id=?", (self.uid,)).fetchone()[0]
+        device_b = sqlite3.connect(db.DB_PATH).execute(
+            "SELECT device_id FROM robot_accounts WHERE user_id=?", (uid_b,)).fetchone()[0]
+        self.assertNotEqual(device_a, device_b)
+        profile_calls = mock.calls_to("users/profile")
+        self.assertEqual({c["headers"]["device-id"] for c in profile_calls}, {device_a, device_b})
+
+        # Starting a session on user B doesn't touch or appear in user A's status.
+        self.start_live("live1")
+        status, body_b_status = api("GET", "/robot/status", token=token_b)
+        self.assertFalse(body_b_status["session"]["running"])
+        self.assertTrue(self.status()["session"]["running"])
+
 
 class ModerationFlowTests(RobotTestBase):
     def test_rules_are_applied_to_the_live_chat(self):
