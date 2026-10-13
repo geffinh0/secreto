@@ -138,7 +138,18 @@ def _message_spacing_seconds() -> float:
     return float(os.getenv("SUPERLIVE_MESSAGE_SPACING_SECONDS", "3"))
 
 
-async def _dispatcher(queue: "asyncio.PriorityQueue") -> None:
+# egress proxy URL -> monotonic time of its last HTTP 429; the watch loop halves
+# its polling budget on an egress that was throttled recently.
+_last_429: dict = {}
+THROTTLE_MEMORY_SECONDS = 300.0
+
+
+def recently_throttled(proxy: str = "") -> bool:
+    ts = _last_429.get(proxy)
+    return ts is not None and time.monotonic() - ts < THROTTLE_MEMORY_SECONDS
+
+
+async def _dispatcher(queue: "asyncio.PriorityQueue", proxy: str = "") -> None:
     """The only coroutine that actually sends anything to SuperLive for a
     given event loop - every request, from every session, passes through
     here one at a time, in priority order. Keeping it as a single
@@ -172,11 +183,14 @@ async def _dispatcher(queue: "asyncio.PriorityQueue") -> None:
                 backoff_429 = min(max(backoff_429 * 2, 2.0), 60.0)
                 pause = min(exc.retry_after or backoff_429, 120.0)
                 cooldown_until = time.monotonic() + pause
+                _last_429[proxy] = time.monotonic()
                 log.warning("SuperLive HTTP 429 em %s: fila global pausada por %.0fs", path, pause)
             if not fut.cancelled():
                 fut.set_exception(exc)
         else:
-            backoff_429 = 0.0
+            # decays instead of resetting: a burst of 429s separated by single
+            # successes keeps escalating the pause rather than starting over at 2s
+            backoff_429 = backoff_429 / 2 if backoff_429 >= 4.0 else 0.0
             if not fut.cancelled():
                 fut.set_result(result)
         finally:
@@ -205,7 +219,7 @@ def _ensure_dispatcher(proxy: str = "") -> asyncio.PriorityQueue:
     entry = _dispatchers.get(key)
     if entry is None or entry[1].done():
         queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
-        task = loop.create_task(_dispatcher(queue), name="superlive-dispatcher")
+        task = loop.create_task(_dispatcher(queue, proxy), name="superlive-dispatcher")
         log.info("superlive dispatcher started for egress %s", _redact_proxy(proxy))
         _dispatchers[key] = (queue, task)
         return queue

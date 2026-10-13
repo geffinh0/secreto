@@ -27,7 +27,7 @@ import db
 import security
 from superlive import (
     PRIORITY_LOW, PRIORITY_NORMAL, USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
-    get_proxy_pool, get_proxy_url, heartbeat_message, leave_message, proxy_for_slot,
+    get_proxy_pool, get_proxy_url, heartbeat_message, leave_message, proxy_for_slot, recently_throttled,
 )
 
 
@@ -1431,6 +1431,8 @@ class WatchManager:
         base * her own multiplier m, so hot creators are looked at often and cold
         ones rarely while the egress still sends only ~budget requests/s."""
         budget = _poll_budget()
+        if recently_throttled(proxy):
+            budget /= 2  # this egress got a 429 lately: poll half as much for a while
         mults = [self._mult.get(u, 1.0) for u, p in self._egress.items() if p == proxy] or [1.0]
 
         def floor(m: float) -> float:
@@ -1511,8 +1513,15 @@ class WatchManager:
                 priority = PRIORITY_NORMAL if user_id in self._urgent else PRIORITY_LOW
                 self._urgent.discard(user_id)
                 result = await client.find_live_by_shared_id(watch["shared_id"], priority)
-            except SuperLiveError:
+            except SuperLiveError as exc:
+                # a failed lookup is "unknown", not "offline": keep the two apart in the log
+                # (two accounts on one streamer once disagreed and nothing showed why)
+                log.warning("watch %s: lookup of %s failed (HTTP %s, egress slot %s): %s",
+                            user_id, watch["shared_id"], exc.status, slot, exc)
                 result = None
+            else:
+                log.debug("watch %s: lookup of %s -> live=%s livestream_id=%s (egress slot %s)",
+                          user_id, watch["shared_id"], result.get("live"), result.get("livestream_id"), slot)
 
             session = self._sessions.get(user_id)
             is_live = bool(result and result.get("live") and result.get("livestream_id"))

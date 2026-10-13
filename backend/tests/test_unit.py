@@ -510,6 +510,33 @@ class Dispatcher429Tests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(calls[1][1] - calls[0][1], 0.28)
 
 
+class ThrottleAwarePollingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_429_marks_the_egress_and_halves_its_polling_budget(self):
+        import superlive
+        from engine import WatchManager
+
+        def fake_post(self, path, body, auth):
+            raise SuperLiveError("slow down", 429, None, retry_after=0.01)
+
+        proxy = "socks5h://throttled-egress:1080"
+        superlive._last_429.pop(proxy, None)
+        self.assertFalse(superlive.recently_throttled(proxy))
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), \
+                mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0"}):
+            with self.assertRaises(SuperLiveError):
+                await SuperLiveClient("t", "d", proxy_url=proxy).post("a", {})
+        self.assertTrue(superlive.recently_throttled(proxy))
+        self.assertFalse(superlive.recently_throttled("socks5h://other:1080"))
+
+        mgr = WatchManager.__new__(WatchManager)
+        mgr._mult = {i: 1.0 for i in range(150)}
+        mgr._egress = {i: proxy for i in range(150)}
+        throttled = mgr._poll_interval(proxy, 0)
+        superlive._last_429.pop(proxy, None)
+        normal = mgr._poll_interval(proxy, 0)
+        self.assertGreater(throttled, normal * 1.6)
+
+
 class EgressPoolTests(unittest.IsolatedAsyncioTestCase):
     """Scale: one serial queue PER egress IP (the SuperLive collision rule is per IP),
     background polling shed first, and a fixed least-loaded egress per user."""
