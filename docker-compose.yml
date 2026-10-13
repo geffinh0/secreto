@@ -56,6 +56,11 @@ services:
       # changed) everyone simply looks like the proxy again - the old behaviour,
       # never an attacker-chosen address.
       FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-172.28.0.10}"
+      # Failed logins allowed per client IP per 5 minutes (per username it is
+      # always 8). 50 is the safe default while the real client IP may not reach
+      # the backend; with FORWARDED_ALLOW_IPS listing the cata-pobre proxy (it
+      # does, pinned at 172.19.0.3) 10-15 is reasonable. Set it in .env.
+      SM_LOGIN_IP_MAX: "${SM_LOGIN_IP_MAX:-50}"
       # The robot's SuperLive token is encrypted at rest with the key in this
       # file (a Docker secret, below) - a path, not the key itself, so
       # `docker inspect` shows nothing useful. Missing/unreadable key = the robot
