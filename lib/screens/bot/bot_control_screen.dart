@@ -910,6 +910,7 @@ class _LiveControlCardState extends State<_LiveControlCard> {
               running: running,
               sessionState: session.state,
               isBusy: _togglingWatch || bot.isBusy,
+              watchWaitingSeconds: session.watchWaitingSeconds,
               onToggle: (active) =>
                   _toggleWatch(active, sharedId: bot.watch.sharedId),
             ),
@@ -1221,13 +1222,24 @@ class _FavoriteStreamerCard extends StatelessWidget {
   final bool isBusy;
   final ValueChanged<bool> onToggle;
 
+  /// Seconds since the robot noticed it's parked on a livestream_id that
+  /// still matches what it was stopped on - see RobotSession.watchWaitingSeconds.
+  final double? watchWaitingSeconds;
+
   const _FavoriteStreamerCard({
     required this.watch,
     required this.running,
     required this.sessionState,
     required this.isBusy,
     required this.onToggle,
+    this.watchWaitingSeconds,
   });
+
+  static String _roundedDuration(double seconds) {
+    if (seconds < 60) return '${seconds.round()}s';
+    final minutes = (seconds / 60).round();
+    return minutes == 1 ? '1 minuto' : '$minutes minutos';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1237,6 +1249,7 @@ class _FavoriteStreamerCard extends StatelessWidget {
     final IconData badgeIcon;
 
     final isWaiting = sessionState == 'waiting_for_live';
+    final isStuckOnOldId = watchWaitingSeconds != null;
 
     if (!watch.active) {
       badgeLabel = 'Desativada';
@@ -1248,6 +1261,20 @@ class _FavoriteStreamerCard extends StatelessWidget {
       statusDescription = 'A transmissão anterior encerrou. O robô continua vigilante para a próxima live.';
       badgeColor = AppTheme.warning;
       badgeIcon = Icons.hourglass_top_rounded;
+    } else if (isStuckOnOldId) {
+      // Distinct from "Sentinela armada" on purpose: this isn't "never
+      // connected yet", it's "was stopped, and the lookup keeps resolving the
+      // same transmissão it was stopped on" - a real, different situation that
+      // used to look identical to "armed" in this card (see the bug report
+      // this was built for). "Iniciar moderação manual" with a fresh id typed
+      // in, below, is the manual way out while it's waiting.
+      badgeLabel = 'Aguardando nova transmissão';
+      statusDescription = 'O robô foi parado numa transmissão que ainda não mudou de ID segundo o '
+          'SuperLive - esperando há ${_roundedDuration(watchWaitingSeconds!)}. Não reinicia sozinho '
+          'na mesma transmissão em que foi parado; se achar que já é uma live nova, '
+          'informe o ID manualmente abaixo.';
+      badgeColor = AppTheme.info;
+      badgeIcon = Icons.sync_problem_rounded;
     } else if (running) {
       badgeLabel = 'Moderando ao vivo';
       statusDescription = 'Conectado à transmissão agora. Aplicando regras de moderação em tempo real.';
@@ -1269,9 +1296,11 @@ class _FavoriteStreamerCard extends StatelessWidget {
           color: watch.active
               ? (isWaiting
                   ? AppTheme.warning.withValues(alpha: 0.45)
-                  : running
-                      ? AppTheme.success.withValues(alpha: 0.45)
-                      : AppTheme.primary.withValues(alpha: 0.35))
+                  : isStuckOnOldId
+                      ? AppTheme.info.withValues(alpha: 0.45)
+                      : running
+                          ? AppTheme.success.withValues(alpha: 0.45)
+                          : AppTheme.primary.withValues(alpha: 0.35))
               : AppTheme.border,
         ),
       ),

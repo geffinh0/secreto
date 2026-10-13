@@ -1167,6 +1167,42 @@ class StreamerWatchTests(RobotTestBase):
         finally:
             engine.WATCH_POLL_INTERVAL_SECONDS = old_poll
 
+    def test_reports_watch_waiting_seconds_while_stuck_on_the_stopped_live(self):
+        """Regression for a real bug report: a second account's robot, manually
+        stopped on a live that hadn't actually ended yet from SuperLive's point
+        of view, sat silently "waiting" with no visible indication why - it
+        looked identical to never having started. `watch_waiting_seconds` (and
+        the UI it feeds) should say so as soon as the watch loop notices."""
+        old_poll = engine.WATCH_POLL_INTERVAL_SECONDS
+        engine.WATCH_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.connect_robot()
+            self.watch()  # already live on "live1" -> auto-starts immediately
+            wait_for(lambda: self.status()["session"]["running"], 5)
+
+            api("POST", "/robot/stop", token=self.token)
+            wait_for(lambda: self.status()["session"]["state"] == "stopped", 5)
+            self.assertIsNone(self.status()["session"]["watch_waiting_seconds"])
+
+            # The streamer hasn't actually changed broadcast yet (still "live1") -
+            # the watch loop should recognise it's stuck on the same id and say so,
+            # instead of silently doing nothing.
+            wait_for(lambda: self.status()["session"]["watch_waiting_seconds"] is not None,
+                     5, "watch_waiting_seconds was never set while stuck on the same live")
+            self.assertGreaterEqual(self.status()["session"]["watch_waiting_seconds"], 0)
+            self.assertEqual(self.status()["session"]["state"], "stopped")
+
+            # Once she genuinely moves to a new broadcast, it resumes - and the
+            # flag clears, because it's now a fresh session.
+            mock.end_live(STREAMER_ID, "live1")
+            mock.start_new_live(STREAMER_ID, "live4")
+            wait_for(lambda: self.status()["session"]["running"]
+                     and self.status()["session"]["livestream_id"] == "live4",
+                     5, "did not resume once a genuinely new live appeared")
+            self.assertIsNone(self.status()["session"]["watch_waiting_seconds"])
+        finally:
+            engine.WATCH_POLL_INTERVAL_SECONDS = old_poll
+
     def test_watches_are_re_armed_on_restart(self):
         # What `lifespan()` does at startup - re-arm every active watch row.
         self.connect_robot()

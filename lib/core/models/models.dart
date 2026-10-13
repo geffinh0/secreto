@@ -470,6 +470,13 @@ class RobotSession {
   final String? livestreamId;
   final DateTime? startedAt;
   final String? stopReason;
+
+  /// Non-null only while [state] is 'stopped' AND the robot is still favourited
+  /// on this same streamer: the watch loop found her live, but still under the
+  /// exact livestream_id this session was stopped on, so it's deliberately not
+  /// auto-restarting yet (see backend WatchManager) - waiting for a genuinely
+  /// new id, not stuck/broken. How long that's been true, in seconds.
+  final double? watchWaitingSeconds;
   final String? lastError;
   final int messagesSent;
   final int chatSeen;
@@ -485,6 +492,7 @@ class RobotSession {
     this.livestreamId,
     this.startedAt,
     this.stopReason,
+    this.watchWaitingSeconds,
     this.lastError,
     this.messagesSent = 0,
     this.chatSeen = 0,
@@ -508,6 +516,7 @@ class RobotSession {
       livestreamId: json['livestream_id']?.toString(),
       startedAt: parseDate(json['started_at']),
       stopReason: json['stop_reason'] as String?,
+      watchWaitingSeconds: (json['watch_waiting_seconds'] as num?)?.toDouble(),
       lastError: json['last_error'] as String?,
       messagesSent: asInt(counters['messages_sent']),
       chatSeen: asInt(counters['chat_seen']),

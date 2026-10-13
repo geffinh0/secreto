@@ -260,6 +260,13 @@ class BotSession:
         self.stop_reason = None
         self.last_error = None           # moderation / message / auth problems
         self.ws_error = None             # transient connection problems (cleared on reconnect)
+        # Set by WatchManager while this (stopped) session's own livestream_id is
+        # still what the favourited-streamer lookup resolves to - i.e. genuinely
+        # waiting for her to go live under a NEW id before auto-restarting, not
+        # stuck/broken. Exposed so the UI can say that plainly instead of just
+        # "não está ao vivo", which used to read the same as never having gone
+        # live at all. See WatchManager._watch_loop.
+        self._watch_stuck_since: Optional[float] = None
         self.streamer_id: Optional[str] = None
         self.streamer_shared_id: Optional[str] = None
         self.watch_shared_id: Optional[str] = None
@@ -1078,6 +1085,10 @@ class BotSession:
             "livestream_id": self.livestream_id,
             "started_at": self.started_at,
             "stop_reason": self.stop_reason,
+            "watch_waiting_seconds": (
+                time.monotonic() - self._watch_stuck_since
+                if self._watch_stuck_since is not None else None
+            ),
             "last_error": self.last_error or (self.ws_error if self.ws_state != "connected" else None),
             "counters": {
                 "messages_sent": self.messages_sent,
@@ -1094,7 +1105,7 @@ class BotSession:
 
 IDLE_SNAPSHOT = {
     "running": False, "state": "idle", "ws_state": "disconnected", "livestream_id": None,
-    "started_at": None, "stop_reason": None, "last_error": None,
+    "started_at": None, "stop_reason": None, "watch_waiting_seconds": None, "last_error": None,
     "counters": {"messages_sent": 0, "chat_seen": 0, "actions_ok": 0, "actions_failed": 0},
     "alerts": [], "last_live_summary": None,
     "recent_chat": [], "recent_actions": [],
@@ -1208,11 +1219,13 @@ class WatchManager:
                     # second account's lookup kept resolving the OLD, just-ended one for
                     # several poll cycles in a row).
                     if session is not None and session.state == "stopped" and session.livestream_id == current_live_id:
-                        log.info(
-                            "session %s: watch lookup still resolves the just-ended live %s - "
-                            "waiting for a genuinely new livestream_id before auto-restarting",
-                            user_id, current_live_id,
-                        )
+                        if session._watch_stuck_since is None:
+                            session._watch_stuck_since = time.monotonic()
+                            log.info(
+                                "session %s: watch lookup still resolves the just-ended live %s - "
+                                "waiting for a genuinely new livestream_id before auto-restarting",
+                                user_id, current_live_id,
+                            )
                     else:
                         try:
                             new_sess = await self._sessions.start(
