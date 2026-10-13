@@ -1379,6 +1379,7 @@ class WatchManager:
         # shared_id -> {user_id: (monotonic, is_live, livestream_id)}: what each robot's
         # last lookup of that streamer answered, to flag two robots disagreeing.
         self._last_lookup: dict[str, dict[int, tuple]] = {}
+        self._diverge_warned: dict[str, float] = {}
         self._urgent: set = set()  # users whose next poll must not be shed
 
     def is_watching(self, user_id: int) -> bool:
@@ -1482,6 +1483,9 @@ class WatchManager:
                      user_id, shared_id, is_live, live_id, slot)
         for other, (ts, o_live, o_id) in seen.items():
             if other != user_id and now - ts < 120 and (o_live, o_id) != (is_live, live_id):
+                if now - self._diverge_warned.get(str(shared_id), -1e9) < 600:
+                    break  # already reported recently; the disagreement persists, don't repeat every poll
+                self._diverge_warned[str(shared_id)] = now
                 log.warning("watch divergence on %s: user %s sees live=%s id=%s, user %s sees live=%s id=%s "
                             "(slots differ or same? this one: %s)",
                             shared_id, user_id, is_live, live_id, other, o_live, o_id, slot)

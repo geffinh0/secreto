@@ -542,6 +542,7 @@ class WatchLookupLoggingTests(unittest.TestCase):
         from engine import WatchManager
         mgr = WatchManager.__new__(WatchManager)
         mgr._last_lookup = {}
+        mgr._diverge_warned = {}
         return mgr
 
     def test_logs_only_changes_and_warns_when_two_robots_disagree(self):
@@ -553,6 +554,15 @@ class WatchLookupLoggingTests(unittest.TestCase):
         text = "\n".join(cm.output)
         self.assertEqual(text.count("lookup of 69"), 2)
         self.assertIn("watch divergence on 69", text)
+
+    def test_a_persistent_disagreement_is_reported_once_not_every_poll(self):
+        mgr = self._mgr()
+        with self.assertLogs("super_moderator.engine", level="WARNING") as cm:
+            mgr._note_lookup(1, "69", 0, True, "L1")
+            for _ in range(5):
+                mgr._note_lookup(2, "69", 0, False, None)
+                mgr._note_lookup(1, "69", 0, True, "L1")
+        self.assertEqual("\n".join(cm.output).count("watch divergence"), 1)
 
     def test_agreeing_robots_do_not_warn(self):
         mgr = self._mgr()
