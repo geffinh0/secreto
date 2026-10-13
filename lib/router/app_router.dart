@@ -10,6 +10,7 @@ import '../screens/messages/auto_messages_screen.dart';
 import '../screens/bot/bot_control_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/stats/stats_screen.dart';
+import '../screens/admin/admin_screen.dart';
 import '../widgets/shell/main_shell.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
@@ -42,6 +43,15 @@ GoRouter createRouter(AuthProvider authProvider) {
       }
       if (!isAuth && !isAuthRoute) return '/login';
       if (isAuth && isAuthRoute) return '/dashboard';
+
+      // /admin is a separate route on purpose (outside MainShell's bottom
+      // nav/sidebar) - see GUIA.../relatório do painel administrativo. Still
+      // gated the same way as everything else: only an is_admin account gets
+      // past this redirect, checked fresh on every navigation (not cached in
+      // the UI), since isAuthenticated alone isn't enough here.
+      if (location.startsWith('/admin') && !(authProvider.user?.isAdmin ?? false)) {
+        return '/dashboard';
+      }
       return null;
     },
     refreshListenable: authProvider,
@@ -60,6 +70,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),

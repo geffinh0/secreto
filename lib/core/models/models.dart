@@ -691,3 +691,124 @@ class ModerationStats {
             .toList(),
       );
 }
+
+/// ===== ADMIN PANEL MODELS =====
+/// Only ever populated for an is_admin account (GET /admin/*) - see
+/// AdminProvider. Deliberately cross-user; never used anywhere else.
+
+class AdminRobotInfo {
+  final String? nickname;
+  final String? authMode;
+  const AdminRobotInfo({this.nickname, this.authMode});
+
+  factory AdminRobotInfo.fromJson(Map<String, dynamic> json) => AdminRobotInfo(
+        nickname: json['nickname'] as String?,
+        authMode: json['auth_mode'] as String?,
+      );
+}
+
+class AdminUserSummary {
+  final int id;
+  final String username;
+  final String email;
+  final String? displayName;
+  final bool isAdmin;
+  final DateTime? createdAt;
+  final AdminRobotInfo? robot;
+
+  /// 'não configurado' | 'conectado (parado)' | 'aguardando' | 'ativo' | 'erro'
+  final String robotStatus;
+  final String? sessionState;
+  final String? sessionLivestreamId;
+  final bool watchActive;
+  final String? watchNickname;
+  final int rulesCount;
+  final int messagesCount;
+
+  const AdminUserSummary({
+    required this.id,
+    required this.username,
+    required this.email,
+    this.displayName,
+    this.isAdmin = false,
+    this.createdAt,
+    this.robot,
+    this.robotStatus = 'não configurado',
+    this.sessionState,
+    this.sessionLivestreamId,
+    this.watchActive = false,
+    this.watchNickname,
+    this.rulesCount = 0,
+    this.messagesCount = 0,
+  });
+
+  factory AdminUserSummary.fromJson(Map<String, dynamic> json) => AdminUserSummary(
+        id: asInt(json['id']),
+        username: json['username'] as String? ?? '',
+        email: json['email'] as String? ?? '',
+        displayName: json['display_name'] as String?,
+        isAdmin: asBool(json['is_admin']),
+        createdAt: parseDate(json['created_at']),
+        robot: json['robot'] is Map
+            ? AdminRobotInfo.fromJson((json['robot'] as Map).cast<String, dynamic>())
+            : null,
+        robotStatus: json['robot_status'] as String? ?? 'não configurado',
+        sessionState: json['session_state'] as String?,
+        sessionLivestreamId: json['session_livestream_id'] as String?,
+        watchActive: asBool(json['watch_active']),
+        watchNickname: json['watch_nickname'] as String?,
+        rulesCount: asInt(json['rules_count']),
+        messagesCount: asInt(json['messages_count']),
+      );
+}
+
+class AdminSessionSummary {
+  final int userId;
+  final String username;
+  final String state;
+  final String wsState;
+  final String? livestreamId;
+  final DateTime? startedAt;
+  final String? stopReason;
+  final double? watchWaitingSeconds;
+  final String? lastError;
+  final int messagesSent;
+  final int chatSeen;
+  final int actionsOk;
+  final int actionsFailed;
+
+  const AdminSessionSummary({
+    required this.userId,
+    required this.username,
+    this.state = 'idle',
+    this.wsState = 'disconnected',
+    this.livestreamId,
+    this.startedAt,
+    this.stopReason,
+    this.watchWaitingSeconds,
+    this.lastError,
+    this.messagesSent = 0,
+    this.chatSeen = 0,
+    this.actionsOk = 0,
+    this.actionsFailed = 0,
+  });
+
+  factory AdminSessionSummary.fromJson(Map<String, dynamic> json) {
+    final counters = (json['counters'] as Map?)?.cast<String, dynamic>() ?? {};
+    return AdminSessionSummary(
+      userId: asInt(json['user_id']),
+      username: json['username'] as String? ?? '',
+      state: json['state'] as String? ?? 'idle',
+      wsState: json['ws_state'] as String? ?? 'disconnected',
+      livestreamId: json['livestream_id'] as String?,
+      startedAt: parseDate(json['started_at']),
+      stopReason: json['stop_reason'] as String?,
+      watchWaitingSeconds: (json['watch_waiting_seconds'] as num?)?.toDouble(),
+      lastError: json['last_error'] as String?,
+      messagesSent: asInt(counters['messages_sent']),
+      chatSeen: asInt(counters['chat_seen']),
+      actionsOk: asInt(counters['actions_ok']),
+      actionsFailed: asInt(counters['actions_failed']),
+    );
+  }
+}

@@ -7,6 +7,7 @@ import 'providers/bot_provider.dart';
 import 'providers/moderation_provider.dart';
 import 'providers/auto_message_provider.dart';
 import 'providers/stats_provider.dart';
+import 'providers/admin_provider.dart';
 import 'router/app_router.dart';
 import 'package:go_router/go_router.dart';
 
@@ -33,6 +34,7 @@ class SuperModeratorApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ModerationProvider()),
         ChangeNotifierProvider(create: (_) => AutoMessageProvider()),
         ChangeNotifierProvider(create: (_) => StatsProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: const _AppWithRouter(),
     );

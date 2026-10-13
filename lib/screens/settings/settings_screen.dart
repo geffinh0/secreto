@@ -7,6 +7,7 @@ import '../../core/services/portal_api_service.dart';
 import '../../core/services/pwa_install_service.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
 import '../../widgets/common/gradient_button.dart';
@@ -53,6 +54,33 @@ class SettingsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
+
+          if (user?.isAdmin ?? false) ...[
+            _SectionCard(
+              title: 'Administração',
+              accent: AppTheme.secondary,
+              children: [
+                const Text(
+                  'Visão geral de todas as usuárias, status do robô de cada uma '
+                  'e sessões de moderação ativas agora. Só leitura.',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.5),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/admin'),
+                  icon: const Icon(Icons.admin_panel_settings_rounded, size: 18),
+                  label: const Text('Abrir painel administrativo'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.secondary,
+                    side: BorderSide(color: AppTheme.secondary.withValues(alpha: 0.5)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
 
           // Robot account section
           _SectionCard(

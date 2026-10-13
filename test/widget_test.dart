@@ -9,9 +9,11 @@ import 'package:atilas_client/core/constants/app_constants.dart';
 import 'package:atilas_client/core/models/models.dart';
 import 'package:atilas_client/core/services/portal_api_service.dart';
 import 'package:atilas_client/core/theme/app_theme.dart';
+import 'package:atilas_client/providers/admin_provider.dart';
 import 'package:atilas_client/providers/auth_provider.dart';
 import 'package:atilas_client/providers/auto_message_provider.dart';
 import 'package:atilas_client/providers/bot_provider.dart';
+import 'package:atilas_client/screens/admin/admin_screen.dart';
 import 'package:atilas_client/screens/auth/login_screen.dart';
 import 'package:atilas_client/screens/bot/bot_control_screen.dart';
 
@@ -643,6 +645,65 @@ void main() {
       final liveIdField =
           tester.widget<TextField>(find.widgetWithText(TextField, 'ID da Live (livestream_id)'));
       expect(liveIdField.controller!.text, isEmpty); // not filled when she's offline
+    });
+
+    testWidgets('admin screen lists users and active sessions from /admin/*',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1200, 2400);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final api = FakeApi()
+        ..on('GET /admin/users', ok([
+          {
+            'id': 1, 'username': 'geffinho', 'email': 'g@x.com', 'display_name': 'Geffinho',
+            'is_admin': true, 'created_at': '2026-01-01T00:00:00+00:00',
+            'robot': {'nickname': 'Átila', 'auth_mode': 'password'},
+            'robot_status': 'ativo', 'session_state': 'running',
+            'session_livestream_id': 'live9', 'watch_active': true,
+            'watch_nickname': 'Nyx', 'rules_count': 12, 'messages_count': 3,
+          },
+          {
+            'id': 2, 'username': 'nyx', 'email': 'n@x.com', 'display_name': null,
+            'is_admin': false, 'created_at': '2026-02-01T00:00:00+00:00',
+            'robot': null, 'robot_status': 'não configurado', 'session_state': null,
+            'session_livestream_id': null, 'watch_active': false,
+            'watch_nickname': null, 'rules_count': 0, 'messages_count': 0,
+          },
+        ]))
+        ..on('GET /admin/sessions', ok([
+          {
+            'user_id': 1, 'username': 'geffinho', 'state': 'running', 'ws_state': 'connected',
+            'livestream_id': 'live9', 'started_at': '2026-10-13T12:00:00+00:00',
+            'stop_reason': null, 'watch_waiting_seconds': null, 'last_error': null,
+            'counters': {'messages_sent': 2, 'chat_seen': 40, 'actions_ok': 5, 'actions_failed': 0},
+          },
+        ]));
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AdminProvider>(create: (_) => AdminProvider(api: api)),
+          ],
+          child: MaterialApp(theme: AppTheme.darkTheme, home: const AdminScreen()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+
+      expect(find.text('Painel Administrativo'), findsOneWidget);
+      expect(find.text('Usuárias (2)'), findsOneWidget);
+      expect(find.text('Geffinho'), findsOneWidget);
+      expect(find.text('nyx'), findsOneWidget); // falls back to username, no display_name
+      expect(find.text('ativo'), findsOneWidget);
+      expect(find.text('não configurado'), findsOneWidget);
+
+      await tester.tap(find.text('Sessões ativas (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('@geffinho'), findsOneWidget);
+      expect(find.text('Moderando ao vivo'), findsOneWidget);
     });
   });
 }

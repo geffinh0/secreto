@@ -1121,6 +1121,12 @@ class SessionManager:
     def get(self, user_id: int) -> Optional[BotSession]:
         return self._sessions.get(user_id)
 
+    def all_sessions(self) -> dict:
+        """user_id -> BotSession for every session currently held in memory
+        (any state, not just active ones) - read-only, for the admin panel's
+        session monitor. Never used by any per-user endpoint."""
+        return dict(self._sessions)
+
     async def start(self, user_id: int, client: SuperLiveClient, robot_sl_id,
                     livestream_id: str, ws_url_override: Optional[str] = None) -> BotSession:
         current = self._sessions.get(user_id)

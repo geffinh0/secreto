@@ -1415,6 +1415,77 @@ class ActivityLogTests(RobotTestBase):
         self.assertEqual(self.activity()[0]["action"], "login")
 
 
+# ── admin panel (read-only cross-user oversight) ──────────────────────────────
+class AdminPanelTests(RobotTestBase):
+    """/admin/* is the one place in the API that's deliberately cross-user -
+    everything else in this file enforces "only your own data"
+    (require_owner/get_owned). These tests make sure that's gated correctly:
+    only is_admin accounts get in, nobody's password hash or robot
+    token/device_id ever appears in the response, and the data is real."""
+
+    def make_admin(self):
+        sql("UPDATE users SET is_admin = 1 WHERE id = ?", (self.uid,))
+
+    def test_non_admin_is_refused(self):
+        status, body = api("GET", "/admin/users", token=self.token)
+        self.assertEqual(status, 403)
+        status, body = api("GET", "/admin/sessions", token=self.token)
+        self.assertEqual(status, 403)
+
+    def test_admin_sees_every_user_not_just_their_own(self):
+        self.make_admin()
+        name_b, token_b, uid_b = new_user("admin_target")
+        self.addCleanup(lambda: api("POST", "/robot/disconnect", token=token_b))
+
+        status, body = api("GET", "/admin/users", token=self.token)
+        self.assertEqual(status, 200, body)
+        ids = {u["id"] for u in body}
+        self.assertIn(self.uid, ids)
+        self.assertIn(uid_b, ids)
+
+    def test_never_leaks_password_hash_or_robot_secrets(self):
+        self.make_admin()
+        self.connect_robot()
+        status, body = api("GET", "/admin/users", token=self.token)
+        self.assertEqual(status, 200, body)
+        dump = json.dumps(body)
+        self.assertNotIn("password_hash", dump)
+        self.assertNotIn("tok-robot", dump)  # the mock's robot token
+        mine = next(u for u in body if u["id"] == self.uid)
+        self.assertNotIn("token", mine.get("robot") or {})
+        self.assertNotIn("device_id", mine.get("robot") or {})
+
+    def test_robot_status_reflects_reality(self):
+        self.make_admin()
+        status, body = api("GET", "/admin/users", token=self.token)
+        mine = next(u for u in body if u["id"] == self.uid)
+        self.assertEqual(mine["robot_status"], "não configurado")
+
+        self.connect_robot()
+        mine = next(u for u in api("GET", "/admin/users", token=self.token)[1] if u["id"] == self.uid)
+        self.assertEqual(mine["robot_status"], "conectado (parado)")
+
+        self.start_live()
+        mine = next(u for u in api("GET", "/admin/users", token=self.token)[1] if u["id"] == self.uid)
+        self.assertEqual(mine["robot_status"], "ativo")
+
+    def test_sessions_endpoint_lists_an_active_session_across_users(self):
+        self.make_admin()
+        self.connect_robot()
+        self.start_live()
+
+        status, body = api("GET", "/admin/sessions", token=self.token)
+        self.assertEqual(status, 200, body)
+        mine = next(s for s in body if s["user_id"] == self.uid)
+        self.assertEqual(mine["state"], "running")
+        self.assertEqual(mine["livestream_id"], "live1")
+        self.assertIn("username", mine)
+
+    def test_admin_endpoints_still_require_a_valid_token(self):
+        self.assertEqual(api("GET", "/admin/users")[0], 401)
+        self.assertEqual(api("GET", "/admin/sessions")[0], 401)
+
+
 # ── upgrading a database created by the previous version ─────────────────────
 class MigrationTests(unittest.TestCase):
     def test_existing_database_is_upgraded_without_losing_data(self):

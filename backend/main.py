@@ -1159,6 +1159,106 @@ def get_stats(user_id: int, days: int = 30, current_user: dict = Depends(get_cur
     return db.get_stats(conn, user_id, days=max(1, min(days, 365)))
 
 
+# ─── Admin (read-only oversight: users, robots, live sessions) ──────────────
+def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """Separate from require_owner/get_owned - those enforce "only your own
+    data"; this is the opposite: deliberately cross-user, but only for an
+    account flagged is_admin. Every /admin/* route depends on this, never on
+    get_current_user alone."""
+    if not current_user.get("is_admin"):
+        raise HTTPException(403, "Acesso restrito a administradores")
+    return current_user
+
+
+def _robot_admin_status(robot, session) -> str:
+    if robot is None:
+        return "não configurado"
+    if session is None:
+        return "conectado (parado)"
+    if session.state == "error":
+        return "erro"
+    if session.state in ("starting", "waiting_for_live"):
+        return "aguardando"
+    if session.state == "running":
+        return "ativo"
+    return "conectado (parado)"
+
+
+@app.get("/admin/users")
+def admin_list_users(admin: dict = Depends(require_admin), conn: sqlite3.Connection = Depends(get_db)):
+    """One row per portal user: account info + robot/session/rule counts.
+    Never includes password_hash, robot token or device_id - same "secrets
+    never leave the server" rule as every other endpoint, just also enforced
+    here for an admin looking at OTHER people's accounts."""
+    rows = conn.execute("SELECT * FROM users ORDER BY id ASC").fetchall()
+    result = []
+    for row in rows:
+        u = row_to_dict(row)
+        uid = u["id"]
+        robot = db.get_robot(conn, uid)
+        session = sessions.get(uid)
+        watch = db.get_watch(conn, uid)
+        rules_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM moderation_rules WHERE user_id = ?", (uid,)).fetchone()["n"]
+        messages_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM auto_messages WHERE user_id = ?", (uid,)).fetchone()["n"]
+        result.append({
+            "id": uid,
+            "username": u["username"],
+            "email": u["email"],
+            "display_name": u["display_name"],
+            "is_admin": bool(u["is_admin"]),
+            "created_at": u["created_at"],
+            "robot": None if robot is None else {
+                "nickname": robot["nickname"],
+                "auth_mode": robot["auth_mode"],
+            },
+            "robot_status": _robot_admin_status(robot, session),
+            "session_state": session.state if session else None,
+            "session_livestream_id": session.livestream_id if session else None,
+            "watch_active": bool(watch and watch["active"]),
+            "watch_nickname": watch.get("nickname") if watch else None,
+            "rules_count": rules_count,
+            "messages_count": messages_count,
+        })
+    return result
+
+
+@app.get("/admin/sessions")
+def admin_list_sessions(admin: dict = Depends(require_admin), conn: sqlite3.Connection = Depends(get_db)):
+    """Every bot session currently held in memory, across every user, for
+    monitoring - which lives are being moderated right now and the state of
+    each connection. Read-only: no chat content, just state/counters."""
+    all_sess = sessions.all_sessions()
+    usernames: dict[int, str] = {}
+    if all_sess:
+        placeholders = ",".join("?" * len(all_sess))
+        rows = conn.execute(
+            f"SELECT id, username FROM users WHERE id IN ({placeholders})",
+            tuple(all_sess.keys()),
+        ).fetchall()
+        usernames = {r["id"]: r["username"] for r in rows}
+
+    order = {"running": 0, "starting": 1, "waiting_for_live": 2, "stopping": 3, "stopped": 4, "error": 5}
+    result = []
+    for uid, session in all_sess.items():
+        snap = session.snapshot()
+        result.append({
+            "user_id": uid,
+            "username": usernames.get(uid, f"usuário #{uid}"),
+            "state": snap["state"],
+            "ws_state": snap["ws_state"],
+            "livestream_id": snap["livestream_id"],
+            "started_at": snap["started_at"],
+            "stop_reason": snap["stop_reason"],
+            "watch_waiting_seconds": snap["watch_waiting_seconds"],
+            "last_error": snap["last_error"],
+            "counters": snap["counters"],
+        })
+    result.sort(key=lambda s: order.get(s["state"], 9))
+    return result
+
+
 # ─── Health check ────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
