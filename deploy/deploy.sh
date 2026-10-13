@@ -78,7 +78,9 @@ say "4/7 build das imagens novas (nada e derrubado ainda)"
 docker compose build
 
 # o container roda como `appuser`; a chave (modo 400) precisa pertencer a esse uid
-BACKEND_UID=$(docker compose run --rm --no-deps --entrypoint id backend -u | tr -d '\r')
+# (docker run direto na imagem: `compose run` tentaria pegar o IP fixo do backend, que ja esta em uso)
+BACKEND_IMAGE=$(docker compose config --images | grep -- '-backend$' | head -n1)
+BACKEND_UID=$(docker run --rm --no-healthcheck --entrypoint id "$BACKEND_IMAGE" -u | tr -d '\r')
 docker run --rm -v "$PWD/secrets:/s" --entrypoint chown nginx:alpine "$BACKEND_UID" /s/sm_token_key
 
 if running "$BACKEND"; then
