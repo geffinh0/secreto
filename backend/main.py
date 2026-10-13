@@ -44,7 +44,10 @@ logging.basicConfig(
 
 sessions = SessionManager()
 watchers = WatchManager(sessions)
-throttle = security.LoginThrottle()
+# 8 failures lock one username; the per-IP budget is higher because until the
+# real client IP is trusted (FORWARDED_ALLOW_IPS) it may be one bucket for everyone.
+LOGIN_IP_MAX_FAILURES = int(os.getenv("SM_LOGIN_IP_MAX", "50"))
+throttle = security.LoginThrottle(ip_max_failures=LOGIN_IP_MAX_FAILURES)
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -119,6 +122,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.exception_handler(security.RobotKeyUnavailable)
+async def _robot_key_unavailable(_request: Request, exc: security.RobotKeyUnavailable):
+    # Fail closed: without the encryption key the robot token can be neither
+    # stored nor read, and it is never silently handled in clear.
+    logging.getLogger("super_moderator").error("robot token key unavailable: %s", exc)
+    return JSONResponse(status_code=503, content={
+        "detail": "Armazenamento seguro do robô indisponível. Avise o administrador."})
+
+
 # The portal is served from localhost (any port); extra origins via SM_CORS_ORIGINS.
 _extra_origins = [o.strip() for o in os.getenv("SM_CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
@@ -185,8 +197,8 @@ def get_current_user(
         raise HTTPException(401, "Token ausente")
     row = conn.execute(
         "SELECT u.* FROM users u JOIN sessions s ON s.user_id = u.id "
-        "WHERE s.token = ? AND s.expires_at > datetime('now')",
-        (credentials.credentials,),
+        "WHERE s.token_hash = ? AND s.expires_at > datetime('now')",
+        (security.hash_token(credentials.credentials),),
     ).fetchone()
     if not row:
         raise HTTPException(401, "Token inválido ou sessão expirada")
@@ -208,9 +220,11 @@ def get_owned(conn, table: str, row_id: int, current_user: dict, not_found: str)
 
 def create_session(conn, user_id: int) -> str:
     token = security.generate_token()
+    hashed = security.hash_token(token)  # only the hash is stored (token column mirrors it)
     conn.execute(
-        "INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, datetime('now', ?))",
-        (user_id, token, f"+{db.SESSION_DAYS} days"),
+        "INSERT INTO sessions (user_id, token, token_hash, expires_at) "
+        "VALUES (?, ?, ?, datetime('now', ?))",
+        (user_id, hashed, hashed, f"+{db.SESSION_DAYS} days"),
     )
     conn.commit()
     return token
@@ -522,7 +536,7 @@ def logout(
     conn: sqlite3.Connection = Depends(get_db),
 ):
     if credentials is not None:
-        conn.execute("DELETE FROM sessions WHERE token = ?", (credentials.credentials,))
+        conn.execute("DELETE FROM sessions WHERE token_hash = ?", (security.hash_token(credentials.credentials),))
         conn.commit()
     return {"success": True}
 
@@ -792,7 +806,7 @@ def _watch_payload(conn, user_id: int) -> dict:
 
 
 def _robot_payload(conn, user_id: int) -> dict:
-    robot = db.get_robot(conn, user_id)
+    robot = db.get_robot(conn, user_id, with_token=False)
     session = sessions.get(user_id)
     return {
         "connected": robot is not None,
@@ -820,7 +834,7 @@ def _save_robot_account(conn, user_id: int, client: SuperLiveClient, profile: di
             profile.get("nickname") or profile.get("name") or profile.get("username")
             or "Atila's Client",
             profile.get("avatar") or profile.get("profile_picture") or profile.get("picture_url"),
-            client.token, client.device_id, mode,
+            db.store_robot_token(client.token), client.device_id, mode,
         ),
     )
     conn.commit()
@@ -834,7 +848,7 @@ def _require_no_active_session(user_id: int) -> None:
 
 def _robot_device_client(conn, user_id: int) -> SuperLiveClient:
     """A client reusing the robot's already-registered device id, if any."""
-    existing = db.get_robot(conn, user_id)
+    existing = db.get_robot(conn, user_id, with_token=False)
     return SuperLiveClient(device_id=existing["device_id"] if existing else None)
 
 
@@ -1011,14 +1025,17 @@ async def robot_disconnect(current_user: dict = Depends(get_current_user),
     await sessions.stop(user_id)
     _pending_phone_logins.pop(user_id, None)
     _pending_email_logins.pop(user_id, None)
-    robot = db.get_robot(conn, user_id)
+    # The token is only needed for the best-effort logout below; removing the
+    # robot must work even when the encryption key is unavailable.
+    robot = db.get_robot(conn, user_id, with_token=False)
     # Only end the SuperLive session if we created it (password/phone/email-code
     # login). A pasted token belongs to a session the user may still be using
     # elsewhere.
     if robot is not None and robot["auth_mode"] in ("password", "phone", "email_code"):
         try:
-            await SuperLiveClient(robot["token"], robot["device_id"]).logout()
-        except SuperLiveError:
+            token = db.get_robot(conn, user_id)["token"]
+            await SuperLiveClient(token, robot["device_id"]).logout()
+        except (SuperLiveError, security.RobotKeyUnavailable):
             pass
     conn.execute("DELETE FROM robot_accounts WHERE user_id = ?", (user_id,))
     conn.commit()
@@ -1133,6 +1150,17 @@ def robot_live_status(x_healthbot_key: str = Header(default=""),
     return payload
 
 
+@app.get("/ops/active_sessions")
+def ops_active_sessions(x_healthbot_key: str = Header(default="")):
+    """How many moderation sessions are live in this process right now. Used by
+    deploy/deploy.sh to refuse restarting the backend mid-show (a restart drops
+    every session and its in-memory queue). Same shared secret and same
+    never-open behaviour as /robot/live_status; carries no user data."""
+    if not HEALTHBOT_API_KEY or not hmac.compare_digest(x_healthbot_key, HEALTHBOT_API_KEY):
+        raise HTTPException(403, "Acesso negado")
+    return {"active": sum(1 for sess in sessions.all_sessions().values() if sess.is_active)}
+
+
 @app.post("/robot/lookup_streamer")
 async def robot_lookup_streamer(
     req: RobotLookupStreamerRequest, current_user: dict = Depends(get_current_user),
@@ -1218,7 +1246,7 @@ def get_stats(user_id: int, days: int = 30, current_user: dict = Depends(get_cur
 ADMIN_SESSION_DAYS = 7
 ADMIN_BOOTSTRAP_USERNAME = os.getenv("ADMIN_BOOTSTRAP_USERNAME", "").strip()
 ADMIN_BOOTSTRAP_PASSWORD = os.getenv("ADMIN_BOOTSTRAP_PASSWORD", "")
-admin_throttle = security.LoginThrottle()
+admin_throttle = security.LoginThrottle(ip_max_failures=LOGIN_IP_MAX_FAILURES)
 
 
 def _bootstrap_admin_account(conn: sqlite3.Connection) -> None:
@@ -1256,8 +1284,8 @@ def get_current_admin(
         raise HTTPException(401, "Token ausente")
     row = conn.execute(
         "SELECT a.* FROM admin_accounts a JOIN admin_sessions s ON s.admin_id = a.id "
-        "WHERE s.token = ? AND s.expires_at > datetime('now')",
-        (credentials.credentials,),
+        "WHERE s.token_hash = ? AND s.expires_at > datetime('now')",
+        (security.hash_token(credentials.credentials),),
     ).fetchone()
     if not row:
         raise HTTPException(401, "Token inválido ou sessão expirada")
@@ -1289,9 +1317,11 @@ def admin_login(req: AdminLoginRequest, request: Request, conn: sqlite3.Connecti
                      (security.hash_password(req.password), row["id"]))
         conn.commit()
     token = security.generate_token()
+    hashed = security.hash_token(token)
     conn.execute(
-        "INSERT INTO admin_sessions (admin_id, token, expires_at) VALUES (?, ?, datetime('now', ?))",
-        (row["id"], token, f"+{ADMIN_SESSION_DAYS} days"),
+        "INSERT INTO admin_sessions (admin_id, token, token_hash, expires_at) "
+        "VALUES (?, ?, ?, datetime('now', ?))",
+        (row["id"], hashed, hashed, f"+{ADMIN_SESSION_DAYS} days"),
     )
     conn.commit()
     return {
@@ -1306,7 +1336,7 @@ def admin_logout(
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
     conn: sqlite3.Connection = Depends(get_db),
 ):
-    conn.execute("DELETE FROM admin_sessions WHERE token = ?", (credentials.credentials,))
+    conn.execute("DELETE FROM admin_sessions WHERE token_hash = ?", (security.hash_token(credentials.credentials),))
     conn.commit()
     return {"success": True}
 
@@ -1336,7 +1366,7 @@ def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Con
     for row in rows:
         u = row_to_dict(row)
         uid = u["id"]
-        robot = db.get_robot(conn, uid)
+        robot = db.get_robot(conn, uid, with_token=False)
         session = sessions.get(uid)
         watch = db.get_watch(conn, uid)
         rules_count = conn.execute(
@@ -1411,8 +1441,15 @@ if __name__ == "__main__":
 
     host = os.getenv("SM_HOST", "127.0.0.1")  # localhost only; this API controls a bot
     port = int(os.getenv("SM_PORT", "8000"))
+    # Real client IP behind the nginx chain: uvicorn only honours X-Forwarded-For
+    # from these peers and takes the right-most address that is NOT one of them.
+    # Default is loopback only (= ignore the header). In Docker set it to the
+    # web container's pinned IP plus the shared reverse proxy's, never "*" or a
+    # whole subnet: any listed peer can vouch for an address.
+    trusted = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1")
     if os.getenv("SM_RELOAD") == "1":
         # auto-reload restarts the process (and any running live session) on every file save
-        uvicorn.run("main:app", host=host, port=port, reload=True)
+        uvicorn.run("main:app", host=host, port=port, reload=True,
+                    proxy_headers=True, forwarded_allow_ips=trusted)
     else:
-        uvicorn.run(app, host=host, port=port)
+        uvicorn.run(app, host=host, port=port, proxy_headers=True, forwarded_allow_ips=trusted)

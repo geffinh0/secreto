@@ -46,9 +46,15 @@ _tmp = None
 def setUpModule():
     global _api_server, _tmp
     _tmp = tempfile.mkdtemp(prefix="sm-test-")
+    from cryptography.fernet import Fernet
+    key_file = os.path.join(_tmp, "token.key")
+    with open(key_file, "wb") as fh:
+        fh.write(Fernet.generate_key())
+    os.environ["SM_TOKEN_KEY_FILE"] = key_file  # robot tokens are encrypted at rest
     db.DB_PATH = os.path.join(_tmp, "test.db")  # never touch the real database
     engine.CONFIG_TTL_SECONDS = 0.1
     engine.MIN_INTERVAL_SECONDS = 1
+    engine.LIVE_END_RECHECK_SECONDS = 0.2   # keep the end-of-live confirmation fast in tests
     engine.ACTION_SPACING_SECONDS = 0.05
     mock.start(MOCK_PORT)
     superlive.BASE_URL = mock.base_url
@@ -167,7 +173,24 @@ class AuthAndApiTests(unittest.TestCase):
     def test_missing_and_expired_tokens_are_rejected(self):
         self.assertEqual(api("GET", "/auth/me")[0], 401)
         _, token, _ = new_user("exp")
-        sql("UPDATE sessions SET expires_at = datetime('now', '-1 day') WHERE token = ?", (token,))
+        sql("UPDATE sessions SET expires_at = datetime('now', '-1 day') WHERE token_hash = ?",
+            (security.hash_token(token),))
+        self.assertEqual(api("GET", "/auth/me", token=token)[0], 401)
+
+    def test_session_token_is_stored_hashed_and_still_authenticates(self):
+        name, token, _ = new_user("hsh")
+        conn = sqlite3.connect(db.DB_PATH)
+        try:
+            rows = conn.execute("SELECT token, token_hash FROM sessions WHERE token_hash = ?",
+                                (security.hash_token(token),)).fetchall()
+            dump = " ".join(str(v) for r in conn.execute("SELECT * FROM sessions") for v in r)
+        finally:
+            conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn(token, dump)                 # the clear token is nowhere in the table
+        self.assertEqual(api("GET", "/auth/me", token=token)[0], 200)
+        self.assertEqual(api("GET", "/auth/me", token=security.hash_token(token))[0], 401)  # the hash is not a credential
+        api("POST", "/auth/logout", token=token)
         self.assertEqual(api("GET", "/auth/me", token=token)[0], 401)
 
     def test_login_throttle(self):
@@ -177,7 +200,7 @@ class AuthAndApiTests(unittest.TestCase):
                 api("POST", "/auth/login", {"username": name, "password": "x"})
             self.assertEqual(api("POST", "/auth/login", {"username": name, "password": "senha-forte-1"})[0], 429)
         finally:
-            main.throttle._failures.clear()
+            main.throttle.clear()
 
     def test_legacy_sha256_password_still_logs_in_and_is_upgraded(self):
         legacy = hashlib.sha256(b"antiga-senha1").hexdigest()
@@ -370,11 +393,42 @@ class RobotConnectionTests(RobotTestBase):
         row = conn.execute("SELECT token, device_id FROM robot_accounts WHERE user_id=?", (self.uid,)).fetchone()
         dump = " ".join(str(v) for r in conn.execute("SELECT * FROM robot_accounts") for v in r)
         conn.close()
-        self.assertEqual(row[0], "tok-robot")
+        self.assertNotEqual(row[0], "tok-robot")                    # encrypted at rest, never clear
+        self.assertTrue(security.is_encrypted_token(row[0]))
+        self.assertNotIn("tok-robot", dump)
+        self.assertEqual(security.decrypt_robot_token(row[0]), "tok-robot")
         self.assertNotIn("good", dump.split())                      # password not persisted
         profile_call = mock.calls_to("users/own_profile")[0]
         self.assertEqual(profile_call["headers"]["authorization"], "Token tok-robot")
         self.assertEqual(profile_call["headers"]["device-id"], row[1])
+
+    def test_without_the_key_the_robot_token_is_refused_not_stored_in_clear(self):
+        saved = os.environ.pop("SM_TOKEN_KEY_FILE")
+        try:
+            status, body = api("POST", "/robot/connect", {"email": "robot@x.com", "password": "good"}, self.token)
+            self.assertEqual(status, 503, body)
+            conn = sqlite3.connect(db.DB_PATH)
+            n = conn.execute("SELECT COUNT(*) FROM robot_accounts WHERE user_id=?", (self.uid,)).fetchone()[0]
+            conn.close()
+            self.assertEqual(n, 0)                       # nothing written, certainly nothing in clear
+        finally:
+            os.environ["SM_TOKEN_KEY_FILE"] = saved
+
+    def test_legacy_clear_robot_token_still_works_and_is_encrypted_once_a_key_exists(self):
+        self.connect_robot()
+        conn = sqlite3.connect(db.DB_PATH)
+        conn.execute("UPDATE robot_accounts SET token = 'tok-robot' WHERE user_id = ?", (self.uid,))
+        conn.commit()
+        conn.close()
+        self.assertEqual(api("GET", "/robot/status", token=self.token)[0], 200)   # legacy row is readable
+        conn = db.connect()
+        try:
+            db.encrypt_legacy_robot_tokens(conn)
+            stored = conn.execute("SELECT token FROM robot_accounts WHERE user_id=?", (self.uid,)).fetchone()[0]
+        finally:
+            conn.close()
+        self.assertTrue(security.is_encrypted_token(stored))
+        self.assertEqual(security.decrypt_robot_token(stored), "tok-robot")
 
     def test_a_token_is_accepted_even_when_logged_in_is_false(self):
         # Real SuperLive behaviour, seen in production: an existing account can get a
@@ -1285,6 +1339,23 @@ class HealthbotLiveStatusTests(RobotTestBase):
         api("PUT", "/robot/watch",
             {"shared_id": mock_superlive.OFFLINE_STREAMER_SHARED_ID, "active": True}, self._other_token)
 
+    def active_sessions(self, key="test-healthbot-key"):
+        return api("GET", "/ops/active_sessions", headers={"x-healthbot-key": key})
+
+    def test_deploy_gate_counts_active_sessions_and_stays_closed_without_the_key(self):
+        self.assertEqual(self.active_sessions(key="wrong")[0], 403)
+        self.assertEqual(self.active_sessions(key="")[0], 403)
+        status, body = self.active_sessions()
+        self.assertEqual(status, 200)
+        before = body["active"]
+        self.connect_robot()
+        self.start_live()
+        self.assertEqual(self.active_sessions()[1]["active"], before + 1)
+        api("POST", "/robot/stop", token=self.token)
+        self.assertEqual(self.active_sessions()[1]["active"], before)
+        main.HEALTHBOT_API_KEY = ""
+        self.assertEqual(self.active_sessions(key="")[0], 403)           # never falls open
+
     def test_refuses_without_the_shared_key(self):
         self.assertEqual(self.live_status(key="wrong")[0], 403)
         self.assertEqual(self.live_status(key="")[0], 403)
@@ -1713,6 +1784,13 @@ class MigrationTests(unittest.TestCase):
         names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         self.assertTrue({"robot_accounts", "moderation_log"} <= names)
         self.assertIn("expires_at", [r[1] for r in conn.execute("PRAGMA table_info(sessions)")])
+        # the legacy plaintext session token is hashed in place and no clear copy remains
+        if not os.path.exists(real):  # hand-built schema above: we know the seeded token
+            tok, tok_hash = conn.execute("SELECT token, token_hash FROM sessions WHERE user_id = 1").fetchone()
+            self.assertEqual(tok_hash, security.hash_token("old-token"))
+            self.assertNotEqual(tok, "old-token")
+        self.assertEqual(
+            conn.execute("SELECT COUNT(*) FROM sessions WHERE token_hash IS NULL OR token != token_hash").fetchone()[0], 0)
         self.assertIn("kick_permanent", [r[1] for r in conn.execute("PRAGMA table_info(bot_settings)")])
         conn.close()
 

@@ -273,3 +273,13 @@ cd ~/atilas-client && docker compose up -d --build backend
 Acessa em `https://SEU_DOMINIO/#/admin` com esse usuário/senha. As duas
 variáveis podem continuar no `.env` depois disso sem problema - só criam a
 conta na primeira vez que `admin_accounts` estiver vazia.
+
+## 10. Deploy seguro, rollback, IP real e SOCKS restrito
+
+- **Deploy**: `git pull && deploy/deploy.sh`. Cria `secrets/sm_token_key` (guarde cópia fora da VPS), faz backup do SQLite com `integrity_check`, etiqueta as imagens atuais, builda, recusa trocar se houver live sendo moderada (`FORCE=1` ignora), troca só backend e web, recarrega o nginx do cata-pobre e roda teste de fumaça. Nunca use `docker compose down`.
+- **Rollback**: `deploy/rollback.sh [carimbo]`. Volta imagens E banco (a versão nova guarda token do robô cifrado e sessões em hash; a imagem antiga não entende). O banco atual é salvo antes.
+- **IP real no login**: adicione ao `.env` `FORWARDED_ALLOW_IPS=172.28.0.10,<IP do nginx do cata em proxy_shared>` (`docker network inspect proxy_shared`; fixe esse IP no compose do cata, senão ele muda ao recriar). Sem o IP do cata tudo continua como antes (um único balde), nunca pior. Nunca use `*` nem sub-rede.
+- **SOCKS**: troque a regra do ufw da sub-rede inteira por `ufw allow from 172.28.0.11 to 172.28.0.1 port 1080 proto tcp`. No notebook, rode `setup_elevated.ps1 -PermitOpen "host:443,..."` depois de levantar os hosts reais nos logs (`superlive websocket host`).
+- **Limites de login**: usuário = 8 falhas/5 min; IP = 50 (`SM_LOGIN_IP_MAX`). Sem o IP do cata em `FORWARDED_ALLOW_IPS` o balde de IP é um só para todos, então 50 falhas de qualquer origem travam o login de todos por 5 min; com ele configurado, pode baixar `SM_LOGIN_IP_MAX` para 10-15.
+- **Backups antigos**: os feitos antes desta versão ainda contêm tokens de sessão em claro (e o token do robô). Apague-os depois de validar o primeiro deploy.
+- **Ler a chave depois do 1o deploy**: `secrets/sm_token_key` passa a pertencer ao uid do container (modo 400). Para copiá-la: `docker run --rm -v "$PWD/secrets:/s:ro" --entrypoint cat nginx:alpine /s/sm_token_key` (ou `sudo cat`).

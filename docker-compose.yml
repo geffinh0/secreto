@@ -47,10 +47,35 @@ services:
       # leave set permanently: once the account exists, this is a no-op.
       ADMIN_BOOTSTRAP_USERNAME: "${ADMIN_BOOTSTRAP_USERNAME:-}"
       ADMIN_BOOTSTRAP_PASSWORD: "${ADMIN_BOOTSTRAP_PASSWORD:-}"
+      # Real client IP for the login throttle. uvicorn only believes
+      # X-Forwarded-For from these peers and takes the right-most address that is
+      # NOT one of them. The chain is: cata-pobre nginx -> web (172.28.0.10) ->
+      # backend, each appending, so list web and the shared proxy's address on
+      # proxy_shared (`docker network inspect proxy_shared`, see DEPLOY.md). Never
+      # "*" and never a whole subnet. If the proxy is missing here (or its IP
+      # changed) everyone simply looks like the proxy again - the old behaviour,
+      # never an attacker-chosen address.
+      FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-172.28.0.10}"
+      # The robot's SuperLive token is encrypted at rest with the key in this
+      # file (a Docker secret, below) - a path, not the key itself, so
+      # `docker inspect` shows nothing useful. Missing/unreadable key = the robot
+      # features answer 503; a token is never stored in clear.
+      SM_TOKEN_KEY_FILE: /run/secrets/sm_token_key
+    secrets:
+      - sm_token_key
     volumes:
       - backend_data:/data
     networks:
-      - internal
+      internal:
+        # Pinned so the SOCKS5 proxy's firewall rule (DEPLOY.md section 8) can
+        # name exactly this container instead of the whole subnet.
+        ipv4_address: 172.28.0.11
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     # No ports published: only the web container (on the same internal
     # network) can reach it. Never expose this directly to the internet.
 
@@ -61,7 +86,8 @@ services:
     container_name: atilas_client_web
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       # Kept for local debugging on the VPS itself (`curl localhost:8088`).
       # The real public path is through the existing reverse proxy below,
@@ -69,8 +95,16 @@ services:
       # through this port.
       - "127.0.0.1:8088:80"
     networks:
-      - internal
-      - proxy_shared
+      internal:
+        # Pinned: this is the peer the backend trusts for X-Forwarded-For
+        # (FORWARDED_ALLOW_IPS above).
+        ipv4_address: 172.28.0.10
+      proxy_shared:
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 networks:
   # Pinned subnet so the gateway IP (172.28.0.1) is predictable - that's the
@@ -86,6 +120,13 @@ networks:
   # touching this project or needing a host port.
   proxy_shared:
     external: true
+
+secrets:
+  # Created once on the VPS by deploy/deploy.sh (never committed; ./secrets/ is
+  # gitignored). Keep it OUT of the backend_data volume and out of backups of it:
+  # a key stored next to the data it protects protects nothing.
+  sm_token_key:
+    file: ./secrets/sm_token_key
 
 volumes:
   # Named volume for the SQLite DB (robot token, portal accounts, rules...).

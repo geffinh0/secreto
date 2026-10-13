@@ -22,6 +22,7 @@ import websockets
 from websockets.exceptions import InvalidStatus
 
 import db
+import security
 from superlive import (
     USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
     get_proxy_url, heartbeat_message, leave_message,
@@ -79,6 +80,12 @@ CONFIG_TTL_SECONDS = 5         # how often rules/settings are re-read from the D
 MAX_QUEUED_ACTIONS = 200
 MAX_WS_FAILURES = 12
 ACTION_LEVEL = {"mute": 1, "kick": 2}
+# "Live ended" inferred from polling (not from the stream's own end frame) must be
+# seen this many times in a row, spaced LIVE_END_RECHECK_SECONDS apart, before the
+# session leaves the live: one flaky lookup, a proxy hiccup or a mislabelled error
+# must not drop moderation mid-show. Worst case an end is acted on ~one recheck late.
+LIVE_END_CONFIRMATIONS = 2
+LIVE_END_RECHECK_SECONDS = 4
 LIVE_POLL_INTERVAL_SECONDS = 20  # how often to check whether the streamer went live again
 
 
@@ -345,6 +352,10 @@ class BotSession:
         if not base_url:
             raise SuperLiveError("O SuperLive não informou a URL do canal em tempo real (WebSocket)")
         self._ws_url = build_ws_url(base_url, self.client.device_id, self.client.token)
+        # Host only (never the query string, which carries the token): lets the
+        # SOCKS destination allow-list in deploy/notebook-proxy/ be built from facts.
+        log.info("session %s: superlive websocket host %s", self.user_id,
+                 urlsplit(base_url).hostname or "?")
 
         self.state = "running"
         self.started_at = now_iso()
@@ -561,10 +572,11 @@ class BotSession:
                     failures, backoff = 0, 1
                     continue
                 elif status_live is False:
-                    log.info("session %s: live %s ended during disconnect, waiting for next",
-                             self.user_id, self.livestream_id)
-                    await self.on_live_ended()
-                    continue
+                    if await self._confirm_live_ended():
+                        log.info("session %s: live %s ended during disconnect, waiting for next",
+                                 self.user_id, self.livestream_id)
+                        await self.on_live_ended()
+                        continue
             except Exception:
                 pass
 
@@ -630,12 +642,38 @@ class BotSession:
                         self.streamer_id = str(s_id)
                     return True
             except SuperLiveError as exc:
-                if exc.status == 404 or any(w in (exc.message or "").lower() for w in ("not found", "ended", "encerrad", "closed", "live")):
+                if exc.status == 404 or any(w in (exc.message or "").lower() for w in ("not found", "ended", "encerrad", "closed")):
                     return False
             except Exception:
                 pass
 
         return None
+
+    async def _confirm_live_ended(self, accept_unknown: bool = False) -> bool:
+        """Re-check, LIVE_END_CONFIRMATIONS-1 more times, that the live really ended.
+
+        Called after a polling-based lookup (or an error) suggested it did. Any
+        sign of life - still live, switched to another id - or the session moving
+        on by itself cancels the end. ``accept_unknown`` lets "could not tell"
+        (None) count as another vote, for the path that starts from an error
+        message rather than from a definite "not live" answer.
+        """
+        live_id = self.livestream_id
+        for _ in range(max(0, LIVE_END_CONFIRMATIONS - 1)):
+            await asyncio.sleep(LIVE_END_RECHECK_SECONDS)
+            if (not self.is_active or self.livestream_id != live_id
+                    or self.state in ("stopping", "stopped", "error", "waiting_for_live")):
+                return False
+            try:
+                status = await self._check_live_status()
+            except Exception:  # noqa: BLE001
+                return False
+            if self.livestream_id != live_id:   # switched while the lookup was in flight
+                return False
+            if status is False or (accept_unknown and status is None):
+                continue
+            return False
+        return True
 
     async def _handle_live_error_or_change(self, exc: Optional[SuperLiveError] = None) -> None:
         """When an action or message fails against the current livestream, verify if
@@ -649,13 +687,17 @@ class BotSession:
                 await self.switch_livestream(status)
                 self.last_error = None
             elif status is False:
-                log.info("session %s: detected live ended", self.user_id)
-                await self.on_live_ended()
-            elif status is None and exc is not None:
-                msg_lower = (exc.message or "").lower()
-                if any(w in msg_lower for w in ("live", "not found", "ended", "closed", "encerrad", "inexistente", "inativ")) or exc.status == 404:
-                    log.info("session %s: error '%s' indicates live %s ended", self.user_id, exc.message, self.livestream_id)
+                if await self._confirm_live_ended():
+                    log.info("session %s: detected live ended", self.user_id)
                     await self.on_live_ended()
+            elif status is None and exc is not None:
+                # "live" alone is deliberately not a marker: it appears in plenty of
+                # unrelated error texts ("live not available for this action", ...).
+                msg_lower = (exc.message or "").lower()
+                if any(w in msg_lower for w in ("not found", "ended", "closed", "encerrad", "inexistente", "inativ")) or exc.status == 404:
+                    if await self._confirm_live_ended():
+                        log.info("session %s: error '%s' indicates live %s ended", self.user_id, exc.message, self.livestream_id)
+                        await self.on_live_ended()
         except Exception:
             log.exception("session %s: error during live status verification", self.user_id)
 
@@ -672,8 +714,9 @@ class BotSession:
                     log.info("session %s: monitor detected live switched to %s", self.user_id, status)
                     await self.switch_livestream(status)
                 elif status is False:
-                    log.info("session %s: monitor detected live ended", self.user_id)
-                    await self.on_live_ended()
+                    if await self._confirm_live_ended():
+                        log.info("session %s: monitor detected live ended", self.user_id)
+                        await self.on_live_ended()
             except Exception:
                 pass
 
@@ -769,6 +812,7 @@ class BotSession:
 
             self._last_ended_livestream_id = old_livestream_id
             self.livestream_id = new_livestream_id
+            self._drain_queue()
             self.state = "running"
             self.last_error = None
             self._diamonds.clear()
@@ -836,6 +880,7 @@ class BotSession:
                 self._emit_live_summary(old_live)
             self._last_ended_livestream_id = old_live
             self.livestream_id = None
+            self._drain_queue()
             self.state = "waiting_for_live"
             self.last_error = None
             self.ws_state = "disconnected"
@@ -898,7 +943,7 @@ class BotSession:
                                 ts=now_iso(),
                             )
                             try:
-                                self._queue.put_nowait((dummy_entry, "kick", "Nome de usuário proibido ('w')"))
+                                self._queue.put_nowait((dummy_entry, "kick", "Nome de usuário proibido ('w')", self.livestream_id))
                                 self._pending.add((u_id, "kick"))
                                 log.info("session %s: usuário com nome 'w' (%s) entrou na live e foi enfileirado para expulsão",
                                          self.user_id, u_id)
@@ -937,7 +982,7 @@ class BotSession:
         if is_banned_username(entry.name):
             if self._acted.get(user_id, 0) < ACTION_LEVEL["kick"] and (user_id, "kick") not in self._pending:
                 try:
-                    self._queue.put_nowait((entry, "kick", "Nome de usuário proibido ('w')"))
+                    self._queue.put_nowait((entry, "kick", "Nome de usuário proibido ('w')", self.livestream_id))
                     self._pending.add((user_id, "kick"))
                     entry.action = "kick"
                     log.info("session %s: usuário com nome 'w' (%s) enfileirado para expulsão",
@@ -955,7 +1000,7 @@ class BotSession:
         if self._acted.get(user_id, 0) >= ACTION_LEVEL[action] or (user_id, action) in self._pending:
             return
         try:
-            self._queue.put_nowait((entry, action, keyword))
+            self._queue.put_nowait((entry, action, keyword, self.livestream_id))
         except asyncio.QueueFull:
             log.warning("action queue full - dropping %s on %s", action, user_id)
             return
@@ -991,21 +1036,44 @@ class BotSession:
 
     async def _action_worker(self) -> None:
         while True:
-            entry, action, keyword = await self._queue.get()
+            entry, action, keyword, queued_for = await self._queue.get()
             try:
-                await self._execute(entry, action, keyword)
+                await self._execute(entry, action, keyword, queued_for)
             finally:
                 self._pending.discard((entry.user_id, action))
             await asyncio.sleep(ACTION_SPACING_SECONDS)
 
-    async def _execute(self, entry: ChatEntry, action: str, keyword: str) -> None:
+    def _drain_queue(self) -> None:
+        """Drop every action still queued. They were decided from chat of the live
+        that just ended/switched; running them later would mute or kick someone in
+        a different broadcast (or against no live at all)."""
+        dropped = 0
+        while True:
+            try:
+                entry, action, _keyword, _live = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            self._pending.discard((entry.user_id, action))
+            dropped += 1
+        if dropped:
+            log.info("session %s: dropped %d queued action(s) from the previous live",
+                     self.user_id, dropped)
+
+    async def _execute(self, entry: ChatEntry, action: str, keyword: str,
+                       queued_for: Optional[str] = None) -> None:
+        # Act only on the live the action was decided in. If it has changed (or
+        # ended) since, the action is stale: drop it instead of hitting another live.
+        if queued_for is None or queued_for != self.livestream_id:
+            log.info("session %s: skipping stale %s on %s (queued for live %s, now %s)",
+                     self.user_id, action, entry.user_id, queued_for, self.livestream_id)
+            return
         detail, ok = None, True
         try:
             if action == "mute":
-                await self.client.mute(self.livestream_id, entry.user_id)
+                await self.client.mute(queued_for, entry.user_id)
             else:
                 permanent = bool(self._config()["settings"].get("kick_permanent"))
-                await self.client.kick(self.livestream_id, entry.user_id, permanent)
+                await self.client.kick(queued_for, entry.user_id, permanent)
             self._acted[entry.user_id] = max(self._acted.get(entry.user_id, 0), ACTION_LEVEL[action])
             self.actions_ok += 1
             if action == "mute":
@@ -1029,7 +1097,7 @@ class BotSession:
             ok, detail = False, str(exc)
             self.actions_failed += 1
         try:
-            db.log_action(self.user_id, self.livestream_id, entry.user_id, entry.name, action,
+            db.log_action(self.user_id, queued_for, entry.user_id, entry.name, action,
                           keyword, entry.text, ok, detail)
         except Exception:  # noqa: BLE001
             log.exception("could not write moderation log")
@@ -1213,8 +1281,19 @@ class WatchManager:
             try:
                 watch = db.get_watch(conn, user_id)
                 robot = db.get_robot(conn, user_id)
+            except security.RobotKeyUnavailable as exc:
+                # Not a reason to give up watching: the key file can be fixed
+                # without losing the watch, and the next poll picks it up.
+                log.error("watch %s: cannot read the robot token (%s); retrying", user_id, exc)
+                watch = robot = None
+                key_missing = True
+            else:
+                key_missing = False
             finally:
                 conn.close()
+            if key_missing:
+                await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
+                continue
             if watch is None or not watch["active"] or robot is None:
                 self._tasks.pop(user_id, None)
                 return

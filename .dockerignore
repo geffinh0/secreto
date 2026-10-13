@@ -35,3 +35,7 @@ backend/__pycache__/
 /docs/
 /tools/
 *.md
+
+# never bake secrets into an image
+secrets/
+.env

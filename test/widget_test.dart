@@ -223,6 +223,20 @@ void main() {
           contains(AppConstants.localBackendUrl));
       expect(PortalApiService.errorMessage(fail(500, null), 'Falhou'), 'Falhou');
     });
+
+    test('a proxy 502/503/504 page is never shown as "wrong password"', () {
+      for (final code in [502, 503, 504]) {
+        expect(PortalApiService.errorMessage(fail(code, null), 'Credenciais inválidas'),
+            'Servidor indisponível, tente novamente em instantes.');
+      }
+      // a JSON detail from our own 503 (e.g. secure storage unavailable) still wins
+      expect(PortalApiService.errorMessage(fail(503, {'detail': 'Armazenamento indisponível'}), 'x'),
+          'Armazenamento indisponível');
+    });
+
+    test('429 without a detail still explains itself', () {
+      expect(PortalApiService.errorMessage(fail(429, null), 'x'), contains('Muitas tentativas'));
+    });
   });
 
   group('AuthProvider', () {

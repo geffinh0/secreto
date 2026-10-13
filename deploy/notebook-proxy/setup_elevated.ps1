@@ -12,6 +12,17 @@
 #   4. Agenda o tunel reverso (tunnel.ps1) para rodar escondido sempre que
 #      voce fizer login, reconectando sozinho se cair
 
+# Parametro opcional:
+#   -PermitOpen "api.exemplo.com:443,ws.exemplo.com:443"
+# Limita para quais host:porta a chave da VPS pode abrir conexoes. Sem isso o
+# proxy SOCKS5 da VPS sai por AQUI para QUALQUER destino - inclusive a sua rede
+# local (roteador, NAS, impressora) - e qualquer container comprometido da VPS
+# herdaria esse alcance. Descubra os hosts reais antes de ligar (senao a
+# moderacao para): a API e o host do WebSocket aparecem nos logs do backend,
+# linhas "superlive websocket host ..." e a base de backend/superlive.py.
+# Ver DEPLOY.md, secao 8.
+param([string]$PermitOpen = "")
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "1/5 instalando OpenSSH Server..."
@@ -26,26 +37,37 @@ Start-Service sshd
 
 Write-Host "3/5 restringindo o firewall do sshd a loopback..."
 $rule = Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
-if ($rule) {
-    Set-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -RemoteAddress "127.0.0.1"
-}
+if (-not $rule) { throw "Regra de firewall OpenSSH-Server-In-TCP nao encontrada: sem ela o sshd ficaria aberto na rede local. Abortando." }
+Set-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -RemoteAddress "127.0.0.1"
 
 Write-Host "4/5 autorizando a chave da VPS (so forwarding, sem shell)..."
 $sshDir = "$env:ProgramData\ssh"
 $authFile = "$sshDir\administrators_authorized_keys"
-$pubKeyLine = 'restrict,port-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEiCHvEH7G2wKwoXYjU7cRFE3lir8GLVY0eHEFlWRhP0 vps-to-notebook-proxy'
+$keyOptions = 'restrict,port-forwarding'
+if ($PermitOpen.Trim() -ne "") {
+    foreach ($dest in ($PermitOpen -split ',')) {
+        $dest = $dest.Trim()
+        if ($dest -notmatch '^[A-Za-z0-9.-]+:\d{1,5}$') { throw "PermitOpen invalido: '$dest' (use host:porta)" }
+        $keyOptions += ',permitopen="' + $dest + '"'
+    }
+    Write-Host "   destinos permitidos: $PermitOpen"
+} else {
+    Write-Host "   AVISO: sem -PermitOpen o proxy alcanca qualquer destino (inclusive a sua LAN)."
+}
+$pubKeyLine = "$keyOptions ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEiCHvEH7G2wKwoXYjU7cRFE3lir8GLVY0eHEFlWRhP0 vps-to-notebook-proxy"
 
 if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
 if (-not (Test-Path $authFile)) { New-Item -ItemType File -Path $authFile -Force | Out-Null }
-$existing = Get-Content $authFile -ErrorAction SilentlyContinue
-if ($existing -notcontains $pubKeyLine) {
-    Add-Content -Path $authFile -Value $pubKeyLine
-}
+# Troca a linha antiga desta chave em vez de acrescentar uma segunda: o sshd usa a
+# PRIMEIRA linha que casa com a chave, entao uma linha antiga sem permitopen
+# continuaria valendo e anularia a restricao.
+$existing = @(Get-Content $authFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch 'vps-to-notebook-proxy' })
+Set-Content -Path $authFile -Value ($existing + $pubKeyLine)
 
 # ACL exigida pelo sshd: so SYSTEM e Administradores podem ler/escrever
 icacls $authFile /inheritance:r | Out-Null
 icacls $authFile /grant "SYSTEM:F" | Out-Null
-icacls $authFile /grant "Administradores:F" | Out-Null
+icacls $authFile /grant "*S-1-5-32-544:F" | Out-Null   # Administradores (SID: independe do idioma)
 
 Write-Host "5/5 agendando o tunel para rodar escondido no login..."
 $taskDir = "$env:LOCALAPPDATA\AtilaTunnel"

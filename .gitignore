@@ -66,3 +66,6 @@ backend/tests/__pycache__/
 /SuperLive_jadx_completo/
 /SuperLive_recursos/
 /codigo gradele/
+
+# Docker secret files (robot-token encryption key) - live only on the VPS
+secrets/

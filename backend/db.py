@@ -1,6 +1,11 @@
 """SQLite access + schema/migrations for the Atila's Client backend."""
+import logging
 import os
 import sqlite3
+
+import security
+
+log = logging.getLogger("super_moderator.db")
 
 DB_PATH = os.getenv("SM_DB_PATH") or os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "super_moderator.db"
@@ -236,9 +241,31 @@ def init_db():
         if "last_livestream_id" not in _columns(conn, "robot_accounts"):
             c.execute("ALTER TABLE robot_accounts ADD COLUMN last_livestream_id TEXT")
 
+        # Session tokens are stored hashed (security.hash_token) so a leaked DB or
+        # backup holds nothing replayable. token_hash is the lookup column; the
+        # legacy plaintext `token` column (UNIQUE NOT NULL) is overwritten with the
+        # same hash so no clear token survives. Idempotent: only rows still lacking
+        # a token_hash are touched, so existing sessions simply keep working.
+        # (Rolling back to an older image therefore logs everyone out once.)
+        # secure_delete: the clear tokens being replaced must not linger in freed
+        # pages / the WAL (old backups taken before this upgrade still hold them).
+        c.execute("PRAGMA secure_delete = ON")
+        for table in ("sessions", "admin_sessions"):
+            if "token_hash" not in _columns(conn, table):
+                c.execute(f"ALTER TABLE {table} ADD COLUMN token_hash TEXT")  # table is a literal
+            c.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_token_hash ON {table}(token_hash)")
+            for row_id, plain in c.execute(
+                f"SELECT id, token FROM {table} WHERE token_hash IS NULL"
+            ).fetchall():
+                hashed = security.hash_token(plain)
+                c.execute(f"UPDATE {table} SET token_hash = ?, token = ? WHERE id = ?",
+                          (hashed, hashed, row_id))
+
         c.execute("DELETE FROM sessions WHERE expires_at < datetime('now')")
         c.execute("DELETE FROM admin_sessions WHERE expires_at < datetime('now')")
         conn.commit()
+        encrypt_legacy_robot_tokens(conn)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
         conn.close()
 
@@ -278,10 +305,46 @@ def load_engine_config(user_id: int) -> dict:
         conn.close()
 
 
-def get_robot(conn, user_id: int):
-    return row_to_dict(
+def get_robot(conn, user_id: int, with_token: bool = True):
+    """The user's robot account. ``token`` is decrypted for callers that talk to
+    SuperLive; pass ``with_token=False`` where it is not needed (status payloads,
+    the admin overview) so a missing key can never break those and the secret is
+    never even decrypted. Raises security.RobotKeyUnavailable if it cannot be."""
+    robot = row_to_dict(
         conn.execute("SELECT * FROM robot_accounts WHERE user_id = ?", (user_id,)).fetchone()
     )
+    if robot is not None:
+        robot["token"] = security.decrypt_robot_token(robot["token"]) if with_token else None
+    return robot
+
+
+def store_robot_token(token: str) -> str:
+    """What goes in robot_accounts.token. Encrypts; never writes a clear token
+    unless SM_ALLOW_PLAINTEXT_ROBOT_TOKEN=1 (local development only)."""
+    try:
+        return security.encrypt_robot_token(token)
+    except security.RobotKeyUnavailable:
+        if os.getenv("SM_ALLOW_PLAINTEXT_ROBOT_TOKEN") == "1":
+            log.warning("SM_ALLOW_PLAINTEXT_ROBOT_TOKEN=1: storing the robot token UNENCRYPTED (dev only)")
+            return token
+        raise
+
+
+def encrypt_legacy_robot_tokens(conn) -> None:
+    """One-time upgrade of robot tokens saved before encryption existed. Skipped
+    (with a warning) while no key is configured: those rows stay readable."""
+    rows = conn.execute("SELECT id, token FROM robot_accounts").fetchall()
+    legacy = [(r[0], r[1]) for r in rows if not security.is_encrypted_token(r[1])]
+    if not legacy:
+        return
+    try:
+        converted = [(security.encrypt_robot_token(tok), rid) for rid, tok in legacy]
+    except security.RobotKeyUnavailable as exc:
+        log.warning("%d robot token(s) still stored in clear: %s", len(legacy), exc)
+        return
+    conn.executemany("UPDATE robot_accounts SET token = ? WHERE id = ?", converted)
+    conn.commit()
+    log.info("encrypted %d legacy robot token(s)", len(converted))
 
 
 def get_watch(conn, user_id: int):

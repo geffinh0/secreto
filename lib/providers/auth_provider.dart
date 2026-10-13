@@ -38,7 +38,7 @@ class AuthProvider extends ChangeNotifier {
           _user = PortalUser.fromJson(result['data']);
           await _saveUser(_user!);
         } else if (result['statusCode'] == 401) {
-          await _dropSession();
+          await _dropSession(expired: true);
         }
         // Server unreachable (statusCode 0) or failing: keep the saved session so a
         // backend restart does not log the user out. The next request that gets a
@@ -110,12 +110,15 @@ class AuthProvider extends ChangeNotifier {
 
   void _handleUnauthorized() {
     if (_user == null) return;
-    _dropSession();
+    _dropSession(expired: true);
   }
 
-  Future<void> _dropSession() async {
+  /// [expired]: the server rejected the saved token (expired, or sessions were
+  /// reset) - say so on the login screen instead of dropping the user there silently.
+  Future<void> _dropSession({bool expired = false}) async {
     await _clearSession();
     _user = null;
+    _error = expired ? 'Sua sessão expirou. Entre novamente.' : null;
     notifyListeners();
   }
 

@@ -114,9 +114,22 @@ class PortalApiService {
         if (first is Map && first['msg'] is String) return first['msg'] as String;
       }
     }
-    if (result['statusCode'] == 0) {
-      return 'Não foi possível conectar ao servidor (${AppConstants.localBackendUrl}). '
-          'Ele está rodando?';
+    final status = result['statusCode'];
+    if (status == 0) {
+      // In production the API sits behind the same origin ("/api"), where a URL in
+      // the message would only confuse; keep it for a local dev backend.
+      const url = AppConstants.localBackendUrl;
+      return url.startsWith('http')
+          ? 'Não foi possível conectar ao servidor ($url). Ele está rodando?'
+          : 'Não foi possível conectar ao servidor. Verifique sua conexão.';
+    }
+    // The reverse proxy answers with an HTML page (no JSON `detail`) when the API is
+    // down or restarting; that must not be shown as "wrong password".
+    if (status == 502 || status == 503 || status == 504) {
+      return 'Servidor indisponível, tente novamente em instantes.';
+    }
+    if (status == 429) {
+      return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
     }
     return fallback;
   }
