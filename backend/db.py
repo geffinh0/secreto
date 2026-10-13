@@ -189,6 +189,32 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_activity_user ON user_activity_log(user_id, id DESC)"
         )
 
+        # Admin panel login: its own accounts/sessions tables, deliberately separate
+        # from users/sessions. The admin panel must work from its own
+        # username+password, never from a portal user's is_admin flag - so there
+        # is no foreign key to users here on purpose, and no public way to create
+        # a row here (see main.py's startup bootstrap, env-var gated like
+        # HEALTHBOT_API_KEY already is).
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS admin_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                display_name TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                token TEXT UNIQUE NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (admin_id) REFERENCES admin_accounts(id) ON DELETE CASCADE
+            )
+        """)
+
         # ---- additive migrations for databases created by older versions ----
         if "expires_at" not in _columns(conn, "sessions"):
             c.execute("ALTER TABLE sessions ADD COLUMN expires_at TEXT")
@@ -211,6 +237,7 @@ def init_db():
             c.execute("ALTER TABLE robot_accounts ADD COLUMN last_livestream_id TEXT")
 
         c.execute("DELETE FROM sessions WHERE expires_at < datetime('now')")
+        c.execute("DELETE FROM admin_sessions WHERE expires_at < datetime('now')")
         conn.commit()
     finally:
         conn.close()

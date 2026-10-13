@@ -10,6 +10,11 @@ class AppConstants {
   static const String keyPortalToken = 'portal_token';
   static const String keyPortalUser = 'portal_user';
 
+  // Admin panel session token - a completely separate login from the portal
+  // above (see AdminProvider / backend admin_accounts), stored under its own
+  // key so it's never confused with, or cleared by, the portal's own logout.
+  static const String keyAdminToken = 'admin_panel_token';
+
   // Remembers the robot login mode/identifier last used, purely for a faster
   // reconnect form (never a credential - no password or token is stored here).
   static const String keyLastRobotLoginMode = 'last_robot_login_mode';

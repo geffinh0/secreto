@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:atilas_client/core/constants/app_constants.dart';
 import 'package:atilas_client/core/models/models.dart';
+import 'package:atilas_client/core/services/admin_api_service.dart';
 import 'package:atilas_client/core/services/portal_api_service.dart';
 import 'package:atilas_client/core/theme/app_theme.dart';
 import 'package:atilas_client/providers/admin_provider.dart';
@@ -50,6 +51,33 @@ class FakeApi extends PortalApiService {
   @override
   Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async =>
       _next('PUT $path');
+}
+
+/// Same scripted-response idea as FakeApi, but for AdminApiService - the
+/// admin panel's own, separate client (see admin_api_service.dart). Token
+/// storage is left to the real SharedPreferences mock (setMockInitialValues
+/// in each test), only the HTTP calls are faked here.
+class FakeAdminApi extends AdminApiService {
+  final Map<String, List<Map<String, dynamic>>> script = {};
+
+  void on(String route, Map<String, dynamic> response) =>
+      script.putIfAbsent(route, () => []).add(response);
+
+  Map<String, dynamic> _next(String route) {
+    final queue = script[route];
+    if (queue == null || queue.isEmpty) {
+      return {'statusCode': 0, 'data': null, 'success': false};
+    }
+    return queue.length > 1 ? queue.removeAt(0) : queue.first;
+  }
+
+  @override
+  Future<Map<String, dynamic>> get(String path) async => _next('GET $path');
+
+  @override
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body,
+          {bool requireAuth = true}) async =>
+      _next('POST $path');
 }
 
 Map<String, dynamic> ok(Object? data) =>
@@ -647,14 +675,18 @@ void main() {
       expect(liveIdField.controller!.text, isEmpty); // not filled when she's offline
     });
 
-    testWidgets('admin screen lists users and active sessions from /admin/*',
+    testWidgets('admin screen requires its own login, then lists users and active sessions',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(1200, 2400);
       addTearDown(tester.view.resetPhysicalSize);
 
-      final api = FakeApi()
+      final api = FakeAdminApi()
+        ..on('POST /admin/login', ok({
+          'access_token': 'admin-tok',
+          'admin': {'id': 1, 'username': 'root', 'display_name': 'Root'},
+        }))
         ..on('GET /admin/users', ok([
           {
             'id': 1, 'username': 'geffinho', 'email': 'g@x.com', 'display_name': 'Geffinho',
@@ -693,7 +725,18 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
 
+      // No saved token - the login form, not the panel, shows first.
       expect(find.text('Painel Administrativo'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Usuário administrativo'), findsOneWidget);
+      expect(find.text('Usuárias (2)'), findsNothing);
+
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Usuário administrativo'), 'root');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Senha'), 'senha-forte');
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Entrar'));
+      await tester.pump();
+      await tester.pump();
+
       expect(find.text('Usuárias (2)'), findsOneWidget);
       expect(find.text('Geffinho'), findsOneWidget);
       expect(find.text('nyx'), findsOneWidget); // falls back to username, no display_name

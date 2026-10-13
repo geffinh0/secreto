@@ -30,6 +30,7 @@ import uvicorn
 import db
 import engine
 import main
+import security
 import superlive
 import tests.mock_superlive as mock_superlive
 from tests.mock_superlive import ROBOT_ID, STREAMER_ID, MockSuperLive
@@ -1416,37 +1417,64 @@ class ActivityLogTests(RobotTestBase):
 
 
 # ── admin panel (read-only cross-user oversight) ──────────────────────────────
+_admin_counter = [0]
+
+
 class AdminPanelTests(RobotTestBase):
-    """/admin/* is the one place in the API that's deliberately cross-user -
-    everything else in this file enforces "only your own data"
-    (require_owner/get_owned). These tests make sure that's gated correctly:
-    only is_admin accounts get in, nobody's password hash or robot
-    token/device_id ever appears in the response, and the data is real."""
+    """/admin/* has its OWN login (admin_accounts/admin_sessions), completely
+    separate from the portal's users/sessions - there is no is_admin flag on
+    a regular account anymore; a portal token must never work here, and an
+    admin token must never work on a regular /… endpoint. These tests also
+    confirm nobody's password hash or robot token/device_id ever appears in
+    the response, and that the data shown is real."""
 
-    def make_admin(self):
-        sql("UPDATE users SET is_admin = 1 WHERE id = ?", (self.uid,))
+    def make_admin(self, password="admin-senha-forte-1"):
+        """Inserts an admin_accounts row directly (mirrors how the real
+        startup bootstrap creates the first one from env vars - there is no
+        public /admin/register) and logs in through the real endpoint to get
+        a genuine admin token."""
+        _admin_counter[0] += 1
+        username = f"admin{_admin_counter[0]}"
+        sql(
+            "INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
+            (username, security.hash_password(password), "Admin"),
+        )
+        status, body = api("POST", "/admin/login", {"username": username, "password": password})
+        assert status == 200, body
+        return body["access_token"]
 
-    def test_non_admin_is_refused(self):
+    def test_portal_token_does_not_work_on_admin_endpoints(self):
         status, body = api("GET", "/admin/users", token=self.token)
-        self.assertEqual(status, 403)
+        self.assertEqual(status, 401)
         status, body = api("GET", "/admin/sessions", token=self.token)
-        self.assertEqual(status, 403)
+        self.assertEqual(status, 401)
+
+    def test_wrong_admin_password_is_rejected(self):
+        self.make_admin(password="correct-horse")
+        status, body = api("POST", "/admin/login", {"username": "nobody", "password": "wrong"})
+        self.assertEqual(status, 401)
+
+    def test_admin_token_does_not_work_on_regular_endpoints(self):
+        admin_token = self.make_admin()
+        # /moderation/rules requires a portal user token, not an admin one.
+        status, body = api("GET", f"/moderation/rules?user_id={self.uid}", token=admin_token)
+        self.assertEqual(status, 401)
 
     def test_admin_sees_every_user_not_just_their_own(self):
-        self.make_admin()
+        admin_token = self.make_admin()
         name_b, token_b, uid_b = new_user("admin_target")
         self.addCleanup(lambda: api("POST", "/robot/disconnect", token=token_b))
 
-        status, body = api("GET", "/admin/users", token=self.token)
+        status, body = api("GET", "/admin/users", token=admin_token)
         self.assertEqual(status, 200, body)
         ids = {u["id"] for u in body}
         self.assertIn(self.uid, ids)
         self.assertIn(uid_b, ids)
 
     def test_never_leaks_password_hash_or_robot_secrets(self):
-        self.make_admin()
+        admin_token = self.make_admin()
         self.connect_robot()
-        status, body = api("GET", "/admin/users", token=self.token)
+        status, body = api("GET", "/admin/users", token=admin_token)
         self.assertEqual(status, 200, body)
         dump = json.dumps(body)
         self.assertNotIn("password_hash", dump)
@@ -1456,34 +1484,88 @@ class AdminPanelTests(RobotTestBase):
         self.assertNotIn("device_id", mine.get("robot") or {})
 
     def test_robot_status_reflects_reality(self):
-        self.make_admin()
-        status, body = api("GET", "/admin/users", token=self.token)
+        admin_token = self.make_admin()
+        status, body = api("GET", "/admin/users", token=admin_token)
         mine = next(u for u in body if u["id"] == self.uid)
         self.assertEqual(mine["robot_status"], "não configurado")
 
         self.connect_robot()
-        mine = next(u for u in api("GET", "/admin/users", token=self.token)[1] if u["id"] == self.uid)
+        mine = next(u for u in api("GET", "/admin/users", token=admin_token)[1] if u["id"] == self.uid)
         self.assertEqual(mine["robot_status"], "conectado (parado)")
 
         self.start_live()
-        mine = next(u for u in api("GET", "/admin/users", token=self.token)[1] if u["id"] == self.uid)
+        mine = next(u for u in api("GET", "/admin/users", token=admin_token)[1] if u["id"] == self.uid)
         self.assertEqual(mine["robot_status"], "ativo")
 
     def test_sessions_endpoint_lists_an_active_session_across_users(self):
-        self.make_admin()
+        admin_token = self.make_admin()
         self.connect_robot()
         self.start_live()
 
-        status, body = api("GET", "/admin/sessions", token=self.token)
+        status, body = api("GET", "/admin/sessions", token=admin_token)
         self.assertEqual(status, 200, body)
         mine = next(s for s in body if s["user_id"] == self.uid)
         self.assertEqual(mine["state"], "running")
         self.assertEqual(mine["livestream_id"], "live1")
         self.assertIn("username", mine)
 
+    def test_logout_invalidates_the_admin_token(self):
+        admin_token = self.make_admin()
+        status, _ = api("POST", "/admin/logout", token=admin_token)
+        self.assertEqual(status, 200)
+        status, _ = api("GET", "/admin/users", token=admin_token)
+        self.assertEqual(status, 401)
+
     def test_admin_endpoints_still_require_a_valid_token(self):
         self.assertEqual(api("GET", "/admin/users")[0], 401)
         self.assertEqual(api("GET", "/admin/sessions")[0], 401)
+
+
+class AdminBootstrapTests(unittest.TestCase):
+    """The only way an admin_accounts row is ever created outside a test:
+    ADMIN_BOOTSTRAP_USERNAME/PASSWORD env vars, read once at startup (see
+    main._bootstrap_admin_account) - mirrors how HEALTHBOT_API_KEY already
+    works. No public /admin/register exists."""
+
+    def setUp(self):
+        sql("DELETE FROM admin_accounts")
+
+    def test_bootstraps_an_account_from_env_vars(self):
+        old_u, old_p = main.ADMIN_BOOTSTRAP_USERNAME, main.ADMIN_BOOTSTRAP_PASSWORD
+        main.ADMIN_BOOTSTRAP_USERNAME, main.ADMIN_BOOTSTRAP_PASSWORD = "bootadmin", "boot-senha-1"
+        try:
+            conn = sqlite3.connect(db.DB_PATH)
+            try:
+                main._bootstrap_admin_account(conn)
+            finally:
+                conn.close()
+        finally:
+            main.ADMIN_BOOTSTRAP_USERNAME, main.ADMIN_BOOTSTRAP_PASSWORD = old_u, old_p
+
+        status, body = api("POST", "/admin/login", {"username": "bootadmin", "password": "boot-senha-1"})
+        self.assertEqual(status, 200, body)
+
+    def test_does_not_overwrite_an_existing_admin_account(self):
+        sql(
+            "INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
+            ("already", security.hash_password("original-senha"), "Original"),
+        )
+        old_u, old_p = main.ADMIN_BOOTSTRAP_USERNAME, main.ADMIN_BOOTSTRAP_PASSWORD
+        main.ADMIN_BOOTSTRAP_USERNAME, main.ADMIN_BOOTSTRAP_PASSWORD = "already", "different-senha"
+        try:
+            conn = sqlite3.connect(db.DB_PATH)
+            try:
+                main._bootstrap_admin_account(conn)
+            finally:
+                conn.close()
+        finally:
+            main.ADMIN_BOOTSTRAP_USERNAME, main.ADMIN_BOOTSTRAP_PASSWORD = old_u, old_p
+
+        # still the original password - bootstrap did not touch the existing row
+        status, _ = api("POST", "/admin/login", {"username": "already", "password": "original-senha"})
+        self.assertEqual(status, 200)
+        status, _ = api("POST", "/admin/login", {"username": "already", "password": "different-senha"})
+        self.assertEqual(status, 401)
 
 
 # ── upgrading a database created by the previous version ─────────────────────

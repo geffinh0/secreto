@@ -33,8 +33,13 @@ GoRouter createRouter(AuthProvider authProvider) {
       }
 
       final isAuth = authProvider.isAuthenticated;
-      final isAuthRoute =
-          location.startsWith('/login') || location.startsWith('/register');
+      // /admin has its own, completely separate login (admin_accounts, not
+      // the portal's users/sessions) - see AdminProvider/AdminScreen. It's
+      // reachable whether or not anyone is logged into the regular portal in
+      // this browser, and the portal's own auth state never gates it.
+      final isAuthRoute = location.startsWith('/login') ||
+          location.startsWith('/register') ||
+          location.startsWith('/admin');
 
       if (location == _splashPath) {
         final from = state.uri.queryParameters['from'];
@@ -42,16 +47,7 @@ GoRouter createRouter(AuthProvider authProvider) {
         return isAuth ? target : '/login';
       }
       if (!isAuth && !isAuthRoute) return '/login';
-      if (isAuth && isAuthRoute) return '/dashboard';
-
-      // /admin is a separate route on purpose (outside MainShell's bottom
-      // nav/sidebar) - see GUIA.../relatório do painel administrativo. Still
-      // gated the same way as everything else: only an is_admin account gets
-      // past this redirect, checked fresh on every navigation (not cached in
-      // the UI), since isAuthenticated alone isn't enough here.
-      if (location.startsWith('/admin') && !(authProvider.user?.isAdmin ?? false)) {
-        return '/dashboard';
-      }
+      if (isAuth && isAuthRoute && !location.startsWith('/admin')) return '/dashboard';
       return null;
     },
     refreshListenable: authProvider,

@@ -91,6 +91,7 @@ async def lifespan(_app: FastAPI):
     try:
         for watch in db.all_active_watches(conn):
             watchers.start(watch["user_id"])
+        _bootstrap_admin_account(conn)
     finally:
         conn.close()
     print("[OK] Atila's Client API iniciada!")
@@ -1160,14 +1161,105 @@ def get_stats(user_id: int, days: int = 30, current_user: dict = Depends(get_cur
 
 
 # ─── Admin (read-only oversight: users, robots, live sessions) ──────────────
-def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Separate from require_owner/get_owned - those enforce "only your own
-    data"; this is the opposite: deliberately cross-user, but only for an
-    account flagged is_admin. Every /admin/* route depends on this, never on
-    get_current_user alone."""
-    if not current_user.get("is_admin"):
-        raise HTTPException(403, "Acesso restrito a administradores")
-    return current_user
+# Its own login (admin_accounts/admin_sessions, see db.py) - deliberately NOT
+# the portal's users/sessions with an is_admin flag. There is no public
+# /admin/register; the first account is created from env vars at startup
+# (see _bootstrap_admin_account), the same pattern HEALTHBOT_API_KEY already
+# uses for a VPS-only secret never committed to git.
+ADMIN_SESSION_DAYS = 7
+ADMIN_BOOTSTRAP_USERNAME = os.getenv("ADMIN_BOOTSTRAP_USERNAME", "").strip()
+ADMIN_BOOTSTRAP_PASSWORD = os.getenv("ADMIN_BOOTSTRAP_PASSWORD", "")
+admin_throttle = security.LoginThrottle()
+
+
+def _bootstrap_admin_account(conn: sqlite3.Connection) -> None:
+    """Creates the first admin_accounts row from env vars, if none exists yet -
+    there is no public /admin/register. Idempotent: once ANY admin account
+    exists, this is a no-op forever, even with the env vars still set (so
+    they can stay in .env without recreating/overwriting on every restart -
+    change the password from inside the panel instead, once that exists)."""
+    if not ADMIN_BOOTSTRAP_USERNAME or not ADMIN_BOOTSTRAP_PASSWORD:
+        return
+    if conn.execute("SELECT 1 FROM admin_accounts LIMIT 1").fetchone():
+        return
+    conn.execute(
+        "INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
+        (ADMIN_BOOTSTRAP_USERNAME, security.hash_password(ADMIN_BOOTSTRAP_PASSWORD), "Administrador"),
+    )
+    conn.commit()
+    print(f"[ADMIN] Conta administrativa inicial criada: {ADMIN_BOOTSTRAP_USERNAME}")
+
+
+class AdminLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=200)
+
+
+def get_current_admin(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Separate from get_current_user/require_owner/get_owned entirely - those
+    are the portal's own auth; this checks admin_sessions, a completely
+    different token namespace. A portal session token is never valid here,
+    and vice versa."""
+    if credentials is None:
+        raise HTTPException(401, "Token ausente")
+    row = conn.execute(
+        "SELECT a.* FROM admin_accounts a JOIN admin_sessions s ON s.admin_id = a.id "
+        "WHERE s.token = ? AND s.expires_at > datetime('now')",
+        (credentials.credentials,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(401, "Token inválido ou sessão expirada")
+    return row_to_dict(row)
+
+
+@app.post("/admin/login")
+def admin_login(req: AdminLoginRequest, request: Request, conn: sqlite3.Connection = Depends(get_db)):
+    ip = request.client.host if request.client else "unknown"
+    user_key, ip_key = f"admin:{req.username.lower()}", f"ip:{ip}"
+    if admin_throttle.is_blocked(user_key, ip_key):
+        raise HTTPException(429, "Muitas tentativas de login. Aguarde alguns minutos.")
+
+    row = conn.execute(
+        "SELECT * FROM admin_accounts WHERE lower(username) = lower(?)", (req.username,)
+    ).fetchone()
+    if row is None:
+        security.burn_password_check(req.password)
+        valid, needs_rehash = False, False
+    else:
+        valid, needs_rehash = security.verify_password(req.password, row["password_hash"])
+    if not valid:
+        admin_throttle.record_failure(user_key, ip_key)
+        raise HTTPException(401, "Credenciais inválidas")
+
+    admin_throttle.reset(user_key)
+    if needs_rehash:
+        conn.execute("UPDATE admin_accounts SET password_hash = ? WHERE id = ?",
+                     (security.hash_password(req.password), row["id"]))
+        conn.commit()
+    token = security.generate_token()
+    conn.execute(
+        "INSERT INTO admin_sessions (admin_id, token, expires_at) VALUES (?, ?, datetime('now', ?))",
+        (row["id"], token, f"+{ADMIN_SESSION_DAYS} days"),
+    )
+    conn.commit()
+    return {
+        "access_token": token,
+        "admin": {"id": row["id"], "username": row["username"], "display_name": row["display_name"]},
+    }
+
+
+@app.post("/admin/logout")
+def admin_logout(
+    admin: dict = Depends(get_current_admin),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    conn.execute("DELETE FROM admin_sessions WHERE token = ?", (credentials.credentials,))
+    conn.commit()
+    return {"success": True}
 
 
 def _robot_admin_status(robot, session) -> str:
@@ -1185,7 +1277,7 @@ def _robot_admin_status(robot, session) -> str:
 
 
 @app.get("/admin/users")
-def admin_list_users(admin: dict = Depends(require_admin), conn: sqlite3.Connection = Depends(get_db)):
+def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Connection = Depends(get_db)):
     """One row per portal user: account info + robot/session/rule counts.
     Never includes password_hash, robot token or device_id - same "secrets
     never leave the server" rule as every other endpoint, just also enforced
@@ -1225,7 +1317,7 @@ def admin_list_users(admin: dict = Depends(require_admin), conn: sqlite3.Connect
 
 
 @app.get("/admin/sessions")
-def admin_list_sessions(admin: dict = Depends(require_admin), conn: sqlite3.Connection = Depends(get_db)):
+def admin_list_sessions(admin: dict = Depends(get_current_admin), conn: sqlite3.Connection = Depends(get_db)):
     """Every bot session currently held in memory, across every user, for
     monitoring - which lives are being moderated right now and the state of
     each connection. Read-only: no chat content, just state/counters."""

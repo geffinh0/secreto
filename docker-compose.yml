@@ -33,6 +33,14 @@ services:
       # multi-account test that needs to be reviewed afterwards; unset it
       # again once done so routine operation doesn't grow this file forever.
       SM_LOG_FILE: "${SM_LOG_FILE:-}"
+      # Bootstraps the FIRST admin_accounts row at startup, only while none
+      # exists yet (see main._bootstrap_admin_account) - the admin panel's
+      # own login, fully separate from the portal's users table. No public
+      # /admin/register exists; this .env pair is the only way in. Same
+      # never-committed-secret pattern as HEALTHBOT_API_KEY above. Safe to
+      # leave set permanently: once the account exists, this is a no-op.
+      ADMIN_BOOTSTRAP_USERNAME: "${ADMIN_BOOTSTRAP_USERNAME:-}"
+      ADMIN_BOOTSTRAP_PASSWORD: "${ADMIN_BOOTSTRAP_PASSWORD:-}"
     volumes:
       - backend_data:/data
     networks:

@@ -225,3 +225,26 @@ systemctl status atila-healthbot
 Manda `/status` pro bot no Telegram pra testar - deve responder na hora com
 a lista de tudo. `/live` e `/resumo` só têm o que mostrar depois da próxima
 live. Se algo cair depois, o bot avisa sozinho.
+
+## Painel administrativo (`/admin`)
+
+Login próprio, separado das contas de portal - sem is_admin, sem cadastro
+público. A primeira (e única, por enquanto) conta é criada automaticamente
+no startup do backend a partir de duas variáveis de ambiente; depois disso
+vira um no-op permanente (não sobrescreve a conta existente a cada restart).
+
+```bash
+# gera uma senha forte e cola no .env do docker-compose (raiz do repo, fora do git)
+ADMIN_PASS=$(openssl rand -base64 18)
+cat >> ~/atilas-client/.env <<EOF
+ADMIN_BOOTSTRAP_USERNAME=geffinho
+ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS
+EOF
+echo "Senha do painel admin: $ADMIN_PASS"   # guarda em algum lugar seguro - só aparece aqui
+
+cd ~/atilas-client && docker compose up -d --build backend
+```
+
+Acessa em `https://SEU_DOMINIO/#/admin` com esse usuário/senha. As duas
+variáveis podem continuar no `.env` depois disso sem problema - só criam a
+conta na primeira vez que `admin_accounts` estiver vazia.

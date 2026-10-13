@@ -8,8 +8,10 @@ import '../../providers/admin_provider.dart';
 
 /// Read-only oversight panel - usuárias cadastradas, status do robô de cada
 /// uma e sessões de moderação ativas agora. Rota própria (/admin), fora do
-/// shell normal de navegação; só chega aqui quem é is_admin (ver
-/// app_router.dart). Nada aqui modifica dado nenhum.
+/// shell normal de navegação e com login PRÓPRIO (admin_accounts no
+/// backend) - entrar com uma conta normal da criadora não dá acesso a isto;
+/// é um usuário/senha completamente separado (ver AdminProvider). Nada aqui
+/// modifica dado nenhum.
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
 
@@ -17,14 +19,45 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStateMixin {
+class _AdminScreenState extends State<AdminScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AdminProvider>().restoreSession());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final admin = context.watch<AdminProvider>();
+
+    if (admin.isRestoringSession) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bgDark,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+      );
+    }
+    if (!admin.isAuthenticated) {
+      return const _AdminLoginScreen();
+    }
+    return const _AdminPanelScaffold();
+  }
+}
+
+class _AdminPanelScaffold extends StatefulWidget {
+  const _AdminPanelScaffold();
+
+  @override
+  State<_AdminPanelScaffold> createState() => _AdminPanelScaffoldState();
+}
+
+class _AdminPanelScaffoldState extends State<_AdminPanelScaffold>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AdminProvider>().load());
   }
 
   @override
@@ -42,16 +75,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       appBar: AppBar(
         backgroundColor: AppTheme.bgCard,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textPrimary),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/dashboard'),
-        ),
-        title: const Row(
+        automaticallyImplyLeading: false,
+        title: Row(
           children: [
-            Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary, size: 20),
-            SizedBox(width: 10),
-            Text('Painel Administrativo',
+            const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary, size: 20),
+            const SizedBox(width: 10),
+            const Text('Painel Administrativo',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+            if (admin.adminUsername != null) ...[
+              const SizedBox(width: 10),
+              Text('· ${admin.adminUsername}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+            ],
           ],
         ),
         actions: [
@@ -59,6 +95,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
             tooltip: 'Atualizar',
             onPressed: admin.isLoading ? null : () => context.read<AdminProvider>().load(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: AppTheme.textSecondary),
+            tooltip: 'Sair do painel',
+            onPressed: () => context.read<AdminProvider>().logout(),
           ),
           const SizedBox(width: 8),
         ],
@@ -80,6 +121,155 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           child: TabBarView(
             controller: _tabController,
             children: const [_UsersTab(), _SessionsTab()],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Login form for the admin panel's OWN credentials (admin_accounts on the
+/// backend) - never the portal's regular e-mail/senha. There is no "criar
+/// conta" link here on purpose: the first (and so far only) admin account is
+/// created from env vars on the server, not through this screen.
+class _AdminLoginScreen extends StatefulWidget {
+  const _AdminLoginScreen();
+
+  @override
+  State<_AdminLoginScreen> createState() => _AdminLoginScreenState();
+}
+
+class _AdminLoginScreenState extends State<_AdminLoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    await context.read<AdminProvider>().login(
+          _usernameController.text.trim(),
+          _passwordController.text,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final admin = context.watch<AdminProvider>();
+
+    return Scaffold(
+      backgroundColor: AppTheme.bgDark,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textMuted),
+                      onPressed: () =>
+                          context.canPop() ? context.pop() : context.go('/dashboard'),
+                      tooltip: 'Voltar',
+                    ),
+                  ],
+                ),
+                const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary, size: 36),
+                const SizedBox(height: 16),
+                const Text('Painel Administrativo',
+                    style: TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                const Text(
+                  'Login próprio, separado da conta de criadora.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                ),
+                const SizedBox(height: 28),
+                if (admin.error != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_rounded, color: AppTheme.error, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(admin.error!,
+                              style: const TextStyle(color: AppTheme.error, fontSize: 13)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Usuário administrativo',
+                          prefixIcon: Icon(Icons.person_rounded),
+                        ),
+                        validator: (v) => (v?.isEmpty ?? true) ? 'Campo obrigatório' : null,
+                        onFieldSubmitted: (_) => _submit(),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'Senha',
+                          prefixIcon: const Icon(Icons.lock_rounded),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePassword
+                                ? Icons.visibility_rounded
+                                : Icons.visibility_off_rounded),
+                            onPressed: () =>
+                                setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                        validator: (v) => (v?.isEmpty ?? true) ? 'Campo obrigatório' : null,
+                        onFieldSubmitted: (_) => _submit(),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: admin.isLoggingIn ? null : _submit,
+                          child: admin.isLoggingIn
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: AppTheme.onAccent),
+                                )
+                              : const Text('Entrar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
