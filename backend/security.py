@@ -39,6 +39,65 @@ def verify_password(password: str, stored: str):
     return ok, ok
 
 
+PASSWORD_MIN_LENGTH = 10
+PASSWORD_MAX_LENGTH = 128
+# Passwords people actually pick; compared lowercase and with digits/symbols stripped,
+# so "Senha@123" and "senha1234" are both caught. Kept short on purpose: the length +
+# letter/digit rules do the heavy lifting, this only blocks the famous ones.
+_COMMON_PASSWORDS = frozenset("""
+password senha senhasenha senha123 senhaforte minhasenha qwerty qwertyuiop qwertyuiop asdfgh asdfghjkl
+zxcvbnm abc abcd abcde abcdef abcdefgh abcdefghij iloveyou amorzinho eusouinteligente brasil brasil123
+brasileiro flamengo corinthians palmeiras saopaulo santos gremio vasco cruzeiro atletico mudar123
+mudar mudarsenha trocar trocarsenha bemvindo bemvinda admin administrador administrator
+letmein welcome monkey dragon master superman batman princesa princess linda lindinha gatinha
+superlive moderator moderador atilas atilasclient
+""".split())
+
+
+def password_problems(password: str, username: str = "", display_name: str = "") -> list:
+    """Why ``password`` is too weak, in Portuguese (empty list = accepted).
+
+    Length and mixing letters with digits do most of the work; the rest blocks the
+    cheap guesses an agency staff member could try (their own name, the username,
+    the usual "senha123")."""
+    problems = []
+    if len(password) < PASSWORD_MIN_LENGTH:
+        problems.append(f"use pelo menos {PASSWORD_MIN_LENGTH} caracteres")
+    if len(password) > PASSWORD_MAX_LENGTH:
+        problems.append(f"use no máximo {PASSWORD_MAX_LENGTH} caracteres")
+    if not any(ch.isalpha() for ch in password) or not any(ch.isdigit() for ch in password):
+        problems.append("misture letras e números")
+    lowered = password.lower()
+
+    def squeeze(text: str) -> str:  # letters and digits only: "Fulana-de_Tal" == "fulana de tal"
+        return "".join(ch for ch in text.lower() if ch.isalnum())
+
+    squeezed = squeeze(password)
+    if len(squeeze(username)) >= 3 and squeeze(username) in squeezed:
+        problems.append("não use o seu nome de usuário na senha")
+    if len(squeeze(display_name or "")) >= 4 and squeeze(display_name) in squeezed:
+        problems.append("não use o seu nome de exibição na senha")
+    letters_only = "".join(ch for ch in lowered if ch.isalpha())
+    if lowered in _COMMON_PASSWORDS or letters_only in _COMMON_PASSWORDS:
+        problems.append("essa senha é muito comum, escolha outra")
+    if password and len(set(lowered)) <= 3:
+        problems.append("a senha tem caracteres repetidos demais")
+    if password and (lowered in "01234567890123456789" or lowered in "abcdefghijklmnopqrstuvwxyz"
+                     or lowered in "9876543210" or lowered in "zyxwvutsrqponmlkjihgfedcba"):
+        problems.append("não use sequências como 1234567890 ou abcdefghij")
+    return problems
+
+
+_TEMP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"  # no 0/O/1/l/I
+
+
+def generate_temp_password() -> str:
+    """12 random characters (~68 bits) in groups of four, e.g. ``Kp7x-Qm4e-Zb9w``,
+    typed once by the user, so no look-alike characters."""
+    raw = "".join(secrets.choice(_TEMP_ALPHABET) for _ in range(12))
+    return "-".join(raw[i:i + 4] for i in range(0, 12, 4))
+
+
 def burn_password_check(password: str) -> None:
     """Spend roughly the same time as a real check (avoids user-enumeration by timing)."""
     hashlib.pbkdf2_hmac("sha256", password.encode(), b"\x00" * 16, PBKDF2_ITERATIONS)

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
@@ -37,12 +38,16 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 12),
               _InfoRow(label: 'Usuário', value: '@${user?.username ?? 'N/A'}'),
               const SizedBox(height: 12),
-              _InfoRow(label: 'E-mail', value: user?.email ?? 'N/A'),
-              const SizedBox(height: 12),
               _InfoRow(
                   label: 'Tipo',
                   value: (user?.isAdmin ?? false) ? 'Administrador' : 'Criadora'),
               const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/change-password'),
+                icon: const Icon(Icons.lock_reset_rounded, size: 18),
+                label: const Text('Alterar senha'),
+              ),
+              const SizedBox(height: 12),
               GradientButton(
                 id: 'logout_button',
                 onPressed: () => context.read<AuthProvider>().logout(),

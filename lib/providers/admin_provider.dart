@@ -92,6 +92,25 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Releases a password change for one user: returns the one-time temporary password
+  /// (shown to the admin once, never stored by the server in clear), or null (see [error]).
+  /// Her current logins are signed out and the temporary password expires.
+  Future<({String password, int hours})?> releasePasswordReset(int userId) async {
+    final result = await _api.post('/admin/users/$userId/password_reset', {});
+    if (result['success'] == true && result['data'] is Map) {
+      final data = (result['data'] as Map).cast<String, dynamic>();
+      await _tryLoad(); // the list now shows "troca pendente"
+      notifyListeners();
+      return (
+        password: data['temporary_password'] as String? ?? '',
+        hours: asInt(data['expires_in_hours']),
+      );
+    }
+    _error = AdminApiService.errorMessage(result, 'Não foi possível liberar a troca de senha.');
+    notifyListeners();
+    return null;
+  }
+
   /// Creates an agency; returns its signup code, or null (see [error]).
   Future<String?> createAgency(String name) async {
     final result = await _api.post('/admin/agencies', {'name': name});

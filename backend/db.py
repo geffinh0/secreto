@@ -244,6 +244,26 @@ def init_db():
         if "agency_id" not in _columns(conn, "users"):
             c.execute("ALTER TABLE users ADD COLUMN agency_id INTEGER REFERENCES agencies(id)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_users_agency ON users(agency_id)")
+        # Admin-released password reset: the admin hands the user a one-time temporary
+        # password; she must replace it before using anything else (see main.py).
+        if "must_change_password" not in _columns(conn, "users"):
+            c.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+        if "temp_password_expires_at" not in _columns(conn, "users"):
+            c.execute("ALTER TABLE users ADD COLUMN temp_password_expires_at TEXT")
+        if "temp_password_used" not in _columns(conn, "users"):
+            c.execute("ALTER TABLE users ADD COLUMN temp_password_used INTEGER NOT NULL DEFAULT 0")
+        # usernames are unique regardless of case ('Nyx' == 'nyx'). The old UNIQUE
+        # constraint is case-sensitive and the app-level check races, so enforce it here.
+        # If rows already collide the index is NOT created (nothing is deleted or renamed)
+        # and the log says which names to fix.
+        try:
+            c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase "
+                      "ON users(lower(username))")
+        except sqlite3.IntegrityError:
+            dupes = [r[0] for r in c.execute(
+                "SELECT lower(username) FROM users GROUP BY lower(username) HAVING COUNT(*) > 1")]
+            log.error("users has usernames that differ only by case (%s); case-insensitive "
+                      "unique index NOT created - rename them and restart", ", ".join(dupes))
         if "egress_slot" not in _columns(conn, "users"):
             c.execute("ALTER TABLE users ADD COLUMN egress_slot INTEGER")
             # Everyone who already has a robot connected got their token through the

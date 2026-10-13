@@ -5,6 +5,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/gradient_button.dart';
+import 'change_password_screen.dart' show passwordRuleError;
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,7 +18,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _displayNameController = TextEditingController();
   final _agencyCodeController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -43,7 +43,6 @@ class _RegisterScreenState extends State<RegisterScreen>
   void dispose() {
     _animCtrl.dispose();
     _usernameController.dispose();
-    _emailController.dispose();
     _displayNameController.dispose();
     _agencyCodeController.dispose();
     _passwordController.dispose();
@@ -56,7 +55,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     final auth = context.read<AuthProvider>();
     final success = await auth.register(
       _usernameController.text.trim(),
-      _emailController.text.trim(),
       _passwordController.text,
       _displayNameController.text.trim(),
       _agencyCodeController.text.trim(),
@@ -173,27 +171,12 @@ class _RegisterScreenState extends State<RegisterScreen>
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'E-mail',
-                            prefixIcon: Icon(Icons.email_rounded),
-                            hintText: 'seu@email.com',
-                          ),
-                          validator: (v) {
-                            if (v?.isEmpty ?? true) return 'Campo obrigatório';
-                            if (!v!.contains('@')) return 'E-mail inválido';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
                           controller: _passwordController,
                           obscureText: _obscurePass,
                           decoration: InputDecoration(
                             labelText: 'Senha',
                             prefixIcon: const Icon(Icons.lock_rounded),
-                            hintText: 'Mínimo 8 caracteres',
+                            hintText: 'Mínimo 10 caracteres, com letras e números',
                             suffixIcon: IconButton(
                               icon: Icon(_obscurePass
                                   ? Icons.visibility_rounded
@@ -204,8 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                           ),
                           validator: (v) {
                             if (v?.isEmpty ?? true) return 'Campo obrigatório';
-                            if (v!.length < 8) return 'Mínimo 8 caracteres';
-                            return null;
+                            return passwordRuleError(v!);
                           },
                         ),
                         const SizedBox(height: 14),

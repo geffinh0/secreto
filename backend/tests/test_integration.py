@@ -125,7 +125,7 @@ def new_user(prefix="user"):
     _counter[0] += 1
     name = f"{prefix}{_counter[0]}"
     status, body = api("POST", "/auth/register", {
-        "username": name, "email": f"{name}@example.com", "password": "senha-forte-1",
+        "username": name, "email": f"{name}@example.com", "password": "pw-teste-4821x",
         "agency_code": agency_code(),
     })
     assert status == 200, body
@@ -152,7 +152,7 @@ class AuthAndApiTests(unittest.TestCase):
     def test_register_duplicate_is_case_insensitive(self):
         name, _, _ = new_user("dup")
         status, _ = api("POST", "/auth/register", {
-            "username": name.upper(), "email": "other@example.com", "password": "senha-forte-1",
+            "username": name.upper(), "email": "other@example.com", "password": "pw-teste-4821x",
             "agency_code": agency_code()})
         self.assertEqual(status, 400)
 
@@ -162,13 +162,13 @@ class AuthAndApiTests(unittest.TestCase):
         os.environ["SM_ALLOW_REGISTRATION"] = "0"
         try:
             status, body = api("POST", "/auth/register", {
-                "username": "lockedout", "email": "lockedout@example.com", "password": "senha-forte-1",
+                "username": "lockedout", "email": "lockedout@example.com", "password": "pw-teste-4821x",
                 "agency_code": agency_code()})
             self.assertEqual(status, 403)
             self.assertIn("desativado", body["detail"])
             # login for accounts that already existed is unaffected
             self.assertEqual(
-                api("POST", "/auth/login", {"username": name, "password": "senha-forte-1"})[0], 200)
+                api("POST", "/auth/login", {"username": name, "password": "pw-teste-4821x"})[0], 200)
         finally:
             if old is None:
                 os.environ.pop("SM_ALLOW_REGISTRATION", None)
@@ -179,7 +179,7 @@ class AuthAndApiTests(unittest.TestCase):
         name, _, _ = new_user("login")
         status, bad = api("POST", "/auth/login", {"username": name, "password": "errada"})
         self.assertEqual(status, 401)
-        status, ok = api("POST", "/auth/login", {"username": name, "password": "senha-forte-1"})
+        status, ok = api("POST", "/auth/login", {"username": name, "password": "pw-teste-4821x"})
         self.assertEqual(status, 200)
         self.assertIs(ok["user"]["is_admin"], False)
         status, me = api("GET", "/auth/me", token=ok["access_token"])
@@ -217,7 +217,7 @@ class AuthAndApiTests(unittest.TestCase):
         try:
             for _ in range(8):
                 api("POST", "/auth/login", {"username": name, "password": "x"})
-            self.assertEqual(api("POST", "/auth/login", {"username": name, "password": "senha-forte-1"})[0], 429)
+            self.assertEqual(api("POST", "/auth/login", {"username": name, "password": "pw-teste-4821x"})[0], 429)
         finally:
             main.throttle.clear()
 
@@ -1604,7 +1604,7 @@ class ActivityLogTests(RobotTestBase):
         self.assertGreater(len(self.activity()), 0)
 
     def test_login_is_recorded(self):
-        api("POST", "/auth/login", {"username": self.name, "password": "senha-forte-1"})
+        api("POST", "/auth/login", {"username": self.name, "password": "pw-teste-4821x"})
         self.assertEqual(self.activity()[0]["action"], "login")
 
 
@@ -1620,7 +1620,7 @@ class AdminPanelTests(RobotTestBase):
     confirm nobody's password hash or robot token/device_id ever appears in
     the response, and that the data shown is real."""
 
-    def make_admin(self, password="admin-senha-forte-1"):
+    def make_admin(self, password="admin-pw-teste-4821x"):
         """Inserts an admin_accounts row directly (mirrors how the real
         startup bootstrap creates the first one from env vars - there is no
         public /admin/register) and logs in through the real endpoint to get
@@ -1719,8 +1719,8 @@ def make_admin_token():
     _admin_counter[0] += 1
     username = f"agadmin{_admin_counter[0]}"
     sql("INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
-        (username, security.hash_password("admin-senha-forte-1"), "Admin"))
-    status, body = api("POST", "/admin/login", {"username": username, "password": "admin-senha-forte-1"})
+        (username, security.hash_password("admin-pw-teste-4821x"), "Admin"))
+    status, body = api("POST", "/admin/login", {"username": username, "password": "admin-pw-teste-4821x"})
     assert status == 200, body
     return body["access_token"]
 
@@ -1729,7 +1729,7 @@ def register_with(code, name=None):
     _counter[0] += 1
     name = name or f"ag{_counter[0]}"
     return api("POST", "/auth/register", {
-        "username": name, "email": f"{name}@example.com", "password": "senha-forte-1",
+        "username": name, "email": f"{name}@example.com", "password": "pw-teste-4821x",
         "agency_code": code})
 
 
@@ -1750,7 +1750,7 @@ class AgencyTests(unittest.TestCase):
 
     def test_register_requires_an_agency_code(self):
         status, body = api("POST", "/auth/register", {
-            "username": "nocode1", "email": "nocode1@example.com", "password": "senha-forte-1"})
+            "username": "nocode1", "email": "nocode1@example.com", "password": "pw-teste-4821x"})
         self.assertEqual(status, 422)
         self.assertIn("campo obrigatório", body["detail"])
 
@@ -1787,7 +1787,7 @@ class AgencyTests(unittest.TestCase):
         agency = self.new_agency()
         _, body = register_with(agency["code"], "stays1")
         api("POST", f"/admin/agencies/{agency['id']}/active", {"active": False}, self.admin)
-        status, _ = api("POST", "/auth/login", {"username": "stays1", "password": "senha-forte-1"})
+        status, _ = api("POST", "/auth/login", {"username": "stays1", "password": "pw-teste-4821x"})
         self.assertEqual(status, 200)
         self.assertEqual(self.agency_row(agency["id"])["users_total"], 1)
 
@@ -2063,6 +2063,173 @@ class MigrationTests(unittest.TestCase):
             conn.execute("SELECT COUNT(*) FROM sessions WHERE token_hash IS NULL OR token != token_hash").fetchone()[0], 0)
         self.assertIn("kick_permanent", [r[1] for r in conn.execute("PRAGMA table_info(bot_settings)")])
         conn.close()
+
+
+class AccountSecurityTests(unittest.TestCase):
+    """Sign-up without e-mail, strong passwords, unique usernames, and the
+    admin-released one-time password that must be replaced before anything else."""
+
+    GOOD = "pw-teste-4821x"
+
+    def register(self, username, password=GOOD, **extra):
+        body = {"username": username, "password": password, "agency_code": agency_code(), **extra}
+        return api("POST", "/auth/register", body)
+
+    def admin_token(self):
+        _admin_counter[0] += 1
+        username = f"secadmin{_admin_counter[0]}"
+        sql("INSERT INTO admin_accounts (username, password_hash, display_name) VALUES (?, ?, ?)",
+            (username, security.hash_password("admin-pw-teste-4821x"), "Admin"))
+        status, body = api("POST", "/admin/login", {"username": username, "password": "admin-pw-teste-4821x"})
+        assert status == 200, body
+        return body["access_token"]
+
+    def release_reset(self, user_id):
+        return api("POST", f"/admin/users/{user_id}/password_reset", token=self.admin_token())
+
+    # ── sign-up ──
+    def test_signup_needs_no_email_and_never_returns_one(self):
+        _counter[0] += 1
+        status, body = self.register(f"noemail{_counter[0]}", display_name="Maria")
+        self.assertEqual(status, 200, body)
+        self.assertNotIn("email", body["user"])
+        self.assertNotIn("password_hash", body["user"])
+        self.assertFalse(body["user"]["must_change_password"])
+
+    def test_an_old_client_that_still_sends_an_email_is_tolerated_and_it_is_dropped(self):
+        _counter[0] += 1
+        name = f"oldclient{_counter[0]}"
+        status, body = self.register(name, email="alguem@exemplo.com")
+        self.assertEqual(status, 200, body)
+        self.assertNotIn("alguem@exemplo.com", json.dumps(body))
+        stored = sqlite3.connect(db.DB_PATH).execute(
+            "SELECT email FROM users WHERE username = ?", (name,)).fetchone()[0]
+        self.assertNotEqual(stored, "alguem@exemplo.com")
+
+    def test_weak_passwords_are_refused_with_a_reason_in_portuguese(self):
+        _counter[0] += 1
+        name = f"weak{_counter[0]}"
+        for weak in ("curta1", "somenteletrasaqui", "1234567890", "senhasenha1", f"{name}-2026-x", "aaaaaaaaaa1"):
+            status, body = self.register(name, password=weak)
+            self.assertEqual(status, 422, (weak, body))
+            self.assertTrue(body["detail"].startswith("Senha fraca"), body)
+        self.assertEqual(self.register(name)[0], 200)   # and a good one still works
+
+    def test_the_display_name_cannot_be_the_password(self):
+        _counter[0] += 1
+        status, body = self.register(f"disp{_counter[0]}", password="Fulana-de-Tal1", display_name="Fulana de Tal")
+        self.assertEqual(status, 422, body)
+
+    # ── unique usernames ──
+    def test_usernames_are_unique_ignoring_case_even_at_the_database(self):
+        _counter[0] += 1
+        name = f"Unico{_counter[0]}"
+        self.assertEqual(self.register(name)[0], 200)
+        status, body = self.register(name.lower())
+        self.assertEqual(status, 400)
+        self.assertIn("já está em uso", body["detail"])
+        with self.assertRaises(sqlite3.IntegrityError):   # the index, not just the app check
+            sql("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                (name.upper(), f"{name}@x.invalid", "x"))
+
+    def test_two_simultaneous_signups_of_the_same_name_create_one_account(self):
+        _counter[0] += 1
+        name = f"corrida{_counter[0]}"
+        results = []
+        threads = [threading.Thread(target=lambda n=n: results.append(self.register(n)[0]))
+                   for n in (name, name.upper(), name.title(), name)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        self.assertEqual(sorted(results).count(200), 1, results)
+
+    # ── admin-released one-time password ──
+    def test_release_gives_a_one_time_password_that_forces_a_new_one(self):
+        _counter[0] += 1
+        name = f"reset{_counter[0]}"
+        _, body = self.register(name)
+        user_id, old_token = body["user"]["id"], body["access_token"]
+
+        status, released = self.release_reset(user_id)
+        self.assertEqual(status, 200, released)
+        temp = released["temporary_password"]
+        self.assertEqual(released["username"], name)
+        stored = sqlite3.connect(db.DB_PATH).execute(
+            "SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+        self.assertNotIn(temp, stored)                                   # only a hash is stored
+        self.assertEqual(api("GET", "/auth/me", token=old_token)[0], 401)  # old logins are out
+        self.assertEqual(api("POST", "/auth/login", {"username": name, "password": self.GOOD})[0], 401)
+
+        status, login = api("POST", "/auth/login", {"username": name, "password": temp})
+        self.assertEqual(status, 200, login)
+        self.assertTrue(login["user"]["must_change_password"])
+        forced = login["access_token"]
+
+        # nothing but /auth/me and /auth/change-password works until she picks her own
+        self.assertEqual(api("GET", "/auth/me", token=forced)[0], 200)
+        status, body = api("GET", "/moderation/rules", token=forced)
+        self.assertEqual(status, 403, body)
+        self.assertIn("nova senha", body["detail"])
+
+        # the temporary password cannot be used twice
+        status, again = api("POST", "/auth/login", {"username": name, "password": temp})
+        self.assertEqual(status, 401)
+        self.assertIn("já foi usada", again["detail"])
+
+        # she must give the right current one, and a strong new one
+        self.assertEqual(api("POST", "/auth/change-password",
+                             {"current_password": "errada", "new_password": "Nova-senha-9271"}, forced)[0], 400)
+        self.assertEqual(api("POST", "/auth/change-password",
+                             {"current_password": temp, "new_password": "curta1"}, forced)[0], 422)
+        self.assertEqual(api("POST", "/auth/change-password",
+                             {"current_password": temp, "new_password": temp}, forced)[0], 400)
+        status, done = api("POST", "/auth/change-password",
+                           {"current_password": temp, "new_password": "Nova-senha-9271"}, forced)
+        self.assertEqual(status, 200, done)
+
+        self.assertNotEqual(api("GET", "/moderation/rules", token=forced)[0], 403)      # fully usable now
+        self.assertEqual(api("POST", "/auth/login", {"username": name, "password": "Nova-senha-9271"})[0], 200)
+        self.assertEqual(api("POST", "/auth/login", {"username": name, "password": temp})[0], 401)
+
+    def test_an_expired_temporary_password_is_refused(self):
+        _counter[0] += 1
+        name = f"expira{_counter[0]}"
+        _, body = self.register(name)
+        _, released = self.release_reset(body["user"]["id"])
+        sql("UPDATE users SET temp_password_expires_at = datetime('now', '-1 minute') WHERE username = ?", (name,))
+        status, out = api("POST", "/auth/login", {"username": name, "password": released["temporary_password"]})
+        self.assertEqual(status, 401)
+        self.assertIn("expirou", out["detail"])
+
+    def test_changing_the_password_signs_out_her_other_logins(self):
+        _counter[0] += 1
+        name = f"troca{_counter[0]}"
+        _, body = self.register(name)
+        keep = body["access_token"]
+        _, other = api("POST", "/auth/login", {"username": name, "password": self.GOOD})
+        status, _ = api("POST", "/auth/change-password",
+                        {"current_password": self.GOOD, "new_password": "Outra-senha-5518"}, keep)
+        self.assertEqual(status, 200)
+        self.assertEqual(api("GET", "/auth/me", token=keep)[0], 200)
+        self.assertEqual(api("GET", "/auth/me", token=other["access_token"])[0], 401)
+
+    def test_only_an_admin_can_release_a_reset_and_the_user_must_exist(self):
+        _counter[0] += 1
+        _, body = self.register(f"semadmin{_counter[0]}")
+        self.assertEqual(api("POST", f"/admin/users/{body['user']['id']}/password_reset")[0], 401)
+        self.assertEqual(api("POST", f"/admin/users/{body['user']['id']}/password_reset",
+                             token=body["access_token"])[0], 401)   # a portal token is not an admin token
+        self.assertEqual(api("POST", "/admin/users/99999999/password_reset", token=self.admin_token())[0], 404)
+
+    def test_the_admin_user_list_has_no_email_but_shows_who_must_change(self):
+        _counter[0] += 1
+        _, body = self.register(f"lista{_counter[0]}")
+        token = self.admin_token()
+        self.release_reset(body["user"]["id"])
+        status, users = api("GET", "/admin/users", token=token)
+        self.assertEqual(status, 200)
+        mine = next(u for u in users if u["id"] == body["user"]["id"])
+        self.assertNotIn("email", mine)
+        self.assertTrue(mine["must_change_password"])
 
 
 if __name__ == "__main__":

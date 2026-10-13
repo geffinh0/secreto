@@ -31,42 +31,45 @@ DateTime? parseDate(dynamic value) {
 class PortalUser {
   final int id;
   final String username;
-  final String email;
   final String? displayName;
   final String? avatarUrl;
   final DateTime createdAt;
   final bool isAdmin;
 
+  /// True while the user still holds a temporary password released by the admin:
+  /// the app only lets her reach the "set a new password" screen until she does.
+  final bool mustChangePassword;
+
   PortalUser({
     required this.id,
     required this.username,
-    required this.email,
     this.displayName,
     this.avatarUrl,
     required this.createdAt,
     this.isAdmin = false,
+    this.mustChangePassword = false,
   });
 
   factory PortalUser.fromJson(Map<String, dynamic> json) {
     return PortalUser(
       id: asInt(json['id']),
       username: json['username'] ?? '',
-      email: json['email'] ?? '',
       displayName: json['display_name'],
       avatarUrl: json['avatar_url'],
       createdAt: parseDate(json['created_at']) ?? DateTime.now(),
       isAdmin: asBool(json['is_admin']),
+      mustChangePassword: asBool(json['must_change_password']),
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'username': username,
-        'email': email,
         'display_name': displayName,
         'avatar_url': avatarUrl,
         'created_at': createdAt.toIso8601String(),
         'is_admin': isAdmin,
+        'must_change_password': mustChangePassword,
       };
 }
 
@@ -711,9 +714,9 @@ class AdminRobotInfo {
 class AdminUserSummary {
   final int id;
   final String username;
-  final String email;
   final String? displayName;
   final bool isAdmin;
+  final bool mustChangePassword; // an admin released a reset and she hasn't set her own yet
   final DateTime? createdAt;
   final AdminRobotInfo? robot;
 
@@ -731,9 +734,9 @@ class AdminUserSummary {
   const AdminUserSummary({
     required this.id,
     required this.username,
-    required this.email,
     this.displayName,
     this.isAdmin = false,
+    this.mustChangePassword = false,
     this.createdAt,
     this.robot,
     this.robotStatus = 'não configurado',
@@ -750,9 +753,9 @@ class AdminUserSummary {
   factory AdminUserSummary.fromJson(Map<String, dynamic> json) => AdminUserSummary(
         id: asInt(json['id']),
         username: json['username'] as String? ?? '',
-        email: json['email'] as String? ?? '',
         displayName: json['display_name'] as String?,
         isAdmin: asBool(json['is_admin']),
+        mustChangePassword: asBool(json['must_change_password']),
         createdAt: parseDate(json['created_at']),
         robot: json['robot'] is Map
             ? AdminRobotInfo.fromJson((json['robot'] as Map).cast<String, dynamic>())

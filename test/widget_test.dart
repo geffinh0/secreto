@@ -15,6 +15,7 @@ import 'package:atilas_client/providers/auth_provider.dart';
 import 'package:atilas_client/providers/auto_message_provider.dart';
 import 'package:atilas_client/providers/bot_provider.dart';
 import 'package:atilas_client/screens/admin/admin_screen.dart';
+import 'package:atilas_client/screens/auth/change_password_screen.dart' show passwordRuleError;
 import 'package:atilas_client/screens/auth/login_screen.dart';
 import 'package:atilas_client/screens/bot/bot_control_screen.dart';
 
@@ -274,10 +275,71 @@ void main() {
           },
         }));
       final auth = AuthProvider(api: api);
-      final done = await auth.register('ana', 'ana@x.com', 'senha-forte-1', 'Ana', 'ab3k-9xq2');
+      final done = await auth.register('ana', 'Bolo-de-cenoura-42', 'Ana', 'ab3k-9xq2');
       expect(done, isTrue);
       expect(api.postBodies['POST /auth/register']?['agency_code'], 'ab3k-9xq2');
       expect(auth.isAuthenticated, isTrue);
+    });
+
+    test('register no longer sends an e-mail', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = FakeApi()
+        ..on('POST /auth/register', ok({
+          'access_token': 'tok',
+          'user': {'id': 8, 'username': 'bia', 'is_admin': false, 'created_at': '2026-10-13T00:00:00.000Z'},
+        }));
+      final auth = AuthProvider(api: api);
+      expect(await auth.register('bia', 'Bolo-de-cenoura-42', 'Bia', 'ab3k-9xq2'), isTrue);
+      expect(api.postBodies['POST /auth/register']!.containsKey('email'), isFalse);
+    });
+
+    test('a temporary password logs in but flags that a new one must be chosen, until it is changed', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = FakeApi()
+        ..on('POST /auth/login', ok({
+          'access_token': 'tok',
+          'user': {
+            'id': 9, 'username': 'cris', 'is_admin': false, 'must_change_password': true,
+            'created_at': '2026-10-13T00:00:00.000Z',
+          },
+        }))
+        ..on('POST /auth/change-password', ok({'ok': true}))
+        ..on('GET /auth/me', ok({
+          'id': 9, 'username': 'cris', 'is_admin': false, 'must_change_password': false,
+          'created_at': '2026-10-13T00:00:00.000Z',
+        }));
+      final auth = AuthProvider(api: api);
+      expect(await auth.login('cris', 'Kp7x-Qm4e-Zb9w'), isTrue);
+      expect(auth.mustChangePassword, isTrue);
+
+      expect(await auth.changePassword('Kp7x-Qm4e-Zb9w', 'Nova-senha-9271'), isTrue);
+      expect(api.postBodies['POST /auth/change-password']?['new_password'], 'Nova-senha-9271');
+      expect(auth.mustChangePassword, isFalse);
+    });
+
+    test('a refused password change surfaces the server reason and keeps the flag', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = FakeApi()
+        ..on('POST /auth/login', ok({
+          'access_token': 'tok',
+          'user': {
+            'id': 9, 'username': 'cris', 'is_admin': false, 'must_change_password': true,
+            'created_at': '2026-10-13T00:00:00.000Z',
+          },
+        }))
+        ..on('POST /auth/change-password', fail(422, {'detail': 'Senha fraca: essa senha é muito comum, escolha outra'}));
+      final auth = AuthProvider(api: api);
+      await auth.login('cris', 'Kp7x-Qm4e-Zb9w');
+      expect(await auth.changePassword('Kp7x-Qm4e-Zb9w', 'senhasenha1'), isFalse);
+      expect(auth.error, contains('Senha fraca'));
+      expect(auth.mustChangePassword, isTrue);
+    });
+
+    test('client-side password rules mirror the basics the server enforces', () {
+      expect(passwordRuleError('curta1'), isNotNull);
+      expect(passwordRuleError('somenteletrasaqui'), isNotNull);
+      expect(passwordRuleError('1234567890'), isNotNull);
+      expect(passwordRuleError('Bolo-de-cenoura-42'), isNull);
     });
 
     test('register surfaces the server message for a wrong agency code', () async {
@@ -286,7 +348,7 @@ void main() {
         ..on('POST /auth/register',
             fail(400, {'detail': 'Código de agência inválido. Peça o código à sua agência.'}));
       final auth = AuthProvider(api: api);
-      final done = await auth.register('ana', 'ana@x.com', 'senha-forte-1', 'Ana', 'ZZZZ-ZZZZ');
+      final done = await auth.register('ana', 'Bolo-de-cenoura-42', 'Ana', 'ZZZZ-ZZZZ');
       expect(done, isFalse);
       expect(auth.error, contains('Código de agência inválido'));
     });

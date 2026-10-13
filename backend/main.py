@@ -17,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 import db
 import security
@@ -190,8 +190,10 @@ def _describe_validation_error(err: dict) -> str:
         return f"{label}: deve ser {'no mínimo' if kind == 'greater_than_equal' else 'no máximo'} {bound}"
     if kind == "literal_error":
         return f"{label}: valor inválido"
-    msg = str(err.get("msg", "valor inválido"))
-    return f"{label}: {msg.removeprefix('Value error, ')}"
+    msg = str(err.get("msg", "valor inválido")).removeprefix("Value error, ")
+    if msg.startswith("senha fraca"):  # raised by a model-level validator: no field name
+        return "Senha fraca" + msg.removeprefix("senha fraca")
+    return f"{label}: {msg}"
 
 
 @app.exception_handler(RequestValidationError)
@@ -210,10 +212,13 @@ def get_db():
         conn.close()
 
 
-def get_current_user(
+def get_current_user_any(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
     conn: sqlite3.Connection = Depends(get_db),
 ):
+    """The session's user, even one who still has to replace a temporary password.
+    Only /auth/me and /auth/change-password use this; everything else goes through
+    get_current_user below."""
     if credentials is None:
         raise HTTPException(401, "Token ausente")
     row = conn.execute(
@@ -224,6 +229,14 @@ def get_current_user(
     if not row:
         raise HTTPException(401, "Token inválido ou sessão expirada")
     return row_to_dict(row)
+
+
+def get_current_user(user: dict = Depends(get_current_user_any)):
+    """A fully usable session. While the user still holds an admin-issued temporary
+    password, every route that depends on this refuses with 403 until she changes it."""
+    if user.get("must_change_password"):
+        raise HTTPException(403, "Defina uma nova senha para continuar usando o sistema.")
+    return user
 
 
 def require_owner(current_user: dict, user_id: int) -> None:
@@ -254,6 +267,11 @@ def create_session(conn, user_id: int) -> str:
 def public_user(row) -> dict:
     user = row_to_dict(row) if not isinstance(row, dict) else dict(row)
     user.pop("password_hash", None)
+    # the portal has no real e-mail any more (see /auth/register); never expose the
+    # placeholder, and the temporary-password bookkeeping is server-side only
+    for hidden in ("email", "temp_password_expires_at", "temp_password_used"):
+        user.pop(hidden, None)
+    user["must_change_password"] = bool(user.get("must_change_password"))
     return user
 
 
@@ -265,10 +283,16 @@ def _clean_keyword(value: str) -> str:
     return cleaned
 
 
+def _password_error(password: str, username: str, display_name: Optional[str]) -> Optional[str]:
+    problems = security.password_problems(password, username, display_name or "")
+    return None if not problems else "senha fraca: " + "; ".join(problems)
+
+
 class RegisterRequest(BaseModel):
+    # No e-mail: the portal never sends or verifies one. Clients that still send an
+    # `email` field are tolerated (unknown fields are ignored) and the value is dropped.
     username: str
-    email: str
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=1, max_length=security.PASSWORD_MAX_LENGTH)
     display_name: Optional[str] = Field(default=None, max_length=60)
     agency_code: str = Field(min_length=1, max_length=40)
 
@@ -280,13 +304,17 @@ class RegisterRequest(BaseModel):
             raise ValueError("use 3 a 32 caracteres: letras, números, ponto, hífen ou underline")
         return v
 
-    @field_validator("email")
-    @classmethod
-    def _email(cls, v: str) -> str:
-        v = v.strip().lower()
-        if len(v) > 200 or not EMAIL_RE.match(v):
-            raise ValueError("e-mail inválido")
-        return v
+    @model_validator(mode="after")
+    def _strong_password(self):
+        error = _password_error(self.password, self.username, self.display_name)
+        if error:
+            raise ValueError(error)
+        return self
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=security.PASSWORD_MAX_LENGTH)
+    new_password: str = Field(min_length=1, max_length=security.PASSWORD_MAX_LENGTH)
 
 
 class LoginRequest(BaseModel):
@@ -502,23 +530,23 @@ def register(req: RegisterRequest, request: Request, conn: sqlite3.Connection = 
     if agency is None or not agency["active"]:
         register_throttle.record_failure(ip_key)
         raise HTTPException(400, "Código de agência inválido. Peça o código à sua agência.")
-    existing = conn.execute(
-        "SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)",
-        (req.username, req.email),
-    ).fetchone()
-    if existing:
-        raise HTTPException(400, "Usuário ou e-mail já cadastrado")
+    taken = "Esse nome de usuário já está em uso. Escolha outro."
+    if conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?)", (req.username,)).fetchone():
+        raise HTTPException(400, taken)
 
+    # users.email is still NOT NULL UNIQUE in the schema (dropping it needs a table
+    # rebuild, deferred); the portal has no e-mail, so store a unique placeholder.
+    placeholder_email = f"{req.username.lower()}@interno.invalid"
     try:
         cursor = conn.execute(
             "INSERT INTO users (username, email, display_name, password_hash, agency_id) "
             "VALUES (?, ?, ?, ?, ?)",
-            (req.username, req.email, req.display_name or req.username,
+            (req.username, placeholder_email, req.display_name or req.username,
              security.hash_password(req.password), agency["id"]),
         )
         conn.commit()
-    except sqlite3.IntegrityError:
-        raise HTTPException(400, "Usuário ou e-mail já cadastrado") from None
+    except sqlite3.IntegrityError:  # two sign-ups racing: the case-insensitive unique index decides
+        raise HTTPException(400, taken) from None
     user_id = cursor.lastrowid
     db.get_settings(conn, user_id)  # creates the default settings row
 
@@ -548,18 +576,63 @@ def login(req: LoginRequest, request: Request, conn: sqlite3.Connection = Depend
         raise HTTPException(401, "Credenciais inválidas")
 
     throttle.reset(user_key)
-    if needs_rehash:
+    if row["must_change_password"]:
+        # an admin-issued temporary password works exactly once, within its window:
+        # claiming it is one atomic UPDATE, so two simultaneous logins can't both win
+        claimed = conn.execute(
+            "UPDATE users SET temp_password_used = 1 WHERE id = ? AND temp_password_used = 0 "
+            "AND temp_password_expires_at > datetime('now')", (row["id"],)).rowcount
+        conn.commit()
+        if claimed != 1:
+            raise HTTPException(
+                401, "Esta senha provisória já foi usada ou expirou. Peça uma nova ao administrador.")
+    elif needs_rehash:
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
                      (security.hash_password(req.password), row["id"]))
         conn.commit()
     token = create_session(conn, row["id"])
     db.log_activity(row["id"], "login")
-    return {"access_token": token, "token_type": "bearer", "user": public_user(row)}
+    fresh = conn.execute("SELECT * FROM users WHERE id = ?", (row["id"],)).fetchone()
+    return {"access_token": token, "token_type": "bearer", "user": public_user(fresh)}
 
 
 @app.get("/auth/me")
-def get_me(current_user: dict = Depends(get_current_user)):
+def get_me(current_user: dict = Depends(get_current_user_any)):
     return public_user(current_user)
+
+
+@app.post("/auth/change-password")
+def change_password(
+    req: ChangePasswordRequest, request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    current_user: dict = Depends(get_current_user_any),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """The user sets her own password: voluntarily, or forced after an admin released a
+    reset. Other logins of hers are signed out; this session stays."""
+    ip = request.client.host if request.client else "unknown"
+    user_key, ip_key = f"user:{current_user['username'].lower()}", f"ip:{ip}"
+    if throttle.is_blocked(user_key, ip_key):
+        raise HTTPException(429, "Muitas tentativas. Aguarde alguns minutos.")
+    valid, _ = security.verify_password(req.current_password, current_user["password_hash"])
+    if not valid:
+        throttle.record_failure(user_key, ip_key)
+        raise HTTPException(400, "A senha atual está incorreta.")
+    if req.new_password == req.current_password:
+        raise HTTPException(400, "A nova senha precisa ser diferente da atual.")
+    error = _password_error(req.new_password, current_user["username"], current_user.get("display_name"))
+    if error:
+        raise HTTPException(422, "Senha fraca" + error.removeprefix("senha fraca"))
+    conn.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 0, "
+        "temp_password_expires_at = NULL, temp_password_used = 0 WHERE id = ?",
+        (security.hash_password(req.new_password), current_user["id"]))
+    conn.execute("DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?",
+                 (current_user["id"], security.hash_token(credentials.credentials)))
+    conn.commit()
+    throttle.reset(user_key)
+    db.log_activity(current_user["id"], "password_changed")
+    return {"ok": True}
 
 
 @app.post("/auth/logout")
@@ -1452,6 +1525,33 @@ def _robot_admin_status(robot, session) -> str:
     return "conectado (parado)"
 
 
+TEMP_PASSWORD_HOURS = 24
+
+
+@app.post("/admin/users/{user_id}/password_reset")
+def admin_release_password_reset(
+    user_id: int, admin: dict = Depends(get_current_admin), conn: sqlite3.Connection = Depends(get_db),
+):
+    """Releases a password change for one user: creates a one-time temporary password,
+    shown here ONCE (only its hash is stored). It works for a single login within
+    TEMP_PASSWORD_HOURS; that login can do nothing but set her own password. Her current
+    sessions are signed out right away, so the old password stops working too."""
+    row = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Usuária não encontrada")
+    temporary = security.generate_temp_password()
+    conn.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 1, temp_password_used = 0, "
+        "temp_password_expires_at = datetime('now', ?) WHERE id = ?",
+        (security.hash_password(temporary), f"+{TEMP_PASSWORD_HOURS} hours", user_id))
+    conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    conn.commit()
+    db.log_activity(user_id, "password_reset_released", f"liberado pelo admin {admin['username']}")
+    return JSONResponse(
+        {"username": row["username"], "temporary_password": temporary, "expires_in_hours": TEMP_PASSWORD_HOURS},
+        headers={"Cache-Control": "no-store"})
+
+
 @app.get("/admin/users")
 def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Connection = Depends(get_db)):
     """One row per portal user: account info + robot/session/rule counts.
@@ -1482,8 +1582,8 @@ def admin_list_users(admin: dict = Depends(get_current_admin), conn: sqlite3.Con
         result.append({
             "id": uid,
             "username": u["username"],
-            "email": u["email"],
             "display_name": u["display_name"],
+            "must_change_password": bool(u["must_change_password"]),
             "is_admin": bool(u["is_admin"]),
             "created_at": u["created_at"],
             "agency_id": u["agency_id"],

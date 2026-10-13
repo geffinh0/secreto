@@ -27,9 +27,10 @@ def main() -> int:
             print(f"Usuario '{username}' nao encontrado.")
             return 1
 
-        password = getpass.getpass(f"Nova senha para {row['username']} (minimo 8 caracteres): ")
-        if len(password) < 8:
-            print("A senha precisa ter pelo menos 8 caracteres.")
+        password = getpass.getpass(f"Nova senha para {row['username']} (minimo {security.PASSWORD_MIN_LENGTH} caracteres, letras e numeros): ")
+        problems = security.password_problems(password, row["username"])
+        if problems:
+            print("Senha fraca: " + "; ".join(problems) + ".")
             return 1
         if getpass.getpass("Repita a senha: ") != password:
             print("As senhas nao conferem.")

@@ -59,19 +59,52 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
-  Future<bool> register(String username, String email, String password,
-      String displayName, String agencyCode) async {
+  Future<bool> register(String username, String password, String displayName,
+      String agencyCode) async {
     return _authenticate(
       '/auth/register',
       {
         'username': username,
-        'email': email,
         'password': password,
         'display_name': displayName,
         'agency_code': agencyCode,
       },
       fallbackError: 'Erro ao criar conta',
     );
+  }
+
+  /// True while the user holds a temporary password released by the admin: the router
+  /// then only lets her reach the "choose a new password" screen.
+  bool get mustChangePassword => _user?.mustChangePassword ?? false;
+
+  /// Sets the user's own password (voluntary, or forced after an admin release).
+  /// Other logins of hers are signed out by the server; this one stays.
+  Future<bool> changePassword(String currentPassword, String newPassword) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await _api.post('/auth/change-password', {
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      });
+      if (result['success'] == true) {
+        final me = await _api.get('/auth/me');
+        if (me['success'] == true) {
+          _user = PortalUser.fromJson(me['data']);
+          await _saveUser(_user!);
+        }
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+      _error = PortalApiService.errorMessage(result, 'Não foi possível trocar a senha');
+    } catch (_) {
+      _error = 'Erro ao processar a resposta do servidor';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> _authenticate(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../screens/auth/change_password_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
@@ -17,6 +18,7 @@ final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
 
 const String _splashPath = '/splash';
+const String _changePasswordPath = '/change-password';
 
 GoRouter createRouter(AuthProvider authProvider) {
   return GoRouter(
@@ -52,6 +54,11 @@ GoRouter createRouter(AuthProvider authProvider) {
         return isAuth ? target : '/login';
       }
       if (!isAuth && !isAuthRoute) return '/login';
+      // an admin-released temporary password: nothing else until she picks her own
+      if (isAuth && authProvider.mustChangePassword && location != _changePasswordPath &&
+          !location.startsWith('/admin')) {
+        return _changePasswordPath;
+      }
       if (isAuth && isAuthRoute && !location.startsWith('/admin')) return '/dashboard';
       return null;
     },
@@ -75,6 +82,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: '/admin',
         builder: (context, state) => const AdminScreen(),
+      ),
+      GoRoute(
+        path: _changePasswordPath,
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),

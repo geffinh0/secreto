@@ -223,7 +223,7 @@ class _MainShellState extends State<MainShell> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  user?.email ?? '',
+                  '@${user?.username ?? ''}',
                   style: const TextStyle(
                     color: AppTheme.textMuted,
                     fontSize: 11,

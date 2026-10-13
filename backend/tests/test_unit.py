@@ -537,6 +537,53 @@ class ThrottleAwarePollingTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(throttled, normal * 1.6)
 
 
+class PasswordRulesTests(unittest.TestCase):
+    def test_accepts_a_long_password_with_letters_and_digits(self):
+        self.assertEqual(security.password_problems("Bolo-de-cenoura-42", "maria", "Maria Souza"), [])
+
+    def test_each_rule_reports_its_own_reason(self):
+        self.assertTrue(any("pelo menos" in p for p in security.password_problems("abc123")))
+        self.assertTrue(any("letras e números" in p for p in security.password_problems("abcdefghijkl")))
+        self.assertTrue(any("nome de usuário" in p for p in security.password_problems("xx-Maria.Souza-91", "maria.souza")))
+        self.assertTrue(any("nome de exibição" in p for p in security.password_problems("Fulana_de_Tal-77", "u1", "Fulana de Tal")))
+        self.assertTrue(any("comum" in p for p in security.password_problems("Senha@123456")))
+        self.assertTrue(any("sequências" in p for p in security.password_problems("1234567890")))
+
+    def test_temporary_passwords_are_random_and_unambiguous(self):
+        seen = {security.generate_temp_password() for _ in range(50)}
+        self.assertEqual(len(seen), 50)
+        for pw in seen:
+            self.assertRegex(pw, r"^[A-Za-z2-9]{4}-[A-Za-z2-9]{4}-[A-Za-z2-9]{4}$")
+            self.assertFalse(set(pw) & set("0O1lI"))
+
+
+class UsernameMigrationTests(unittest.TestCase):
+    def test_startup_with_names_that_differ_only_by_case_does_not_crash_or_delete_anything(self):
+        import sqlite3
+        import tempfile
+        import db as dbmod
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "old.db")
+            old = sqlite3.connect(path)
+            old.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, "
+                        "email TEXT UNIQUE NOT NULL, display_name TEXT, password_hash TEXT NOT NULL, "
+                        "is_admin INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))")
+            old.executemany("INSERT INTO users (username, email, password_hash) VALUES (?,?,?)",
+                            [("Nyx", "a@x.com", "h"), ("nyx", "b@x.com", "h")])
+            old.commit()
+            old.close()
+            with mock.patch.object(dbmod, "DB_PATH", path):
+                with self.assertLogs("super_moderator.db", level="ERROR") as cm:
+                    dbmod.init_db()
+                conn = sqlite3.connect(path)
+                names = [r[0] for r in conn.execute("SELECT username FROM users ORDER BY id")]
+                cols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
+                conn.close()
+            self.assertEqual(names, ["Nyx", "nyx"])          # nothing renamed or removed
+            self.assertIn("must_change_password", cols)      # the rest of the migration still ran
+            self.assertIn("differ only by case", "\n".join(cm.output))
+
+
 class WatchLookupLoggingTests(unittest.TestCase):
     def _mgr(self):
         from engine import WatchManager

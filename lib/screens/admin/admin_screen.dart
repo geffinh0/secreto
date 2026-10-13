@@ -298,7 +298,6 @@ class _UsersTabState extends State<_UsersTab> {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return u.username.toLowerCase().contains(q) ||
-        u.email.toLowerCase().contains(q) ||
         (u.displayName ?? '').toLowerCase().contains(q) ||
         (u.robot?.nickname ?? '').toLowerCase().contains(q);
   }
@@ -451,7 +450,7 @@ class _UserCard extends StatelessWidget {
                         ],
                       ],
                     ),
-                    Text('@${user.username} · ${user.email}',
+                    Text('@${user.username}${user.mustChangePassword ? ' · troca de senha pendente' : ''}',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                   ],
@@ -494,6 +493,82 @@ class _UserCard extends StatelessWidget {
                 _MiniFact(label: 'Live atual', value: user.sessionLivestreamId!),
             ],
           ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _releaseReset(context),
+              icon: const Icon(Icons.lock_reset_rounded, size: 18),
+              label: const Text('Liberar troca de senha'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _releaseReset(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgCard,
+        title: Text('Liberar troca de senha de @${user.username}?',
+            style: const TextStyle(color: AppTheme.textPrimary)),
+        content: const Text(
+            'A senha atual deixa de funcionar e as sessões abertas dela são encerradas agora. '
+            'Será gerada uma senha provisória, de uso único, que você entrega a ela. '
+            'Ao entrar com ela, a usuária é obrigada a criar a própria senha.',
+            style: TextStyle(color: AppTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Gerar senha provisória')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final provider = context.read<AdminProvider>();
+    final released = await provider.releasePasswordReset(user.id);
+    if (!context.mounted) return;
+    if (released == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(provider.error ?? 'Não foi possível liberar a troca.')));
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgCard,
+        title: Text('Senha provisória de @${user.username}',
+            style: const TextStyle(color: AppTheme.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                'Entregue a ela agora: esta senha aparece só desta vez, vale para um único login '
+                'e expira em ${released.hours} horas.',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            const SizedBox(height: 16),
+            Center(
+              child: SelectableText(released.password,
+                  style: const TextStyle(
+                      color: AppTheme.primary, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: released.password));
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Senha copiada')));
+              }
+            },
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            label: const Text('Copiar'),
+          ),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Já anotei')),
         ],
       ),
     );
