@@ -110,6 +110,48 @@ class _PendingEmailLogin:
 _pending_email_logins: dict[int, _PendingEmailLogin] = {}
 
 
+# ─── Orphan sweep ────────────────────────────────────────────────────────────
+ORPHAN_SWEEP_SECONDS = 60
+
+
+async def reap_deleted_users() -> list:
+    """Stops the robot session and the live watch of every user that no longer exists.
+
+    A user deleted straight from the database (there is no delete endpoint) used to leave
+    their session running in memory: it kept moderating, held an egress slot and failed on
+    every write with FOREIGN KEY errors. Returns the user ids that were cleaned up."""
+    held = set(sessions.all_sessions()) | set(watchers.watching_ids())
+    if not held:
+        return []
+
+    def _existing() -> set:
+        conn = db.connect()
+        try:
+            marks = ",".join("?" * len(held))
+            return {r["id"] for r in conn.execute(f"SELECT id FROM users WHERE id IN ({marks})", list(held))}
+        finally:
+            conn.close()
+
+    gone = held - await asyncio.to_thread(_existing)
+    for user_id in sorted(gone):
+        logging.getLogger("super_moderator.main").warning(
+            "user %s no longer exists: stopping its robot session and live watch", user_id)
+        await watchers.stop(user_id)
+        await sessions.drop(user_id, "Usuário removido")
+    return sorted(gone)
+
+
+async def _orphan_sweep_loop() -> None:
+    while True:
+        await asyncio.sleep(ORPHAN_SWEEP_SECONDS)
+        try:
+            await reap_deleted_users()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - the sweep must never die
+            logging.getLogger("super_moderator.main").exception("orphan sweep failed")
+
+
 # ─── App setup ───────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -130,7 +172,9 @@ async def lifespan(_app: FastAPI):
     print("[OK] Atila's Client API iniciada!")
     print(f"[DB] Banco de dados: {db.DB_PATH}")
     print("[DOCS] Docs: http://localhost:8000/docs")
+    sweeper = asyncio.create_task(_orphan_sweep_loop(), name="orphan-sweep")
     yield
+    sweeper.cancel()
     await watchers.shutdown()
     await sessions.shutdown()
 

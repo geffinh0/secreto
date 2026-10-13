@@ -584,6 +584,61 @@ class UsernameMigrationTests(unittest.TestCase):
             self.assertIn("differ only by case", "\n".join(cm.output))
 
 
+class OrphanSweepTests(unittest.IsolatedAsyncioTestCase):
+    async def test_sessions_and_watches_of_deleted_users_are_stopped_and_dropped(self):
+        import sqlite3
+        import tempfile
+        import db as dbmod
+        import main as mainmod
+
+        class FakeSessions:
+            def __init__(self):
+                self.held, self.dropped = {1: object(), 2: object()}, []
+
+            def all_sessions(self):
+                return dict(self.held)
+
+            async def drop(self, user_id, reason):
+                self.dropped.append((user_id, reason))
+
+        class FakeWatchers:
+            def __init__(self):
+                self.stopped = []
+
+            def watching_ids(self):
+                return [2, 3]
+
+            async def stop(self, user_id):
+                self.stopped.append(user_id)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.db")
+            with mock.patch.object(dbmod, "DB_PATH", path):
+                dbmod.init_db()
+                conn = sqlite3.connect(path)
+                conn.execute("INSERT INTO users (id, username, email, password_hash) VALUES (1, 'viva', 'v@x.invalid', 'h')")
+                conn.commit()
+                conn.close()
+                fake_sessions, fake_watchers = FakeSessions(), FakeWatchers()
+                with mock.patch.object(mainmod, "sessions", fake_sessions), \
+                        mock.patch.object(mainmod, "watchers", fake_watchers), \
+                        self.assertLogs("super_moderator.main", level="WARNING"):
+                    gone = await mainmod.reap_deleted_users()
+        self.assertEqual(gone, [2, 3])                       # user 1 still exists: untouched
+        self.assertEqual(fake_watchers.stopped, [2, 3])
+        self.assertEqual([uid for uid, _ in fake_sessions.dropped], [2, 3])
+
+    async def test_nothing_held_means_no_database_work(self):
+        import main as mainmod
+
+        class Empty:
+            def all_sessions(self): return {}
+            def watching_ids(self): return []
+
+        with mock.patch.object(mainmod, "sessions", Empty()), mock.patch.object(mainmod, "watchers", Empty()):
+            self.assertEqual(await mainmod.reap_deleted_users(), [])
+
+
 class WatchLookupLoggingTests(unittest.TestCase):
     def _mgr(self):
         from engine import WatchManager

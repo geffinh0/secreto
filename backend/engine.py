@@ -1293,6 +1293,13 @@ class SessionManager:
             await session.stop()
         return session
 
+    async def drop(self, user_id: int, reason: str) -> None:
+        """Stops and forgets a user's session for good (the user no longer exists)."""
+        session = self._sessions.get(user_id)
+        if session is not None:
+            await session.stop(reason=reason)
+            self._sessions.pop(user_id, None)
+
     async def shutdown(self) -> None:
         await asyncio.gather(
             *(s.stop(reason="Servidor encerrado") for s in self._sessions.values()),
@@ -1399,6 +1406,9 @@ class WatchManager:
             return
         self._tasks[user_id] = asyncio.create_task(
             self._watch_loop(user_id, jitter), name=f"watch-{user_id}")
+
+    def watching_ids(self) -> list:
+        return list(self._tasks)
 
     async def stop(self, user_id: int) -> None:
         self._egress.pop(user_id, None)
