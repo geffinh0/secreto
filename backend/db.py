@@ -376,6 +376,35 @@ def list_agencies_with_counts(conn) -> list:
     return result
 
 
+def get_live_pattern(conn, user_id: int):
+    """What the activity log says about when this creator goes live: the start
+    times of her lives over the last 21 days, when the last one ended, and when
+    her account was created. All naive UTC datetimes (SQLite's datetime('now'))."""
+    from datetime import datetime
+
+    def parse(value):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            return None
+
+    starts, last_end = [], None
+    for row in conn.execute(
+        "SELECT action, created_at FROM user_activity_log WHERE user_id = ? "
+        "AND action IN ('session_auto_started', 'session_started', 'favorite_live_connected', 'live_ended') "
+        "AND created_at >= datetime('now', '-21 days') ORDER BY id", (user_id,)
+    ):
+        when = parse(row["created_at"])
+        if when is None:
+            continue
+        if row["action"] == "live_ended":
+            last_end = when
+        else:
+            starts.append(when)
+    created = conn.execute("SELECT created_at FROM users WHERE id = ?", (user_id,)).fetchone()
+    return starts, last_end, parse(created["created_at"]) if created else None
+
+
 def get_or_assign_egress_slot(conn, user_id: int, pool_size: int) -> int:
     """The user's fixed egress (proxy) slot. Assigned once, to the least loaded
     slot, then never changed: SuperLive ties a token to the IP it was issued

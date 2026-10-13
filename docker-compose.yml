@@ -32,7 +32,8 @@ services:
       SUPERLIVE_PROXY_URLS: "${SUPERLIVE_PROXY_URLS:-}"
       # Share of each egress's request budget (req/s) given to "is she live yet?"
       # polling; the more creators per IP, the slower each is polled.
-      SM_POLL_BUDGET_RPS: "${SM_POLL_BUDGET_RPS:-1.5}"      # Shared secret the Telegram healthbot sends to read /robot/live_status
+      SM_POLL_BUDGET_RPS: "${SM_POLL_BUDGET_RPS:-2.0}"
+      # Shared secret the Telegram healthbot sends to read /robot/live_status
       # (no portal login of its own - see main.py). Comes from a .env file
       # next to this compose file, never committed; see DEPLOY.md. Empty =
       # the endpoint refuses every request, it never falls open.

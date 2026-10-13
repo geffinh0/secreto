@@ -678,5 +678,113 @@ class ProxyOutageTests(unittest.IsolatedAsyncioTestCase):
                 await task
 
 
+class AdaptiveWatchTests(unittest.IsolatedAsyncioTestCase):
+    """Fewer requests per creator: hot/cold polling weights, no duplicate polling
+    by the session while the watcher covers her."""
+
+    NOW = __import__("datetime").datetime(2026, 10, 13, 21, 0, 0)
+
+    def days_ago(self, days, hour=21):
+        import datetime as dt
+        d = self.NOW - dt.timedelta(days=days)
+        return d.replace(hour=hour, minute=10)
+
+    def mult(self, starts=(), last_end=None, created=None, state=None):
+        from engine import watch_multiplier
+        created = created or self.NOW.replace(year=2026, month=1)
+        return watch_multiplier(list(starts), last_end, self.NOW, created, state)
+
+    def test_creator_who_usually_goes_live_at_this_hour_is_polled_twice_as_often(self):
+        self.assertEqual(self.mult([self.days_ago(1), self.days_ago(3), self.days_ago(8)]), 0.5)
+        # +-1 hour counts, 4 hours away does not
+        self.assertEqual(self.mult([self.days_ago(1, 22), self.days_ago(2, 20), self.days_ago(3, 21)]), 0.5)
+        self.assertEqual(self.mult([self.days_ago(1, 17), self.days_ago(2, 17), self.days_ago(3, 17)]), 1.0)
+
+    def test_two_lives_on_the_same_day_are_one_day_not_two(self):
+        d = self.days_ago(1)
+        self.assertEqual(self.mult([d, d.replace(hour=22), self.days_ago(2)]), 1.0)
+
+    def test_no_lives_for_two_weeks_means_polled_four_times_less(self):
+        self.assertEqual(self.mult([self.days_ago(16, 3)]), 4.0)
+        self.assertEqual(self.mult([]), 4.0)
+
+    def test_a_brand_new_account_is_not_cold_yet(self):
+        import datetime as dt
+        self.assertEqual(self.mult([], created=self.NOW - dt.timedelta(days=3)), 1.0)
+
+    def test_just_ended_live_and_session_state_override_history(self):
+        import datetime as dt
+        self.assertEqual(self.mult([], last_end=self.NOW - dt.timedelta(minutes=5)), 0.5)
+        self.assertEqual(self.mult([], last_end=self.NOW - dt.timedelta(minutes=45)), 4.0)
+        self.assertEqual(self.mult([], state="waiting_for_live"), 0.5)
+        self.assertEqual(self.mult([self.days_ago(1), self.days_ago(2), self.days_ago(3)], state="running"), 2.0)
+
+    def test_intervals_share_the_budget_and_hot_creators_wait_less(self):
+        import engine
+        wm = engine.WatchManager(SessionManager())
+        # 500 creators on one egress: 50 hot (0.5), 450 cold (4)
+        for uid in range(500):
+            wm._egress[uid] = "px"
+            wm._mult[uid] = 0.5 if uid < 50 else 4.0
+        with mock.patch.dict("os.environ", {"SM_POLL_BUDGET_RPS": "1.5"}), \
+                mock.patch("engine.random.uniform", lambda a, b: 1.0):
+            hot, cold = wm._poll_interval("px", 0), wm._poll_interval("px", 499)
+            self.assertLess(hot, 90)                                  # was 333 s for everyone
+            self.assertLessEqual(cold, engine.WATCH_COLD_MAX_INTERVAL_SECONDS)
+            rate = sum(1 / wm._poll_interval("px", u) for u in range(500))
+            self.assertLessEqual(rate, 1.5 * 1.15)                   # the egress budget still holds
+
+    async def test_session_does_not_poll_while_the_watcher_covers_her(self):
+        import engine
+        client = _FakeClient()
+        session = BotSession(1, client, "r1", "live1")
+        session.state = "running"
+        asked = []
+
+        async def fake_check():
+            asked.append(1)
+            return True
+
+        session._check_live_status = fake_check
+        with mock.patch.object(engine, "LIVE_POLL_INTERVAL_SECONDS", 0.02):
+            task = asyncio.create_task(session._live_monitor_loop())
+            session.watch_covers_until = time.monotonic() + 60
+            await asyncio.sleep(0.15)
+            self.assertEqual(asked, [])                               # covered: zero requests
+            session.watch_covers_until = 0.0                           # watcher gone: back to self-polling
+            await asyncio.sleep(0.15)
+            self.assertGreater(len(asked), 0)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
+
+class LivePatternDbTests(unittest.TestCase):
+    def test_reads_starts_and_last_end_from_the_activity_log(self):
+        import db
+        old = db.DB_PATH
+        tmp = tempfile.mkdtemp(prefix="sm-pattern-")
+        db.DB_PATH = os.path.join(tmp, "p.db")
+        try:
+            db.init_db()
+            conn = db.connect()
+            conn.execute("INSERT INTO users (username, email, password_hash) VALUES ('a', 'a@x.com', 'x')")
+            rows = [("session_auto_started", "-1 days"), ("session_started", "-2 days"),
+                    ("favorite_live_connected", "-3 days"), ("live_ended", "-2 days"),
+                    ("login", "-1 days"), ("session_auto_started", "-40 days")]
+            for action, delta in rows:
+                conn.execute("INSERT INTO user_activity_log (user_id, action, created_at) "
+                             "VALUES (1, ?, datetime('now', ?))", (action, delta))
+            conn.commit()
+            starts, last_end, created = db.get_live_pattern(conn, 1)
+            self.assertEqual(len(starts), 3)          # login ignored, the 40-day-old start is outside 21 days
+            self.assertIsNotNone(last_end)
+            self.assertIsNotNone(created)
+            conn.close()
+        finally:
+            db.DB_PATH = old
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

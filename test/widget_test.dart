@@ -318,6 +318,20 @@ void main() {
   });
 
   group('BotProvider', () {
+    test('pingWatch asks the server to check her now, and relays its refusal', () async {
+      final okApi = FakeApi()..on('POST /robot/watch/ping', ok({'queued': true}));
+      final bot = BotProvider(api: okApi, pollInterval: const Duration(hours: 1));
+      expect(await bot.pingWatch(), isNull);
+      expect(okApi.calls, contains('POST /robot/watch/ping'));
+      bot.dispose();
+
+      final limited = FakeApi()
+        ..on('POST /robot/watch/ping', fail(429, {'detail': 'Aguarde 12s para chamar de novo.'}));
+      final bot2 = BotProvider(api: limited, pollInterval: const Duration(hours: 1));
+      expect(await bot2.pingWatch(), 'Aguarde 12s para chamar de novo.');
+      bot2.dispose();
+    });
+
     test('refresh mirrors the backend status', () async {
       final api = FakeApi()
         ..on('GET /robot/status', ok(statusPayload(running: true, totalOk: 3)));

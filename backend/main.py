@@ -1178,6 +1178,27 @@ async def robot_watch_set(req: RobotWatchRequest, current_user: dict = Depends(g
     return _watch_payload(conn, user_id)
 
 
+_last_watch_ping: dict = {}  # user_id -> monotonic time of the last accepted ping
+WATCH_PING_MIN_GAP_SECONDS = int(os.getenv("SM_WATCH_PING_MIN_GAP", "30"))
+
+
+@app.post("/robot/watch/ping")
+async def robot_watch_ping(current_user: dict = Depends(get_current_user)):
+    """"I just went live": the favourite-streamer watcher checks her right now
+    instead of waiting for its next scheduled poll (which, with hundreds of
+    creators on one IP, can be minutes). One accepted ping per creator per 30 s."""
+    user_id = current_user["id"]
+    now = time.monotonic()
+    last = _last_watch_ping.get(user_id)
+    if last is not None and now - last < WATCH_PING_MIN_GAP_SECONDS:
+        raise HTTPException(
+            429, f"Aguarde {int(WATCH_PING_MIN_GAP_SECONDS - (now - last)) + 1}s para chamar de novo.")
+    if not watchers.ping(user_id):
+        raise HTTPException(400, "Ligue a streamer favorita primeiro para o robô poder entrar sozinho.")
+    _last_watch_ping[user_id] = now
+    return {"queued": True}
+
+
 @app.get("/robot/status")
 def robot_status(current_user: dict = Depends(get_current_user),
                  conn: sqlite3.Connection = Depends(get_db)):

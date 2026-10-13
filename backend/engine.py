@@ -11,6 +11,7 @@ import os
 import random
 import re
 import time
+from datetime import datetime, timedelta, timezone
 import unicodedata
 import uuid
 from collections import deque
@@ -25,7 +26,7 @@ from websockets.exceptions import InvalidStatus
 import db
 import security
 from superlive import (
-    PRIORITY_LOW, USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
+    PRIORITY_LOW, PRIORITY_NORMAL, USER_AGENT, SuperLiveClient, SuperLiveError, build_ws_url, enter_message,
     get_proxy_pool, get_proxy_url, heartbeat_message, leave_message, proxy_for_slot,
 )
 
@@ -285,6 +286,10 @@ class BotSession:
         self.last_error = None           # moderation / message / auth problems
         self.ws_error = None             # transient connection problems (cleared on reconnect)
         self.proxy_failures = 0          # consecutive failures to open the egress tunnel
+        # While the favourite-streamer watcher keeps asking "is she live / on which
+        # id?" for this user, the session must not ask the same question itself.
+        # The watcher sets this to (monotonic) now + ~1.5 poll intervals each cycle.
+        self.watch_covers_until = 0.0
         # Set by WatchManager while this (stopped) session's own livestream_id is
         # still what the favourited-streamer lookup resolves to - i.e. genuinely
         # waiting for her to go live under a NEW id before auto-restarting, not
@@ -751,6 +756,8 @@ class BotSession:
             await asyncio.sleep(LIVE_POLL_INTERVAL_SECONDS)
             if not self.is_active or self.state != "running" or not self.livestream_id:
                 continue
+            if time.monotonic() < self.watch_covers_until:
+                continue  # the watcher is already polling this creator
             try:
                 status = await self._check_live_status()
                 if isinstance(status, str) and status != self.livestream_id:
@@ -814,13 +821,15 @@ class BotSession:
         self._live_found_event.clear()
         log.info("session %s: waiting for the streamer's next live", self.user_id)
         while self.is_active and self.livestream_id is None:
-            try:
-                found_id = await self._find_next_live()
-            except SuperLiveError as exc:
-                if exc.is_auth_error:
-                    self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
-                    return False
-                found_id = None
+            found_id = None
+            if time.monotonic() >= self.watch_covers_until:  # else the watcher polls for us
+                try:
+                    found_id = await self._find_next_live()
+                except SuperLiveError as exc:
+                    if exc.is_auth_error:
+                        self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
+                        return False
+                    found_id = None
             if found_id:
                 await self.switch_livestream(found_id)
                 break
@@ -1295,18 +1304,60 @@ class SessionManager:
 WATCH_POLL_INTERVAL_SECONDS = 30  # how often a favourited streamer is checked (floor)
 
 
+def _poll_budget() -> float:
+    try:
+        return max(float(os.getenv("SM_POLL_BUDGET_RPS", "2.0")), 0.1)
+    except ValueError:
+        return 2.0
+
+
+WATCH_MAX_INTERVAL_SECONDS = 300
+WATCH_COLD_MAX_INTERVAL_SECONDS = 900  # creators with no live in 14 days
+WATCH_HOT_MIN_DAYS = 3        # lives started around this hour on >= this many of the last 21 days
+WATCH_JUST_ENDED_SECONDS = 20 * 60
+
+
+def watch_multiplier(starts, last_end, now, account_created, session_state=None) -> float:
+    """How often (relative to the average) to look at one creator:
+    0.5 = twice as often, 4 = four times less often. Pure, so it is testable.
+
+    * her robot session is waiting for her next live -> 0.5 (she often comes right back)
+    * her robot is moderating a live right now -> 2 (the WebSocket reports the end;
+      this poll is only a safety net)
+    * her last live ended < 20 min ago -> 0.5
+    * she started a live around this hour of day (+-1h) on >= 3 of the last 21 days -> 0.5
+    * no live in 14 days (account older than that) -> 4
+    * otherwise (new, or unpredictable) -> 1
+    """
+    if session_state == "running":
+        return 2.0
+    if session_state == "waiting_for_live":
+        return 0.5
+    if last_end is not None and 0 <= (now - last_end).total_seconds() < WATCH_JUST_ENDED_SECONDS:
+        return 0.5
+    days = set()
+    for t in starts:
+        if t < now - timedelta(days=21):
+            continue
+        gap = abs(t.hour - now.hour)
+        if min(gap, 24 - gap) <= 1:
+            days.add(t.date())
+    if len(days) >= WATCH_HOT_MIN_DAYS:
+        return 0.5
+    recent = any(t >= now - timedelta(days=14) for t in starts)
+    if not recent and account_created is not None and now - account_created > timedelta(days=14):
+        return 4.0
+    return 1.0
+
+
 def watch_poll_interval(watchers_on_egress: float) -> float:
     """Seconds between checks of ONE watched streamer, given how many watchers
     share her egress IP. Each egress sends ~2.8 requests/s in total (see
     superlive._dispatcher) and chat/moderation need most of that, so polling
-    gets a fixed share (SM_POLL_BUDGET_RPS, default 1.5 req/s per IP): the more
+    gets a fixed share (SM_POLL_BUDGET_RPS, default 2.0 req/s per IP): the more
     creators on an IP, the slower each is polled, instead of the queue growing
     without bound."""
-    try:
-        budget = float(os.getenv("SM_POLL_BUDGET_RPS", "1.5"))
-    except ValueError:
-        budget = 1.5
-    return max(float(WATCH_POLL_INTERVAL_SECONDS), watchers_on_egress / max(budget, 0.1))
+    return max(float(WATCH_POLL_INTERVAL_SECONDS), watchers_on_egress / _poll_budget())
 
 
 class WatchManager:
@@ -1323,10 +1374,21 @@ class WatchManager:
         self._sessions = sessions
         self._tasks: dict[int, asyncio.Task] = {}
         self._egress: dict[int, str] = {}  # user_id -> egress proxy its watch polls through
+        self._mult: dict[int, float] = {}  # user_id -> poll multiplier (see watch_multiplier)
+        self._wake: dict[int, asyncio.Event] = {}
+        self._urgent: set = set()  # users whose next poll must not be shed
 
     def is_watching(self, user_id: int) -> bool:
         task = self._tasks.get(user_id)
         return task is not None and not task.done()
+
+    def ping(self, user_id: int) -> bool:
+        """"I just went live": poll her right now instead of waiting out the interval."""
+        if not self.is_watching(user_id):
+            return False
+        self._urgent.add(user_id)
+        self._wake.setdefault(user_id, asyncio.Event()).set()
+        return True
 
     def start(self, user_id: int, jitter: bool = False) -> None:
         if self.is_watching(user_id):
@@ -1336,6 +1398,8 @@ class WatchManager:
 
     async def stop(self, user_id: int) -> None:
         self._egress.pop(user_id, None)
+        self._mult.pop(user_id, None)
+        self._wake.pop(user_id, None)
         task = self._tasks.pop(user_id, None)
         if task is not None:
             task.cancel()
@@ -1356,14 +1420,49 @@ class WatchManager:
             watch = db.get_watch(conn, user_id)
             robot = db.get_robot(conn, user_id)
             slot = db.get_or_assign_egress_slot(conn, user_id, len(get_proxy_pool())) if robot else 0
-            return watch, robot, slot
+            pattern = db.get_live_pattern(conn, user_id) if robot and watch and watch["active"] else ([], None, None)
+            return watch, robot, slot, pattern
         finally:
             conn.close()
 
-    def _poll_interval(self, proxy: str) -> float:
-        on_egress = sum(1 for p in self._egress.values() if p == proxy)
+    def _poll_interval(self, proxy: str, user_id: int) -> float:
+        """Seconds until this creator's next check. The egress's polling budget is
+        shared out by weight: base = sum(1/m) / budget, then each creator waits
+        base * her own multiplier m, so hot creators are looked at often and cold
+        ones rarely while the egress still sends only ~budget requests/s."""
+        budget = _poll_budget()
+        mults = [self._mult.get(u, 1.0) for u, p in self._egress.items() if p == proxy] or [1.0]
+
+        def floor(m: float) -> float:
+            return WATCH_POLL_INTERVAL_SECONDS * (2 / 3 if m <= 0.5 else 1.0)
+
+        def cap(m: float) -> float:
+            return float(WATCH_COLD_MAX_INTERVAL_SECONDS if m >= 4 else WATCH_MAX_INTERVAL_SECONDS)
+
+        def rate(base: float) -> float:  # requests/s the egress would send at this base
+            return sum(1.0 / min(max(base * m, floor(m)), cap(m)) for m in mults)
+
+        # smallest base whose total rate fits the budget (floors and the cap included);
+        # if even everyone-at-the-cap exceeds it, everyone simply waits the cap
+        lo, hi = 0.0, float(WATCH_COLD_MAX_INTERVAL_SECONDS)
+        if rate(0.0) <= budget:
+            base = 0.0
+        else:
+            for _ in range(30):
+                mid = (lo + hi) / 2
+                lo, hi = (lo, mid) if rate(mid) <= budget else (mid, hi)
+            base = hi
+        m = self._mult.get(user_id, 1.0)
+        interval = min(max(base * m, floor(m)), cap(m))
         # +-10%: keeps hundreds of loops that started together from staying in lockstep
-        return watch_poll_interval(on_egress) * random.uniform(0.9, 1.1)
+        return interval * random.uniform(0.9, 1.1)
+
+    async def _sleep_or_wake(self, user_id: int, seconds: float) -> None:
+        event = self._wake.setdefault(user_id, asyncio.Event())
+        try:
+            await asyncio.wait_for(event.wait(), timeout=seconds)
+        except asyncio.TimeoutError:
+            pass
 
     async def _watch_loop(self, user_id: int, jitter: bool = False) -> None:
         """Supervisor: any unexpected error (SQLite locked, a bad frame...) must
@@ -1384,8 +1483,9 @@ class WatchManager:
             per_egress = len(self._tasks) / max(1, len(get_proxy_pool()))
             await asyncio.sleep(random.uniform(0, watch_poll_interval(per_egress)))
         while True:
+            self._wake.setdefault(user_id, asyncio.Event()).clear()  # a ping DURING this cycle still wakes the sleep
             try:
-                watch, robot, slot = await asyncio.to_thread(self._read_watch_state, user_id)
+                watch, robot, slot, pattern = await asyncio.to_thread(self._read_watch_state, user_id)
             except security.RobotKeyUnavailable as exc:
                 # Not a reason to give up watching: the key file can be fixed
                 # without losing the watch, and the next poll picks it up.
@@ -1400,6 +1500,7 @@ class WatchManager:
             if watch is None or not watch["active"] or robot is None:
                 self._tasks.pop(user_id, None)
                 self._egress.pop(user_id, None)
+                self._mult.pop(user_id, None)
                 return
 
             proxy = proxy_for_slot(slot)
@@ -1407,7 +1508,9 @@ class WatchManager:
             client = SuperLiveClient(robot["token"], robot["device_id"], proxy_url=proxy)
             try:
                 # lowest priority: never makes a mute/kick/chat message wait
-                result = await client.find_live_by_shared_id(watch["shared_id"], PRIORITY_LOW)
+                priority = PRIORITY_NORMAL if user_id in self._urgent else PRIORITY_LOW
+                self._urgent.discard(user_id)
+                result = await client.find_live_by_shared_id(watch["shared_id"], priority)
             except SuperLiveError:
                 result = None
 
@@ -1488,4 +1591,13 @@ class WatchManager:
                     log.info("session %s: watch detected streamer is offline, live ended", user_id)
                     await session.on_live_ended()
 
-            await asyncio.sleep(self._poll_interval(proxy))
+            current = self._sessions.get(user_id)
+            starts, last_end, created = pattern
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+            self._mult[user_id] = watch_multiplier(
+                starts, last_end, now_utc, created,
+                current.state if current is not None and current.is_active else None)
+            interval = self._poll_interval(proxy, user_id)
+            if current is not None and current.is_active and result is not None:
+                current.watch_covers_until = time.monotonic() + interval * 1.5
+            await self._sleep_or_wake(user_id, interval)

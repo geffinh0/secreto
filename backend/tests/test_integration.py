@@ -1852,6 +1852,56 @@ class AgencyTests(unittest.TestCase):
         self.assertNotIn("socks", json.dumps(body))  # proxy URLs (may hold credentials) never leave
 
 
+class WatchPingTests(RobotTestBase):
+    """POST /robot/watch/ping: "I just went live" - poll her now, not at the next interval."""
+
+    def setUp(self):
+        super().setUp()
+        main._last_watch_ping.clear()
+
+    def watch(self, shared_id, active=True):
+        return api("PUT", "/robot/watch", {"shared_id": shared_id, "active": active}, self.token)
+
+    def ping(self):
+        return api("POST", "/robot/watch/ping", token=self.token)
+
+    def test_needs_a_watch(self):
+        self.connect_robot()
+        status, body = self.ping()
+        self.assertEqual(status, 400)
+        self.assertIn("favorita", body["detail"])
+
+    def test_needs_a_login(self):
+        self.assertEqual(api("POST", "/robot/watch/ping")[0], 401)
+
+    def test_is_rate_limited_per_creator(self):
+        self.connect_robot()
+        self.watch(mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+        self.assertEqual(self.ping()[0], 200)
+        status, body = self.ping()
+        self.assertEqual(status, 429)
+        self.assertIn("Aguarde", body["detail"])
+        # another creator is not affected by this one's ping
+        _, other_token, _ = new_user("pinger")
+        self.assertEqual(api("POST", "/robot/watch/ping", token=other_token)[0], 400)  # no watch, but not 429
+
+    def test_ping_makes_the_robot_join_without_waiting_for_the_interval(self):
+        old = engine.WATCH_POLL_INTERVAL_SECONDS
+        engine.WATCH_POLL_INTERVAL_SECONDS = 30   # production-like: she would be found in ~30 s
+        try:
+            self.connect_robot()
+            self.watch(mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+            self.settle(0.6)                      # first poll done; the loop is now asleep
+            mock.start_new_live(mock_superlive.OFFLINE_STREAMER_ID, "live7")
+            self.settle(0.8)
+            self.assertFalse(self.status()["session"]["running"])   # nothing woke it yet
+            self.assertEqual(self.ping()[0], 200)
+            wait_for(lambda: self.status()["session"]["running"], 5, "ping did not trigger an immediate check")
+            self.assertEqual(self.status()["session"]["livestream_id"], "live7")
+        finally:
+            engine.WATCH_POLL_INTERVAL_SECONDS = old
+
+
 class OneSuperLiveAccountPerCreatorTests(RobotTestBase):
     def test_a_second_creator_cannot_take_the_same_superlive_account(self):
         self.connect_robot()

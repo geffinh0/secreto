@@ -736,7 +736,20 @@ class _LiveControlCardState extends State<_LiveControlCard> {
   final _streamerIdController = TextEditingController();
   bool _looking = false;
   bool _togglingWatch = false;
+  bool _pinging = false;
   StreamerLookup? _lookupResult;
+
+  /// Tells the server she is live so the robot joins now, not at the next
+  /// scheduled check (which can be a few minutes when many creators are watched).
+  Future<void> _pingWatch() async {
+    setState(() => _pinging = true);
+    final error = await context.read<BotProvider>().pingWatch();
+    if (!mounted) return;
+    setState(() => _pinging = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ?? 'Avisado! O robô vai entrar na sua live em instantes.'),
+    ));
+  }
 
   @override
   void initState() {
@@ -1023,6 +1036,12 @@ class _LiveControlCardState extends State<_LiveControlCard> {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: _pinging ? null : _pingWatch,
+                    icon: const Icon(Icons.bolt_rounded, size: 16),
+                    label: const Text('Entrei ao vivo'),
                   ),
                 ],
               ),

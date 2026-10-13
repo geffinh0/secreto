@@ -305,11 +305,19 @@ criadora devolve 409 (`SM_ALLOW_SHARED_ROBOT=1` desliga a regra, só para testes
 notebook) aguenta ~2,8 requisições/s e 20 mensagens de chat/min (a SuperLive recusa duas ações no
 mesmo instante vindas do mesmo IP, por isso a fila é serial por IP). O que isso permite:
 
-| IPs de saída | Lives moderadas ao mesmo tempo | Quanto demora para o robô perceber que a criadora entrou ao vivo (500 criadoras) |
+| IPs de saída | Lives moderadas ao mesmo tempo | Quanto o robô demora para perceber que uma criadora entrou ao vivo (500 criadoras) |
 |---|---|---|
-| 1 (hoje) | ~25 | até ~5,5 min |
-| 3 | ~75 | até ~1,9 min |
-| 5 | ~125 | até ~1,1 min |
+| 1 (hoje) | ~25 | quente ~2 min · normal ~4 min · fria ~15 min (ou na hora, com o botão) |
+| 3 | ~75 | quente ~40 s · normal ~1,3 min · fria ~5 min |
+| 5 | ~125 | quente ~25 s · normal ~45 s · fria ~3 min |
+
+"Quente" = costuma entrar ao vivo nesta hora do dia (3 dos últimos 21 dias, ±1 h) ou acabou de
+encerrar uma live; "fria" = nenhuma live nos últimos 14 dias; o resto é "normal". O robô aprende
+isso sozinho pelo histórico de atividade. Em qualquer caso a criadora pode apertar **"Entrei ao
+vivo"** no app: o robô entra em instantes (1 aperto a cada 30 s). Enquanto a criadora está ao vivo
+ou aguardando a próxima live, só o vigia pergunta se ela está no ar (antes eram três laços
+perguntando a mesma coisa). Valores calculados pela mesma fórmula do código (orçamento
+`SM_POLL_BUDGET_RPS`, 2 req/s por IP), com 15% quentes, 55% normais e 30% frias.
 
 Como crescer: some proxies à lista `SUPERLIVE_PROXY_URLS` no `.env` (o **primeiro** tem de ser o
 atual, `socks5h://172.28.0.1:1080`; quem já tem robô continua nele) e suba `SM_MAX_SESSIONS`
@@ -317,7 +325,7 @@ atual, `socks5h://172.28.0.1:1080`; quem já tem robô continua nele) e suba `SM
 trocada, porque a SuperLive amarra o token ao IP. A aba Agências mostra IPs, lives agora,
 fila mais longa e o tempo de detecção. Fila longa ou "lives agora" colado no máximo = hora de
 pôr outro IP. Sem pool nada muda: tudo sai pelo proxy único, e o intervalo de verificação
-das favoritas passa a crescer sozinho (`SM_POLL_BUDGET_RPS`, 1,5 req/s por IP) em vez de a fila
+das favoritas passa a crescer sozinho (`SM_POLL_BUDGET_RPS`, 2 req/s por IP) em vez de a fila
 explodir.
 
 **nginx do web.** Lê o IP real do visitante (`X-Forwarded-For` só da rede docker) e limita

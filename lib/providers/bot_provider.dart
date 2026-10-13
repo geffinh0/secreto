@@ -287,6 +287,22 @@ class BotProvider extends ChangeNotifier {
     return ok;
   }
 
+  /// "I just went live": asks the server to check the favourite streamer right now
+  /// instead of waiting for its next scheduled check. Returns an error message,
+  /// or null when the check was queued.
+  Future<String?> pingWatch() async {
+    final result = await _api.post('/robot/watch/ping', {});
+    if (_disposed) return null;
+    if (result['success'] == true) {
+      // the robot joins within a couple of seconds - pull it into the screen sooner
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!_disposed) refresh();
+      });
+      return null;
+    }
+    return PortalApiService.errorMessage(result, 'Não foi possível chamar o robô agora.');
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();
