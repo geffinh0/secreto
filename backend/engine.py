@@ -1199,9 +1199,20 @@ class WatchManager:
 
             if is_live and current_live_id:
                 if session is None or not session.is_active:
-                    # If the session was stopped on this specific live, wait for a new live before auto-starting
+                    # If the session was stopped on this specific live, wait for a new live before auto-starting.
+                    # This used to be a silent no-op - invisible in the logs - which made it
+                    # indistinguishable from the watch loop simply not running at all when
+                    # SuperLive's own lookup kept echoing a stale livestream_id after the
+                    # streamer had already moved to a new broadcast (observed for real: one
+                    # account's session auto-started on a NEW live within seconds while a
+                    # second account's lookup kept resolving the OLD, just-ended one for
+                    # several poll cycles in a row).
                     if session is not None and session.state == "stopped" and session.livestream_id == current_live_id:
-                        pass
+                        log.info(
+                            "session %s: watch lookup still resolves the just-ended live %s - "
+                            "waiting for a genuinely new livestream_id before auto-restarting",
+                            user_id, current_live_id,
+                        )
                     else:
                         try:
                             new_sess = await self._sessions.start(
