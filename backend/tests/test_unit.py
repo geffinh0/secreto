@@ -537,6 +537,31 @@ class ThrottleAwarePollingTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(throttled, normal * 1.6)
 
 
+class WatchLookupLoggingTests(unittest.TestCase):
+    def _mgr(self):
+        from engine import WatchManager
+        mgr = WatchManager.__new__(WatchManager)
+        mgr._last_lookup = {}
+        return mgr
+
+    def test_logs_only_changes_and_warns_when_two_robots_disagree(self):
+        mgr = self._mgr()
+        with self.assertLogs("super_moderator.engine", level="INFO") as cm:
+            mgr._note_lookup(1, "69", 0, True, "L1")      # first answer: logged
+            mgr._note_lookup(1, "69", 0, True, "L1")      # unchanged: silent
+            mgr._note_lookup(2, "69", 0, False, None)     # first answer + disagrees with robot 1
+        text = "\n".join(cm.output)
+        self.assertEqual(text.count("lookup of 69"), 2)
+        self.assertIn("watch divergence on 69", text)
+
+    def test_agreeing_robots_do_not_warn(self):
+        mgr = self._mgr()
+        with self.assertLogs("super_moderator.engine", level="INFO") as cm:
+            mgr._note_lookup(1, "69", 0, True, "L1")
+            mgr._note_lookup(2, "69", 0, True, "L1")
+        self.assertNotIn("divergence", "\n".join(cm.output))
+
+
 class EgressPoolTests(unittest.IsolatedAsyncioTestCase):
     """Scale: one serial queue PER egress IP (the SuperLive collision rule is per IP),
     background polling shed first, and a fixed least-loaded egress per user."""

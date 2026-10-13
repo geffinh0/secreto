@@ -1376,6 +1376,9 @@ class WatchManager:
         self._egress: dict[int, str] = {}  # user_id -> egress proxy its watch polls through
         self._mult: dict[int, float] = {}  # user_id -> poll multiplier (see watch_multiplier)
         self._wake: dict[int, asyncio.Event] = {}
+        # shared_id -> {user_id: (monotonic, is_live, livestream_id)}: what each robot's
+        # last lookup of that streamer answered, to flag two robots disagreeing.
+        self._last_lookup: dict[str, dict[int, tuple]] = {}
         self._urgent: set = set()  # users whose next poll must not be shed
 
     def is_watching(self, user_id: int) -> bool:
@@ -1466,6 +1469,24 @@ class WatchManager:
         except asyncio.TimeoutError:
             pass
 
+    def _note_lookup(self, user_id: int, shared_id: str, slot, is_live: bool, live_id) -> None:
+        """Logs a robot's lookup only when its answer CHANGES (not every poll), and warns
+        when another robot watching the same streamer got a different answer within the
+        last 2 minutes - the "one account sees her live, the other says offline" case."""
+        now = time.monotonic()
+        seen = self._last_lookup.setdefault(str(shared_id), {})
+        prev = seen.get(user_id)
+        seen[user_id] = (now, is_live, live_id)
+        if prev is None or (prev[1], prev[2]) != (is_live, live_id):
+            log.info("watch %s: lookup of %s -> live=%s livestream_id=%s (egress slot %s)",
+                     user_id, shared_id, is_live, live_id, slot)
+        for other, (ts, o_live, o_id) in seen.items():
+            if other != user_id and now - ts < 120 and (o_live, o_id) != (is_live, live_id):
+                log.warning("watch divergence on %s: user %s sees live=%s id=%s, user %s sees live=%s id=%s "
+                            "(slots differ or same? this one: %s)",
+                            shared_id, user_id, is_live, live_id, other, o_live, o_id, slot)
+                break
+
     async def _watch_loop(self, user_id: int, jitter: bool = False) -> None:
         """Supervisor: any unexpected error (SQLite locked, a bad frame...) must
         not silently end this creator's watch - nobody would restart it."""
@@ -1520,8 +1541,9 @@ class WatchManager:
                             user_id, watch["shared_id"], exc.status, slot, exc)
                 result = None
             else:
-                log.debug("watch %s: lookup of %s -> live=%s livestream_id=%s (egress slot %s)",
-                          user_id, watch["shared_id"], result.get("live"), result.get("livestream_id"), slot)
+                self._note_lookup(user_id, watch["shared_id"], slot,
+                                  bool(result.get("live") and result.get("livestream_id")),
+                                  str(result["livestream_id"]) if result.get("livestream_id") else None)
 
             session = self._sessions.get(user_id)
             is_live = bool(result and result.get("live") and result.get("livestream_id"))
