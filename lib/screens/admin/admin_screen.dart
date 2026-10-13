@@ -310,6 +310,12 @@ class _UsersTab extends StatelessWidget {
   }
 }
 
+String _avatarInitial(String? displayName, String username) {
+  final trimmedDisplayName = displayName?.trim() ?? '';
+  final label = trimmedDisplayName.isNotEmpty ? trimmedDisplayName : username.trim();
+  return label.isNotEmpty ? label.substring(0, 1).toUpperCase() : '?';
+}
+
 class _UserCard extends StatelessWidget {
   final AdminUserSummary user;
   const _UserCard({required this.user});
@@ -343,7 +349,7 @@ class _UserCard extends StatelessWidget {
                 radius: 18,
                 backgroundColor: AppTheme.primary.withValues(alpha: 0.18),
                 child: Text(
-                  (user.displayName ?? user.username).substring(0, 1).toUpperCase(),
+                  _avatarInitial(user.displayName, user.username),
                   style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700),
                 ),
               ),

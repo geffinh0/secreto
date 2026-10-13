@@ -26,6 +26,12 @@ services:
       # next to this compose file, never committed; see DEPLOY.md. Empty =
       # the endpoint refuses every request, it never falls open.
       HEALTHBOT_API_KEY: "${HEALTHBOT_API_KEY:-}"
+      # Which portal user's robot /robot/live_status reports on - only needed
+      # once more than one user has an active watch at the same time (see
+      # main.py). Empty = unchanged old behaviour for the single-user case;
+      # the endpoint now refuses to guess (503) instead of leaking an
+      # arbitrary user's data when this is ambiguous and unset.
+      HEALTHBOT_TARGET_USER_ID: "${HEALTHBOT_TARGET_USER_ID:-}"
       # Opt-in persistent log file (see main.py) - under /data so it
       # survives a `docker compose up -d --build` recreating this
       # container mid-test, unlike `docker logs`. Empty = console-only

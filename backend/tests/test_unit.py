@@ -1,7 +1,9 @@
+import asyncio
 import unittest
+from unittest import mock
 
 import security
-from engine import RuleMatcher, normalize
+from engine import BotSession, RuleMatcher, SessionManager, normalize
 from superlive import DEFAULT_BASE_URL, SuperLiveClient, build_ws_url, heartbeat_message, enter_message
 import json
 
@@ -214,6 +216,54 @@ class AntiEvasionAndNewRulesTests(unittest.TestCase):
         self.assertIn("Resumo da Live live999", summary["summary_text"])
         self.assertEqual(session.last_live_summary, summary)
         self.assertTrue(len(session.alerts) > 0)
+
+
+class SessionManagerRaceTests(unittest.IsolatedAsyncioTestCase):
+    """Regression: two concurrent /robot/start calls for the same user used to
+    both pass the "no active session" check (nothing was registered until
+    after BotSession.start() awaited), so both could end up believing they
+    own the session. Now the session is registered before that await,
+    closing the window."""
+
+    async def test_concurrent_start_calls_do_not_both_succeed(self):
+        sessions = SessionManager()
+        release = asyncio.Event()
+
+        async def slow_start(self):
+            await release.wait()
+            self.state = "running"
+
+        with mock.patch.object(BotSession, "start", slow_start):
+            t1 = asyncio.create_task(sessions.start(1, None, None, "live1"))
+            t2 = asyncio.create_task(sessions.start(1, None, None, "live1"))
+            await asyncio.sleep(0)  # let both tasks reach the patched await
+            release.set()
+            results = await asyncio.gather(t1, t2, return_exceptions=True)
+
+        successes = [r for r in results if not isinstance(r, Exception)]
+        errors = [r for r in results if isinstance(r, Exception)]
+        self.assertEqual(len(successes), 1, results)
+        self.assertEqual(len(errors), 1, results)
+        self.assertIsInstance(errors[0], RuntimeError)
+        self.assertIs(sessions.get(1), successes[0])
+
+    async def test_failed_start_restores_the_previous_stopped_session(self):
+        """The watch loop's "stopped on this exact live, wait for a genuinely
+        new one" guard depends on finding the old session object after a
+        failed restart attempt - not an empty slot (see WatchManager)."""
+        sessions = SessionManager()
+        previous = BotSession(1, None, None, "live_old")
+        previous.state = "stopped"
+        sessions._sessions[1] = previous
+
+        async def failing_start(self):
+            raise RuntimeError("boom")
+
+        with mock.patch.object(BotSession, "start", failing_start):
+            with self.assertRaises(RuntimeError):
+                await sessions.start(1, None, None, "live_new")
+
+        self.assertIs(sessions.get(1), previous)
 
 
 if __name__ == "__main__":

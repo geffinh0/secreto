@@ -1,4 +1,5 @@
 import logging
+import hmac
 import os
 import re
 import sqlite3
@@ -54,6 +55,13 @@ PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")  # E.164: '+', country code, 8-15 di
 # so the pending attempt is held here between the two calls. In-memory only: a backend
 # restart simply makes the user ask for a new code.
 PHONE_CODE_TTL_SECONDS = 600
+# Caps brute-forcing the SMS/e-mail code itself (it has no attempt limit on
+# our side otherwise, only the TTL above). Kept across a resend - a resend
+# asks SuperLive for a fresh code, it is not a way to reset the attempt
+# budget - and reserved before the verification call below, not after, so
+# concurrent verify requests can't all read "attempts < MAX" before any of
+# them writes.
+MAX_OTP_ATTEMPTS = 5
 
 
 @dataclass
@@ -62,6 +70,7 @@ class _PendingPhoneLogin:
     phone_number: str
     verification_id: str
     expires_at: float
+    attempts: int = 0
 
 
 _pending_phone_logins: dict[int, _PendingPhoneLogin] = {}
@@ -78,6 +87,7 @@ class _PendingEmailLogin:
     email: str
     otp_code_id: int
     expires_at: float
+    attempts: int = 0
 
 
 _pending_email_logins: dict[int, _PendingEmailLogin] = {}
@@ -882,11 +892,15 @@ async def robot_connect_phone_send_code(
     except SuperLiveError as exc:
         raise _superlive_http_error(exc, "o envio do código por SMS", login=True) from None
 
+    # A resend keeps whatever attempt budget was already spent - it is a new
+    # code from SuperLive, not a way to reset how many guesses are left.
+    previous_attempts = _pending_phone_logins.get(user_id)
     _pending_phone_logins[user_id] = _PendingPhoneLogin(
         device_id=client.device_id,
         phone_number=req.phone_number,
         verification_id=result["verification_id"],
         expires_at=time.monotonic() + PHONE_CODE_TTL_SECONDS,
+        attempts=previous_attempts.attempts if previous_attempts else 0,
     )
     return {"retry_timeout_seconds": result["retry_timeout_seconds"]}
 
@@ -906,6 +920,12 @@ async def robot_connect_phone_verify(
         raise HTTPException(400, "O código expirou ou não foi solicitado. Peça um novo código.")
     if req.phone_number != pending.phone_number:
         raise HTTPException(400, "Esse número não é o que recebeu o código. Peça um novo código.")
+    if pending.attempts >= MAX_OTP_ATTEMPTS:
+        _pending_phone_logins.pop(user_id, None)
+        raise HTTPException(400, "Número de tentativas excedido. Peça um novo código.")
+    # Reserved before the network call below (not after), so two concurrent
+    # verify requests can't both read "attempts < MAX" before either writes.
+    pending.attempts += 1
 
     client = SuperLiveClient(device_id=pending.device_id)
     try:
@@ -939,11 +959,13 @@ async def robot_connect_email_code_send(
     except SuperLiveError as exc:
         raise _superlive_http_error(exc, "o envio do código por e-mail", login=True) from None
 
+    previous_attempts = _pending_email_logins.get(user_id)
     _pending_email_logins[user_id] = _PendingEmailLogin(
         device_id=client.device_id,
         email=req.email,
         otp_code_id=otp_code_id,
         expires_at=time.monotonic() + EMAIL_CODE_TTL_SECONDS,
+        attempts=previous_attempts.attempts if previous_attempts else 0,
     )
     return {"ok": True}
 
@@ -963,6 +985,10 @@ async def robot_connect_email_code_verify(
         raise HTTPException(400, "O código expirou ou não foi solicitado. Peça um novo código.")
     if req.email != pending.email:
         raise HTTPException(400, "Esse e-mail não é o que recebeu o código. Peça um novo código.")
+    if pending.attempts >= MAX_OTP_ATTEMPTS:
+        _pending_email_logins.pop(user_id, None)
+        raise HTTPException(400, "Número de tentativas excedido. Peça um novo código.")
+    pending.attempts += 1
 
     client = SuperLiveClient(device_id=pending.device_id)
     try:
@@ -1066,6 +1092,19 @@ def robot_status(current_user: dict = Depends(get_current_user),
 
 
 HEALTHBOT_API_KEY = os.getenv("HEALTHBOT_API_KEY", "").strip()
+# Which portal user's robot the Telegram healthbot reports on. Optional: with
+# it unset, the behaviour is unchanged from before this existed (one active
+# watch picks itself, none falls back to user 1) - fine for the common case
+# of a single active user. It only matters once more than one user has an
+# active watch at the same time, which this endpoint now refuses to guess at
+# (see robot_live_status) rather than silently handing out someone else's
+# chat/activity to the bot.
+_raw_healthbot_target = os.getenv("HEALTHBOT_TARGET_USER_ID", "").strip()
+try:
+    HEALTHBOT_TARGET_USER_ID = int(_raw_healthbot_target) if _raw_healthbot_target else None
+except ValueError:
+    print(f"[HEALTHBOT] HEALTHBOT_TARGET_USER_ID inválido ({_raw_healthbot_target!r}), ignorando")
+    HEALTHBOT_TARGET_USER_ID = None
 
 
 @app.get("/robot/live_status")
@@ -1075,10 +1114,20 @@ def robot_live_status(x_healthbot_key: str = Header(default=""),
     Telegram bot's /live and /resumo commands - not a portal user, so it
     authenticates with a shared secret instead of a login token. Without
     HEALTHBOT_API_KEY set, this stays closed (never falls open)."""
-    if not HEALTHBOT_API_KEY or x_healthbot_key != HEALTHBOT_API_KEY:
+    if not HEALTHBOT_API_KEY or not hmac.compare_digest(x_healthbot_key, HEALTHBOT_API_KEY):
         raise HTTPException(403, "Acesso negado")
-    watches = db.all_active_watches(conn)
-    user_id = watches[0]["user_id"] if watches else 1
+    if HEALTHBOT_TARGET_USER_ID is not None:
+        user_id = HEALTHBOT_TARGET_USER_ID
+    else:
+        watches = db.all_active_watches(conn)
+        if len(watches) > 1:
+            # More than one candidate and no explicit target: refuse rather
+            # than hand one user's chat/activity to the bot by guessing.
+            raise HTTPException(
+                503,
+                "Múltiplas usuárias com robô ativo - configure HEALTHBOT_TARGET_USER_ID.",
+            )
+        user_id = watches[0]["user_id"] if watches else 1
     payload = _robot_payload(conn, user_id)
     payload["recent_activities"] = db.list_activity(conn, user_id, limit=8)
     return payload

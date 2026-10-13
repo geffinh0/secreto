@@ -43,7 +43,12 @@ GoRouter createRouter(AuthProvider authProvider) {
 
       if (location == _splashPath) {
         final from = state.uri.queryParameters['from'];
-        final target = (from != null && from.startsWith('/')) ? from : '/dashboard';
+        final target = (from != null && from.startsWith('/') && from != _splashPath)
+            ? from
+            : '/dashboard';
+        // /admin has its own, separate login - reachable straight from cold
+        // start even without a portal session (see isAuthRoute above).
+        if (target == '/admin' || target.startsWith('/admin/')) return target;
         return isAuth ? target : '/login';
       }
       if (!isAuth && !isAuthRoute) return '/login';

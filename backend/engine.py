@@ -1129,12 +1129,27 @@ class SessionManager:
 
     async def start(self, user_id: int, client: SuperLiveClient, robot_sl_id,
                     livestream_id: str, ws_url_override: Optional[str] = None) -> BotSession:
-        current = self._sessions.get(user_id)
-        if current is not None and current.state in ("starting", "running", "stopping"):
+        previous = self._sessions.get(user_id)
+        if previous is not None and previous.state in ("starting", "running", "stopping"):
             raise RuntimeError("Já existe uma sessão do robô em andamento")
         session = BotSession(user_id, client, robot_sl_id, livestream_id, ws_url_override)
-        await session.start()  # may raise SuperLiveError; nothing is registered then
+        # Registered before the await below (not after) so a second, concurrent
+        # call sees this "starting" session immediately and is rejected by the
+        # check above, instead of both calls reading `previous` at the same
+        # time and both slipping through. On failure, put `previous` back
+        # rather than just deleting - the watch loop's "stopped on this exact
+        # live, wait for a genuinely new one" guard (see WatchManager) depends
+        # on finding that old, stopped session, not an empty slot.
         self._sessions[user_id] = session
+        try:
+            await session.start()  # may raise SuperLiveError
+        except Exception:
+            if self._sessions.get(user_id) is session:
+                if previous is not None:
+                    self._sessions[user_id] = previous
+                else:
+                    del self._sessions[user_id]
+            raise
         return session
 
     async def stop(self, user_id: int) -> Optional[BotSession]:
@@ -1231,6 +1246,15 @@ class WatchManager:
                                 "session %s: watch lookup still resolves the just-ended live %s - "
                                 "waiting for a genuinely new livestream_id before auto-restarting",
                                 user_id, current_live_id,
+                            )
+                            # Also recorded in the user's own activity history
+                            # (not just the process log) so this doesn't look
+                            # identical to the watch loop simply not running -
+                            # that ambiguity is the exact bug this guard exists
+                            # to make visible.
+                            db.log_activity(
+                                user_id, "watch_stuck",
+                                f"aguardando novo livestream_id (live anterior: {current_live_id})",
                             )
                     else:
                         try:

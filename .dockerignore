@@ -17,13 +17,19 @@
 /.dart_tool/
 .flutter-plugins-dependencies
 
-# Backend runtime artifacts - never bake the real DB into an image.
+# Backend runtime artifacts - never bake the real DB into an image. A
+# pattern without a leading **/ only matches the build context's root, so
+# the plain *.db below never excluded backend/super_moderator.db (confirmed
+# present in some checkouts, with real user data) - it was getting copied in
+# by backend.Dockerfile's `COPY backend/ .`.
 backend/__pycache__/
 **/__pycache__/
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+.env
+.env.*
 
 # Docs/tools not needed inside either image.
 /docs/

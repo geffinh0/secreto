@@ -607,6 +607,7 @@ class ActivityEntry {
         'live_summary' => 'Resumo da Transmissão',
         'live_ended' => 'Live encerrada',
         'session_switched_live' => 'Live alterada',
+        'watch_stuck' => 'Aguardando nova transmissão',
         _ => action,
       };
 }

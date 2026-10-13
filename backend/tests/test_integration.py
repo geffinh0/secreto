@@ -76,12 +76,14 @@ def wait_for(predicate, timeout=6.0, message="condition not met in time"):
     raise AssertionError(message)
 
 
-def api(method, path, body=None, token=None):
+def api(method, path, body=None, token=None, headers=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(API + path, data=data, method=method)
     req.add_header("Content-Type", "application/json")
     if token:
         req.add_header("Authorization", f"Bearer {token}")
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             text = resp.read().decode()
@@ -523,6 +525,28 @@ class PhoneLoginTests(RobotTestBase):
         self.assertEqual(status, 200, body)
         self.assertTrue(body["connected"])
 
+    def test_too_many_wrong_codes_exhausts_the_pending_verification(self):
+        """Regression: verify used to have no attempt limit, only the 10-minute
+        TTL - a wrong code never got deducted from anything. Now the 6th
+        attempt is rejected even with the right code."""
+        self.send_code()
+        for _ in range(5):
+            status, body = self.verify_code(code="000000")
+            self.assertEqual(status, 400)
+        status, body = self.verify_code()  # right code, but the budget is gone
+        self.assertEqual(status, 400)
+        self.assertIn("Número de tentativas excedido", body["detail"])
+        self.assertFalse(self.status()["connected"])
+
+    def test_resend_does_not_reset_the_wrong_code_attempt_counter(self):
+        self.send_code()
+        for _ in range(5):
+            self.verify_code(code="000000")
+        self.send_code(resend=True)  # fresh SMS code, attempts must carry over
+        status, body = self.verify_code()
+        self.assertEqual(status, 400)
+        self.assertIn("Número de tentativas excedido", body["detail"])
+
     def test_verifying_a_different_number_than_the_one_texted_is_rejected(self):
         self.send_code(phone=mock_superlive.GOOD_PHONE)
         status, body = self.verify_code(phone="+5521988888888", code=mock_superlive.GOOD_SMS_CODE)
@@ -614,9 +638,15 @@ class EmailCodeLoginTests(RobotTestBase):
         self.assertIn("invalid code", body["detail"])
         self.assertFalse(self.status()["connected"])
 
-        status, body = self.verify_code()  # same email_otp_code_id, now the right code
-        self.assertEqual(status, 200, body)
-        self.assertTrue(body["connected"])
+    def test_too_many_wrong_codes_exhausts_the_pending_verification(self):
+        self.send_code()
+        for _ in range(5):
+            status, body = self.verify_code(code="000000")
+            self.assertEqual(status, 400)
+        status, body = self.verify_code()  # right code, but the budget is gone
+        self.assertEqual(status, 400)
+        self.assertIn("Número de tentativas excedido", body["detail"])
+        self.assertFalse(self.status()["connected"])
 
     def test_verifying_a_different_email_than_the_one_mailed_is_rejected(self):
         self.send_code(email=mock_superlive.GOOD_EMAIL_FOR_CODE)
@@ -1193,6 +1223,12 @@ class StreamerWatchTests(RobotTestBase):
             self.assertGreaterEqual(self.status()["session"]["watch_waiting_seconds"], 0)
             self.assertEqual(self.status()["session"]["state"], "stopped")
 
+            # Also recorded in the user's own activity history, not just the
+            # (easy to miss) process log - that was the actual bug: it read
+            # identical to the watch loop simply not running at all.
+            activity_actions = [row["action"] for row in api("GET", "/activity", token=self.token)[1]]
+            self.assertEqual(activity_actions.count("watch_stuck"), 1, activity_actions)
+
             # Once she genuinely moves to a new broadcast, it resumes - and the
             # flag clears, because it's now a fresh session.
             mock.end_live(STREAMER_ID, "live1")
@@ -1215,6 +1251,65 @@ class StreamerWatchTests(RobotTestBase):
         finally:
             conn.close()
         self.assertIn(self.uid, [r["user_id"] for r in rows])
+
+
+class HealthbotLiveStatusTests(RobotTestBase):
+    """/robot/live_status has no portal login - the Telegram healthbot
+    authenticates with a shared key instead (see main.HEALTHBOT_API_KEY)."""
+
+    def setUp(self):
+        super().setUp()
+        self._old_key = main.HEALTHBOT_API_KEY
+        self._old_target = main.HEALTHBOT_TARGET_USER_ID
+        main.HEALTHBOT_API_KEY = "test-healthbot-key"
+        main.HEALTHBOT_TARGET_USER_ID = None
+        self._other_token = None
+
+    def tearDown(self):
+        main.HEALTHBOT_API_KEY = self._old_key
+        main.HEALTHBOT_TARGET_USER_ID = self._old_target
+        if self._other_token:
+            api("POST", "/robot/stop", token=self._other_token)
+            api("POST", "/robot/disconnect", token=self._other_token)
+        super().tearDown()
+
+    def live_status(self, key="test-healthbot-key"):
+        return api("GET", "/robot/live_status", headers={"x-healthbot-key": key})
+
+    def watch(self, shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID, active=True):
+        return api("PUT", "/robot/watch", {"shared_id": shared_id, "active": active}, self.token)
+
+    def add_other_active_watch(self):
+        self._other_token = new_user("other")[1]
+        api("POST", "/robot/connect", {"email": "robot@x.com", "password": "good"}, self._other_token)
+        api("PUT", "/robot/watch",
+            {"shared_id": mock_superlive.OFFLINE_STREAMER_SHARED_ID, "active": True}, self._other_token)
+
+    def test_refuses_without_the_shared_key(self):
+        self.assertEqual(self.live_status(key="wrong")[0], 403)
+        self.assertEqual(self.live_status(key="")[0], 403)
+
+    def test_stays_closed_when_no_key_is_configured(self):
+        main.HEALTHBOT_API_KEY = ""
+        self.assertEqual(self.live_status()[0], 403)
+
+    def test_refuses_to_guess_between_two_active_watches(self):
+        """Regression: with more than one user watching at once and no
+        explicit target, this used to silently hand out whichever user's
+        data came back first from the DB - now it fails closed instead."""
+        self.connect_robot()
+        self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+        self.add_other_active_watch()
+        status, body = self.live_status()
+        self.assertEqual(status, 503, body)
+
+    def test_explicit_target_resolves_even_with_two_active_watches(self):
+        self.connect_robot()
+        self.watch(shared_id=mock_superlive.OFFLINE_STREAMER_SHARED_ID)
+        self.add_other_active_watch()
+        main.HEALTHBOT_TARGET_USER_ID = self.uid
+        status, body = self.live_status()
+        self.assertEqual(status, 200, body)
 
 
 class MessagesFlowTests(RobotTestBase):

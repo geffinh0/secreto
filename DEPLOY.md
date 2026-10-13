@@ -114,10 +114,29 @@ menos que o domínio mude.
 
 ## 7. Backup do banco
 
+O banco roda em modo WAL (`journal_mode=WAL`, ver `backend/db.py`), então um
+`cat` direto no arquivo pode sair sem as transações mais recentes (que ainda
+estão só no `-wal`) ou corrompido. Uso o backup via API do próprio SQLite
+(`sqlite3.Connection.backup`), que é seguro mesmo com o banco em uso - a
+imagem `python:3.12-slim` já traz o módulo `sqlite3` do Python, mas não o CLI
+`sqlite3`, por isso o comando é via `python -c` em vez de `sqlite3 .backup`:
+
 ```bash
 # como deploy
-docker exec atilas_client_backend sh -c 'cat /data/super_moderator.db' > backup-$(date +%F).db
+docker exec atilas_client_backend python -c "
+import sqlite3
+src = sqlite3.connect('/data/super_moderator.db')
+dst = sqlite3.connect('/tmp/backup.db')
+src.backup(dst)
+dst.close()
+src.close()
+"
+docker cp atilas_client_backend:/tmp/backup.db backup-$(date +%F).db
+docker exec atilas_client_backend rm /tmp/backup.db
 ```
+
+Teste a restauração de vez em quando (`docker cp` o arquivo pra um container
+novo e confirme que abre) - um backup nunca testado não é um backup.
 
 ## 8. Proxy residencial (notebook) para o SuperLive
 
@@ -205,6 +224,12 @@ EOF
 #    fora do git), pro backend aceitar - sem isso /live e /resumo voltam
 #    "não foi possível obter o status"
 echo "HEALTHBOT_API_KEY=$HEALTHBOT_KEY" >> ~/atilas-client/.env
+# 6b. Só necessário quando houver MAIS DE UMA usuária com robô ativo ao mesmo
+#     tempo: fixa de qual delas é o status que o bot reporta. Com uma única
+#     usuária ativa (caso comum hoje) pode deixar de fora - o endpoint se
+#     resolve sozinho; com mais de uma e isso vazio, ele recusa (503) em vez
+#     de adivinhar. O ID é o `id` da conta de portal (tabela users).
+# echo "HEALTHBOT_TARGET_USER_ID=1" >> ~/atilas-client/.env
 cd ~/atilas-client && docker compose up -d --build backend
 
 # 7. descobre o chat_id a partir da mensagem que você mandou no passo 2
