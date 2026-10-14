@@ -10,6 +10,7 @@ Nothing here tries to defeat bot protection (App Check / reCAPTCHA). If the serv
 asks for it, the login simply fails with the server's own message.
 """
 import asyncio
+import collections
 import itertools
 import json
 import logging
@@ -123,6 +124,135 @@ _dispatchers: "dict[tuple, tuple[asyncio.PriorityQueue, asyncio.Task]]" = {}
 _seq = itertools.count()
 
 
+class _EgressQueue(asyncio.PriorityQueue):
+    """The per-egress priority queue plus a flag the dispatcher can sleep on: it is
+    raised whenever an urgent request (mute/kick) is queued, so a message that is
+    waiting out its own spacing can step aside instead of holding the urgent one."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.urgent_wakeup = asyncio.Event()
+
+
+# ---- pacing telemetry -------------------------------------------------------
+# What decides the real delay is how long requests wait in the queue per priority
+# and how long one call takes through the proxy (L). Kept in memory, per egress,
+# over the last samples; summarised in the log every few minutes and in
+# /admin/capacity (pacing_stats). No behaviour depends on it.
+_STAT_WINDOW = 200
+_STAT_LOG_EVERY_SECONDS = float(os.getenv("SUPERLIVE_PACING_LOG_EVERY_SECONDS", "60"))
+
+
+class _EgressStats:
+    def __init__(self) -> None:
+        self.urgent_wait: "collections.deque[float]" = collections.deque(maxlen=_STAT_WINDOW)
+        self.normal_wait: "collections.deque[float]" = collections.deque(maxlen=_STAT_WINDOW)
+        self.call: "collections.deque[float]" = collections.deque(maxlen=_STAT_WINDOW)
+        self.sent = 0
+        self.network_errors = 0
+        self.throttled = 0
+        self.last_log = time.monotonic()
+        self.sent_at_last_log = 0
+
+
+_stats: "dict[str, _EgressStats]" = {}
+
+
+def _stats_for(proxy: str) -> _EgressStats:
+    st = _stats.get(proxy)
+    if st is None:
+        st = _stats[proxy] = _EgressStats()
+    return st
+
+
+def _percentile(values, q: float) -> float:
+    ordered = sorted(values)
+    if not ordered:
+        return 0.0
+    idx = min(len(ordered) - 1, max(0, round(q * (len(ordered) - 1))))
+    return ordered[idx]
+
+
+def _summary(values) -> dict:
+    return {"n": len(values), "p50": round(_percentile(values, 0.5), 3),
+            "p95": round(_percentile(values, 0.95), 3)}
+
+
+# ---- persistent trace (for capacity planning) -------------------------------------
+# SUPERLIVE_PACING_LOG_FILE=/data/pacing.jsonl writes ONE JSON LINE PER CALL that goes
+# through a queue (every priority) plus one per 429 pause, with rotation so it can run
+# for as long as needed. It is the raw material for sizing: arrival pattern of mute/kick
+# and messages per live, queue wait, and call time (L) through the proxy. Empty = off.
+# Fields: t (epoch, when the call started), te (epoch, when it was queued), egress, prio
+# (0 urgent / 5 normal / 9 background), path, wait (queued -> started, s), L (the call, s),
+# out (ok | 429 | rede | erro), qd_in / qd_out (queue length when queued / when sent).
+_TRACE_MAX_BYTES = 100 * 1024 * 1024
+_TRACE_BACKUPS = 20
+_trace_logger = None
+_trace_path = None
+
+
+def _trace(event: dict) -> None:
+    """Appends one JSON line to the trace file, if enabled. Never raises: a full disk or
+    a bad path must not break moderation."""
+    global _trace_logger, _trace_path
+    path = os.getenv("SUPERLIVE_PACING_LOG_FILE", "")
+    if not path:
+        return
+    try:
+        if _trace_logger is None or _trace_path != path:
+            import logging.handlers
+            lg = logging.getLogger("super_moderator.pacing_trace")
+            lg.setLevel(logging.INFO)
+            lg.propagate = False
+            for h in list(lg.handlers):
+                lg.removeHandler(h)
+                h.close()
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            handler = logging.handlers.RotatingFileHandler(
+                path, maxBytes=_TRACE_MAX_BYTES, backupCount=_TRACE_BACKUPS, encoding="utf-8")
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            lg.addHandler(handler)
+            _trace_logger, _trace_path = lg, path
+            log.info("pacing trace gravando em %s", path)
+        _trace_logger.info(json.dumps(event, separators=(",", ":")))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("pacing trace desativado (%s)", exc)
+        os.environ["SUPERLIVE_PACING_LOG_FILE"] = ""
+
+
+def pacing_stats() -> dict:
+    """egress -> queue wait per priority and call time, in seconds (last samples)."""
+    return {
+        _redact_proxy(proxy): {
+            "urgent_wait": _summary(st.urgent_wait),
+            "normal_wait": _summary(st.normal_wait),
+            "call": _summary(st.call),
+            "sent": st.sent,
+            "network_errors": st.network_errors,
+            "throttled_429": st.throttled,
+        }
+        for proxy, st in _stats.items()
+    }
+
+
+def _maybe_log_stats(proxy: str, st: _EgressStats) -> None:
+    now = time.monotonic()
+    if now - st.last_log < _STAT_LOG_EVERY_SECONDS or st.sent == st.sent_at_last_log:
+        return
+    st.last_log = now
+    st.sent_at_last_log = st.sent
+    log.info(
+        "pacing %s: espera urgente p50/p95=%.2f/%.2fs, espera normal p50/p95=%.2f/%.2fs, "
+        "chamada (L) p50/p95=%.2f/%.2fs, enviadas=%d, erros de rede=%d, 429=%d",
+        _redact_proxy(proxy),
+        _percentile(st.urgent_wait, 0.5), _percentile(st.urgent_wait, 0.95),
+        _percentile(st.normal_wait, 0.5), _percentile(st.normal_wait, 0.95),
+        _percentile(st.call, 0.5), _percentile(st.call, 0.95),
+        st.sent, st.network_errors, st.throttled,
+    )
+
+
 def _request_spacing_seconds() -> float:
     # Read live (not frozen at import time): whichever test module a combined
     # run imports first would otherwise permanently bake in the default
@@ -138,6 +268,15 @@ def _message_spacing_seconds() -> float:
     return float(os.getenv("SUPERLIVE_MESSAGE_SPACING_SECONDS", "3"))
 
 
+def _spacing_from_start() -> bool:
+    """SUPERLIVE_PACING_FROM_START=1 counts the spacing from when the previous call
+    STARTED instead of when it finished (cycle = max(L, spacing) instead of
+    L + spacing). Still one call in flight at a time. Off by default: it raises
+    the request rate by up to ~(spacing / (L + spacing)), so turn it on only after
+    the pacing log shows L and no 429s."""
+    return os.getenv("SUPERLIVE_PACING_FROM_START", "0") == "1"
+
+
 # egress proxy URL -> monotonic time of its last HTTP 429; the watch loop halves
 # its polling budget on an egress that was throttled recently.
 _last_429: dict = {}
@@ -149,14 +288,20 @@ def recently_throttled(proxy: str = "") -> bool:
     return ts is not None and time.monotonic() - ts < THROTTLE_MEMORY_SECONDS
 
 
-async def _dispatcher(queue: "asyncio.PriorityQueue", proxy: str = "") -> None:
+async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
     """The only coroutine that actually sends anything to SuperLive for a
     given event loop - every request, from every session, passes through
     here one at a time, in priority order. Keeping it as a single
     long-running consumer (rather than N callers racing for a lock) is
     what makes "urgent jumps the queue" possible: asyncio.Lock wakes
     waiters FIFO with no concept of priority; a PriorityQueue does.
+
+    A request taken from the queue that still has to wait out its spacing (a chat
+    message waits up to SUPERLIVE_MESSAGE_SPACING_SECONDS) does NOT hold the line:
+    if an urgent request arrives meanwhile, the waiting one goes back to its place
+    and the urgent one is sent first. Message spacing is never applied to mute/kick.
     """
+    st = _stats_for(proxy)
     last_any = 0.0
     last_message = 0.0
     # A 429 is about the shared egress IP, not the one account that got it, so
@@ -166,25 +311,55 @@ async def _dispatcher(queue: "asyncio.PriorityQueue", proxy: str = "") -> None:
     cooldown_until = 0.0
     backoff_429 = 0.0
     while True:
-        _priority, _seq, fut, client, path, body, auth = await queue.get()
+        item = await queue.get()
+        priority, _seq, fut, client, path, body, auth, enqueued, depth_in = item
         if fut.cancelled():
             continue
+        urgent = priority <= PRIORITY_URGENT
+        if urgent:
+            queue.urgent_wakeup.clear()
+        stepped_aside = False
         now = time.monotonic()
         wait = _request_spacing_seconds() - (now - last_any)
         if path == _MESSAGE_PATH:
             wait = max(wait, _message_spacing_seconds() - (now - last_message))
         wait = max(wait, cooldown_until - now)
         if wait > 0:
-            await asyncio.sleep(wait)
+            if urgent:
+                await asyncio.sleep(wait)
+            else:
+                try:
+                    await asyncio.wait_for(queue.urgent_wakeup.wait(), timeout=wait)
+                except asyncio.TimeoutError:
+                    pass  # waited it out: send it
+                else:
+                    # an urgent request showed up: put this one back (same priority and
+                    # sequence number, so it keeps its place) and take the urgent first
+                    queue.urgent_wakeup.clear()
+                    queue.put_nowait(item)
+                    stepped_aside = True
+        if stepped_aside:
+            continue
+        if fut.cancelled():
+            continue  # the caller gave up while this waited its turn
+        started = time.monotonic()
+        outcome = "ok"
         try:
             result = await asyncio.to_thread(client._post_sync, path, body or {}, auth)
         except Exception as exc:  # noqa: BLE001 - relayed to the caller via the future
+            outcome = "429" if isinstance(exc, SuperLiveError) and exc.status == 429 else (
+                "rede" if isinstance(exc, SuperLiveError) and exc.status == 0 else "erro")
             if isinstance(exc, SuperLiveError) and exc.status == 429:
                 backoff_429 = min(max(backoff_429 * 2, 2.0), 60.0)
                 pause = min(exc.retry_after or backoff_429, 120.0)
                 cooldown_until = time.monotonic() + pause
                 _last_429[proxy] = time.monotonic()
+                st.throttled += 1
                 log.warning("SuperLive HTTP 429 em %s: fila global pausada por %.0fs", path, pause)
+                _trace({"ev": "cooldown", "t": round(time.time(), 3), "egress": _redact_proxy(proxy),
+                        "path": path, "pause": round(pause, 2)})
+            elif isinstance(exc, SuperLiveError) and exc.status == 0:
+                st.network_errors += 1
             if not fut.cancelled():
                 fut.set_exception(exc)
         else:
@@ -195,9 +370,24 @@ async def _dispatcher(queue: "asyncio.PriorityQueue", proxy: str = "") -> None:
                 fut.set_result(result)
         finally:
             finished = time.monotonic()
-            last_any = finished
+            last_any = started if _spacing_from_start() else finished
             if path == _MESSAGE_PATH:
                 last_message = finished
+            st.sent += 1
+            st.call.append(finished - started)
+            (st.urgent_wait if urgent else st.normal_wait).append(started - enqueued)
+            if urgent or path == _MESSAGE_PATH:
+                # one line per real action (mute/kick/chat message): low volume, and the
+                # raw material for judging the delay a moderator actually gets
+                log.info("pacing acao egress=%s tipo=%s espera=%.2fs chamada=%.2fs fila=%d resultado=%s",
+                         _redact_proxy(proxy), "urgente" if urgent else "mensagem",
+                         started - enqueued, finished - started, queue.qsize(), outcome)
+            _trace({"t": round(time.time() - (finished - started), 3),
+                    "te": round(time.time() - (finished - enqueued), 3),
+                    "egress": _redact_proxy(proxy), "prio": priority, "path": path,
+                    "wait": round(started - enqueued, 3), "L": round(finished - started, 3),
+                    "out": outcome, "qd_in": depth_in, "qd_out": queue.qsize()})
+            _maybe_log_stats(proxy, st)
 
 
 def queue_depths() -> dict:
@@ -210,7 +400,7 @@ def queue_depths() -> dict:
             if lid == loop_id}
 
 
-def _ensure_dispatcher(proxy: str = "") -> asyncio.PriorityQueue:
+def _ensure_dispatcher(proxy: str = "") -> "_EgressQueue":
     """Lazily creates (or reuses) the queue/dispatcher for the CURRENT
     running loop and egress. Module import happens before any loop exists, so
     this can't be module-level setup."""
@@ -218,7 +408,7 @@ def _ensure_dispatcher(proxy: str = "") -> asyncio.PriorityQueue:
     key = (id(loop), proxy)
     entry = _dispatchers.get(key)
     if entry is None or entry[1].done():
-        queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        queue = _EgressQueue()
         task = loop.create_task(_dispatcher(queue, proxy), name="superlive-dispatcher")
         log.info("superlive dispatcher started for egress %s", _redact_proxy(proxy))
         _dispatchers[key] = (queue, task)
@@ -350,7 +540,10 @@ class SuperLiveClient:
             raise SuperLiveError("Fila de saída do SuperLive ocupada; tentando de novo em breve.", 0)
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
-        await queue.put((priority, next(_seq), fut, self, path, body, auth))
+        await queue.put((priority, next(_seq), fut, self, path, body, auth, time.monotonic(),
+                         queue.qsize()))
+        if priority <= PRIORITY_URGENT:
+            queue.urgent_wakeup.set()  # a message waiting out its spacing yields to this
         try:
             return await fut
         except asyncio.CancelledError:

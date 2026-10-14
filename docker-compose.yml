@@ -51,6 +51,15 @@ services:
       # multi-account test that needs to be reviewed afterwards; unset it
       # again once done so routine operation doesn't grow this file forever.
       SM_LOG_FILE: "${SM_LOG_FILE:-}"
+      # One JSON line per SuperLive call (queue wait, call time, outcome) on the data
+      # volume, rotated at 100 MB x 20, kept across restarts: the data to size how many
+      # robots one egress IP sustains. Set it to empty in .env to turn it off.
+      SUPERLIVE_PACING_LOG_FILE: "${SUPERLIVE_PACING_LOG_FILE:-/data/pacing.jsonl}"
+      # Seconds between the aggregate pacing summaries in the log.
+      SUPERLIVE_PACING_LOG_EVERY_SECONDS: "${SUPERLIVE_PACING_LOG_EVERY_SECONDS:-60}"
+      # 1 = count the request spacing from when the previous call STARTED (cycle =
+      # max(L, spacing)). Raises the request rate; leave 0 until the trace shows L.
+      SUPERLIVE_PACING_FROM_START: "${SUPERLIVE_PACING_FROM_START:-0}"
       # Bootstraps the FIRST admin_accounts row at startup, only while none
       # exists yet (see main._bootstrap_admin_account) - the admin panel's
       # own login, fully separate from the portal's users table. No public

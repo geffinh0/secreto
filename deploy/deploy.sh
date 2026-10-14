@@ -67,10 +67,25 @@ print('integrity_check:', result)
   echo "backup: $BACKUP_DIR/atila-$STAMP.db  (contem dados de contas: mantenha 600, apague quando nao precisar)"
 
   say "3/7 etiquetando as imagens atuais para rollback"
+  tagged=1
   for c in "$BACKEND" "$WEB"; do
-    docker tag "$(docker inspect -f '{{.Image}}' "$c")" "atila-rollback/$c:$STAMP"
+    img=$(docker inspect -f '{{.Image}}' "$c")
+    # a container pode rodar uma imagem que ja saiu do armazenamento do Docker (prune,
+    # imagem sem tag removida): sem a imagem nao ha o que etiquetar. Nao aborta o deploy -
+    # o backup do banco ja foi feito -, mas avisa e nao registra este deploy para o rollback.
+    if docker image inspect "$img" >/dev/null 2>&1; then
+      docker tag "$img" "atila-rollback/$c:$STAMP"
+    else
+      tagged=0
+      echo "AVISO: a imagem em uso por $c ($img) nao existe mais; sem etiqueta de rollback para ele."
+    fi
   done
-  echo "$STAMP" > "$BACKUP_DIR/last-deploy"
+  if [ "$tagged" = 1 ]; then
+    echo "$STAMP" > "$BACKUP_DIR/last-deploy"
+  else
+    rm -f "$BACKUP_DIR/last-deploy"
+    echo "Rollback automatico indisponivel para este deploy (falta imagem). Backup do banco: $BACKUP_DIR/atila-$STAMP.db"
+  fi
 else
   say "2-3/7 backend nao esta rodando: sem backup/etiqueta (primeiro deploy?)"
   # um last-deploy antigo faria o rollback restaurar um banco de dias atras

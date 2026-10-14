@@ -678,6 +678,184 @@ class WatchLookupLoggingTests(unittest.TestCase):
         self.assertNotIn("divergence", "\n".join(cm.output))
 
 
+class DispatcherPacingTests(unittest.IsolatedAsyncioTestCase):
+    """The queue must never make a mute/kick wait behind a chat message that is only
+    waiting out its own 3 s spacing, must keep one request in flight at a time, and
+    must keep the spacing rules otherwise unchanged."""
+
+    async def test_urgent_does_not_wait_for_a_message_spacing(self):
+        import superlive
+        order = []
+
+        def fake_post(self, path, body, auth):
+            order.append(path)
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_MESSAGE_SPACING_SECONDS": "1.0"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-urgent-first:1080")
+            await c.post(superlive._MESSAGE_PATH, {})            # starts the 1 s message window
+            waiting = asyncio.create_task(c.post(superlive._MESSAGE_PATH, {}))   # must wait ~1 s
+            await asyncio.sleep(0.1)
+            start = time.monotonic()
+            await c.post("mute", {}, priority=PRIORITY_URGENT)
+            urgent_took = time.monotonic() - start
+            await waiting
+        self.assertLess(urgent_took, 0.4)        # not held for the ~0.9 s left of the message window
+        self.assertEqual(order, [superlive._MESSAGE_PATH, "mute", superlive._MESSAGE_PATH])
+
+    async def test_messages_still_respect_their_own_spacing(self):
+        import superlive
+        starts = []
+
+        def fake_post(self, path, body, auth):
+            starts.append(time.monotonic())
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_MESSAGE_SPACING_SECONDS": "0.4"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-msg-spacing:1080")
+            await asyncio.gather(c.post(superlive._MESSAGE_PATH, {}), c.post(superlive._MESSAGE_PATH, {}))
+        self.assertGreaterEqual(starts[1] - starts[0], 0.35)
+
+    async def test_urgent_still_respects_the_base_spacing_and_a_waiting_message_keeps_its_place(self):
+        import superlive
+        order = []
+
+        def fake_post(self, path, body, auth):
+            order.append(path)
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0.3", "SUPERLIVE_MESSAGE_SPACING_SECONDS": "1.0"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-base-spacing:1080")
+            first = time.monotonic()
+            await c.post("mute", {}, priority=PRIORITY_URGENT)
+            await c.post("kick", {}, priority=PRIORITY_URGENT)
+            gap = time.monotonic() - first
+        self.assertGreaterEqual(gap, 0.28)       # base spacing still applies to urgent calls
+        self.assertEqual(order, ["mute", "kick"])
+
+    async def test_only_one_request_is_ever_in_flight(self):
+        in_flight = 0
+        peak = 0
+
+        def slow_post(self, path, body, auth):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            time.sleep(0.05)
+            in_flight -= 1
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_PACING_FROM_START": "1"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", slow_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-one-inflight:1080")
+            await asyncio.gather(*[c.post("x", {}) for _ in range(6)])
+        self.assertEqual(peak, 1)
+
+    async def test_spacing_from_start_makes_the_cycle_max_of_call_and_spacing(self):
+        def slow_post(self, path, body, auth):
+            time.sleep(0.2)
+            return {}
+
+        async def run(flag: str, proxy: str) -> float:
+            env = {"SUPERLIVE_REQUEST_SPACING": "0.3", "SUPERLIVE_PACING_FROM_START": flag}
+            with mock.patch.dict("os.environ", env):
+                c = SuperLiveClient("t", "d", proxy_url=proxy)
+                await c.post("warmup", {})
+                await asyncio.sleep(0.35)
+                start = time.monotonic()
+                await asyncio.gather(c.post("a", {}), c.post("b", {}), c.post("c", {}))
+                return time.monotonic() - start
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", slow_post):
+            legacy = await run("0", "socks5h://egress-legacy-cycle:1080")        # 3 calls: 0.2 + 2 x (0.3 + 0.2)
+            from_start = await run("1", "socks5h://egress-start-cycle:1080")     # 3 calls: 0.2 + 2 x 0.3
+        self.assertGreaterEqual(legacy, 1.1)
+        self.assertLess(from_start, legacy - 0.15)
+
+    async def test_each_urgent_action_and_message_logs_wait_and_call_time(self):
+        import superlive
+
+        def fake_post(self, path, body, auth):
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_MESSAGE_SPACING_SECONDS": "0"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-log-line:1080")
+            with self.assertLogs("super_moderator.superlive", level="INFO") as cm:
+                await c.post("mute", {}, priority=PRIORITY_URGENT)
+                await c.post(superlive._MESSAGE_PATH, {})
+                await c.post("users/profile", {})        # background traffic: not one line per call
+        lines = [m for m in cm.output if "pacing acao" in m]
+        self.assertEqual(len(lines), 2)
+        self.assertIn("tipo=urgente", lines[0])
+        self.assertIn("tipo=mensagem", lines[1])
+        self.assertIn("resultado=ok", lines[0])
+
+    async def test_trace_file_gets_one_json_line_per_call(self):
+        import superlive
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        trace = os.path.join(tmp, "sub", "pacing.jsonl")
+
+        def fake_post(self, path, body, auth):
+            if path == "boom":
+                raise SuperLiveError("limite", 429, None, retry_after=0.01)
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_PACING_LOG_FILE": trace}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-trace:1080")
+            await c.post("users/profile", {}, priority=PRIORITY_LOW)
+            await c.post("mute", {}, priority=PRIORITY_URGENT)
+            with self.assertRaises(SuperLiveError):
+                await c.post("boom", {})
+            # close the rotating handler so the file can be read/removed on every OS
+            for h in list(superlive._trace_logger.handlers):
+                h.flush()
+        rows = [json.loads(line) for line in open(trace, encoding="utf-8").read().splitlines()]
+        calls = [r for r in rows if "ev" not in r]
+        self.assertEqual([r["path"] for r in calls], ["users/profile", "mute", "boom"])
+        self.assertEqual([r["prio"] for r in calls], [PRIORITY_LOW, PRIORITY_URGENT, 5])
+        self.assertEqual(calls[2]["out"], "429")
+        for key in ("t", "te", "egress", "wait", "L", "qd_in", "qd_out"):
+            self.assertIn(key, calls[0])
+        self.assertTrue(any(r.get("ev") == "cooldown" for r in rows))
+        for h in list(superlive._trace_logger.handlers):
+            h.close()
+        superlive._trace_logger = None
+
+    async def test_trace_failure_never_breaks_a_call(self):
+        import superlive
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_PACING_LOG_FILE": os.path.join(os.devnull, "x", "y.jsonl")}
+        with mock.patch.object(SuperLiveClient, "_post_sync", lambda self, p, b, a: {"ok": 1}),                 mock.patch.dict("os.environ", env):
+            superlive._trace_logger = None
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-trace-bad:1080")
+            self.assertEqual(await c.post("x", {}), {"ok": 1})
+            self.assertEqual(os.environ.get("SUPERLIVE_PACING_LOG_FILE"), "")   # disabled itself
+
+    async def test_pacing_stats_record_wait_per_priority_and_call_time(self):
+        import superlive
+
+        def fake_post(self, path, body, auth):
+            time.sleep(0.02)
+            return {}
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), \
+                mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0"}):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-stats:1080")
+            await c.post("x", {})
+            await c.post("mute", {}, priority=PRIORITY_URGENT)
+        stats = superlive.pacing_stats()
+        entry = next(v for k, v in stats.items() if "egress-stats" in k)
+        self.assertEqual(entry["sent"], 2)
+        self.assertEqual(entry["urgent_wait"]["n"], 1)
+        self.assertEqual(entry["normal_wait"]["n"], 1)
+        self.assertGreaterEqual(entry["call"]["p50"], 0.02)
+
+
 class EgressPoolTests(unittest.IsolatedAsyncioTestCase):
     """Scale: one serial queue PER egress IP (the SuperLive collision rule is per IP),
     background polling shed first, and a fixed least-loaded egress per user."""

@@ -26,7 +26,7 @@ from engine import (
     IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
 )
 from engine import client_for_user, watch_poll_interval
-from superlive import SuperLiveClient, SuperLiveError, get_proxy_pool, queue_depths
+from superlive import SuperLiveClient, SuperLiveError, get_proxy_pool, pacing_stats, queue_depths
 
 _log_handlers = [logging.StreamHandler()]
 # Opt-in persistent log file (SM_LOG_FILE=path/to/file.log) - used for local
@@ -1901,6 +1901,8 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
         "max_sessions": int(os.getenv("SM_MAX_SESSIONS", "0") or 0),
         # about 25 live sessions per egress IP is what its request budget sustains
         "suggested_max_sessions": 25 * len(pool),
+        # measured, not estimated: queue wait per priority and call time (L) per egress
+        "pacing": pacing_stats(),
     }
 
 
