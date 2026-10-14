@@ -72,8 +72,11 @@ services:
       # 0 = always repeat the profile lookup by internal id when the public-id lookup says she is
       # offline (old behaviour). 1 = skip it when both read the same account.
       SUPERLIVE_DEDUPE_LOOKUP: "${SUPERLIVE_DEDUPE_LOOKUP:-1}"
-      # Live sessions per egress IP shown as the suggested maximum in the admin panel.
-      SM_SUGGESTED_SESSIONS_PER_EGRESS: "${SM_SUGGESTED_SESSIONS_PER_EGRESS:-15}"
+      # Robots allowed at once on ONE egress IP (waiting-for-live ones included); a new robot is
+      # refused past this. 14 was measured with a real account's rules (messages every 60 s are
+      # what limit it: ~18 messages/min per IP). Each proxy added to SUPERLIVE_PROXY_URLS adds
+      # this many. 0 = no per-IP cap.
+      SM_SESSIONS_PER_EGRESS: "${SM_SESSIONS_PER_EGRESS:-14}"
       # Bootstraps the FIRST admin_accounts row at startup, only while none
       # exists yet (see main._bootstrap_admin_account) - the admin panel's
       # own login, fully separate from the portal's users table. No public
@@ -96,10 +99,9 @@ services:
       # the backend; with FORWARDED_ALLOW_IPS listing the cata-pobre proxy (it
       # does, pinned at 172.19.0.3) 10-15 is reasonable. Set it in .env.
       SM_LOGIN_IP_MAX: "${SM_LOGIN_IP_MAX:-50}"
-      # Max robots running at once across ALL creators (0 = no cap). Each egress
-      # IP sustains roughly 25 live sessions (backend/superlive.py: serial queue,
-      # ~2.8 req/s); raise this by 25 for every proxy added to SUPERLIVE_PROXY_URLS.
-      SM_MAX_SESSIONS: "${SM_MAX_SESSIONS:-25}"
+      # Optional extra cap on robots running at once across ALL creators (0 = none: the
+      # per-IP cap SM_SESSIONS_PER_EGRESS below already scales with the proxy list).
+      SM_MAX_SESSIONS: "${SM_MAX_SESSIONS:-0}"
       # The robot's SuperLive token is encrypted at rest with the key in this
       # file (a Docker secret, below) - a path, not the key itself, so
       # `docker inspect` shows nothing useful. Missing/unreadable key = the robot

@@ -25,7 +25,7 @@ from db import row_to_dict
 from engine import (
     IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
 )
-from engine import client_for_user, lookup_stats, watch_poll_interval
+from engine import client_for_user, egress_of, lookup_stats, watch_poll_interval
 from superlive import SuperLiveClient, SuperLiveError, get_proxy_pool, pacing_stats, queue_depths
 
 _log_handlers = [logging.StreamHandler()]
@@ -1892,6 +1892,15 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
             "poll_interval_seconds": round(watch_poll_interval(watch_n)),
         })
     active = sum(1 for s in sessions.all_sessions().values() if s.is_active)
+    per_egress_cap = int(os.getenv("SM_SESSIONS_PER_EGRESS", "14") or 0)
+    running_by_egress = {}
+    for s in sessions.all_sessions().values():
+        if s.is_active:
+            key = egress_of(s.client)
+            running_by_egress[key] = running_by_egress.get(key, 0) + 1
+    for entry in per_slot:
+        entry["active_sessions"] = running_by_egress.get(pool[entry["slot"]], 0)
+        entry["max_sessions"] = per_egress_cap
     return {
         "egress_count": len(pool),
         "slots": per_slot,
@@ -1899,9 +1908,10 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
             "SELECT COUNT(*) AS n FROM users WHERE egress_slot IS NULL").fetchone()["n"],
         "active_sessions": active,
         "max_sessions": int(os.getenv("SM_MAX_SESSIONS", "0") or 0),
-        # conservative until the pacing trace says more (SM_SUGGESTED_SESSIONS_PER_EGRESS): with the
-        # sessions' own polling, one egress IP stopped keeping up near 16 lives in the simulation
-        "suggested_max_sessions": int(os.getenv("SM_SUGGESTED_SESSIONS_PER_EGRESS", "15") or 15) * len(pool),
+        # robots allowed per egress IP (SM_SESSIONS_PER_EGRESS); a new robot is refused once its IP
+        # has this many, counting the ones waiting for a live. One more IP = this many more robots.
+        "sessions_per_egress": per_egress_cap,
+        "suggested_max_sessions": per_egress_cap * len(pool),
         "lookup": lookup_stats(),
         # measured, not estimated: queue wait per priority and call time (L) per egress
         "pacing": pacing_stats(),

@@ -490,6 +490,88 @@ class SessionManagerRaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(sessions.get(3))
 
 
+class _EgressClient:
+    device_id = "d"
+    token = "t"
+
+    def __init__(self, proxy):
+        self.proxy_url = proxy
+
+
+class PerEgressCapTests(unittest.IsolatedAsyncioTestCase):
+    """14 robots per egress IP (SM_SESSIONS_PER_EGRESS), counting the ones waiting for the
+    streamer's next live; another IP has its own allowance."""
+
+    def patched(self, **env):
+        async def ok_start(self):
+            self.state = "running"
+
+        base = {"SM_SESSIONS_PER_EGRESS": "3", "SM_MAX_SESSIONS": "0"}
+        base.update({k: str(v) for k, v in env.items()})
+        return mock.patch.object(BotSession, "start", ok_start), mock.patch.dict("os.environ", base)
+
+    async def test_the_robot_past_the_cap_on_one_ip_is_refused_but_another_ip_is_free(self):
+        sessions = SessionManager()
+        p1, p2 = self.patched()
+        with p1, p2:
+            for uid in (1, 2, 3):
+                await sessions.start(uid, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+            with self.assertRaises(RuntimeError) as cm:
+                await sessions.start(4, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+            self.assertIn("Capacidade", str(cm.exception))
+            self.assertIsNone(sessions.get(4))                       # nothing was left registered
+            await sessions.start(5, _EgressClient("socks5h://ip-b:1"), "bot", "L")   # other IP: free
+            self.assertIsNotNone(sessions.get(5))
+
+    async def test_robots_waiting_for_the_next_live_still_hold_a_slot(self):
+        sessions = SessionManager()
+        p1, p2 = self.patched()
+        with p1, p2:
+            for uid in (1, 2, 3):
+                await sessions.start(uid, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+            sessions.get(1).state = "waiting_for_live"
+            with self.assertRaises(RuntimeError):
+                await sessions.start(4, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+
+    async def test_a_stopped_robot_frees_its_slot(self):
+        sessions = SessionManager()
+        p1, p2 = self.patched()
+        with p1, p2:
+            for uid in (1, 2, 3):
+                await sessions.start(uid, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+            sessions.get(2).state = "stopped"
+            await sessions.start(4, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+
+    async def test_restarting_your_own_waiting_robot_does_not_count_against_you(self):
+        sessions = SessionManager()
+        p1, p2 = self.patched()
+        with p1, p2:
+            for uid in (1, 2, 3):
+                await sessions.start(uid, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+            sessions.get(3).state = "waiting_for_live"
+            await sessions.start(3, _EgressClient("socks5h://ip-a:1"), "bot", "L2")   # her own slot
+
+    async def test_zero_turns_the_per_ip_cap_off_and_the_global_cap_still_works(self):
+        sessions = SessionManager()
+        p1, p2 = self.patched(SM_SESSIONS_PER_EGRESS=0)
+        with p1, p2:
+            for uid in range(1, 8):
+                await sessions.start(uid, _EgressClient("socks5h://ip-a:1"), "bot", "L")
+        sessions2 = SessionManager()
+        q1, q2 = self.patched(SM_SESSIONS_PER_EGRESS=0, SM_MAX_SESSIONS=2)
+        with q1, q2:
+            await sessions2.start(1, _EgressClient("a"), "bot", "L")
+            await sessions2.start(2, _EgressClient("b"), "bot", "L")
+            with self.assertRaises(RuntimeError):
+                await sessions2.start(3, _EgressClient("c"), "bot", "L")
+
+    def test_the_default_is_fourteen_per_ip(self):
+        from engine import _sessions_per_egress
+        with mock.patch.dict("os.environ", {}, clear=False):
+            os.environ.pop("SM_SESSIONS_PER_EGRESS", None)
+            self.assertEqual(_sessions_per_egress(), 14)
+
+
 class Dispatcher429Tests(unittest.IsolatedAsyncioTestCase):
     async def test_429_pauses_the_whole_queue_without_retrying(self):
         calls = []

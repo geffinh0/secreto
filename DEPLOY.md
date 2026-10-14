@@ -342,9 +342,9 @@ instante vindas do mesmo IP, por isso a fila é serial por IP). O que isso permi
 
 | IPs de saída | Lives moderadas ao mesmo tempo | Quanto o robô demora para perceber que uma criadora entrou ao vivo (500 criadoras) |
 |---|---|---|
-| 1 (hoje) | ~15 (ver medição abaixo) | quente ~2 min · normal ~4 min · fria ~15 min (ou na hora, com o botão) |
-| 3 | ~45 | quente ~40 s · normal ~1,3 min · fria ~5 min |
-| 5 | ~75 | quente ~25 s · normal ~45 s · fria ~3 min |
+| 1 (hoje) | 14 (limite configurado; ver medição abaixo) | quente ~2 min · normal ~4 min · fria ~15 min (ou na hora, com o botão) |
+| 3 | 42 | quente ~40 s · normal ~1,3 min · fria ~5 min |
+| 5 | 70 | quente ~25 s · normal ~45 s · fria ~3 min |
 
 "Quente" = costuma entrar ao vivo nesta hora do dia (3 dos últimos 21 dias, ±1 h) ou acabou de
 encerrar uma live; "fria" = nenhuma live nos últimos 14 dias; o resto é "normal". O robô aprende
@@ -358,7 +358,9 @@ perguntando a mesma coisa). Valores calculados pela mesma fórmula do código (o
 consultas de perfil de uma sessão ociosa, em par, a cada ~20,6 s (0,096/s por sessão): com 25
 sessões isso já passa da capacidade serial, e as mensagens esperam sem limite (mute/kick não: eles
 furam a fila, p95 ≈ 1 s). Na simulação o IP sustenta ~12 lives sem folga e satura perto de 16;
-por isso o painel sugere 15 por IP (`SM_SUGGESTED_SESSIONS_PER_EGRESS`) até a coleta mostrar mais.
+por isso o limite é **14 robôs por IP** (`SM_SESSIONS_PER_EGRESS`; conta também os que esperam a
+próxima live): um robô novo é recusado quando o IP dele já tem 14. Com as regras reais de uma conta
+(mensagens a cada 60 s), as mensagens é que limitam (~18/min por IP); a 120 s cabem uns 18.
 O trace (`SUPERLIVE_PACING_LOG_FILE`, `/data/pacing.jsonl`) e o resumo no log (a cada 60 s) mostram
 espera na fila por prioridade, tempo de chamada (L), erros e 429; `/admin/capacity` traz `pacing` e
 `lookup`. Chaves de ajuste (todas no `docker-compose.yml`): `SUPERLIVE_DEDUPE_LOOKUP` (1 = pula a
@@ -370,8 +372,8 @@ espaçamento do início da chamada anterior; aumentam a taxa de requisições, f
 o trace mostrar folga).
 
 Como crescer: some proxies à lista `SUPERLIVE_PROXY_URLS` no `.env` (o **primeiro** tem de ser o
-atual, `socks5h://172.28.0.1:1080`; quem já tem robô continua nele) e suba `SM_MAX_SESSIONS`
-(15 por IP até medir mais). Cada criadora é fixada num IP quando conecta o robô (o menos carregado) e nunca é
+atual, `socks5h://172.28.0.1:1080`; quem já tem robô continua nele) e o limite por IP
+sobe sozinho (14 por IP; `SM_SESSIONS_PER_EGRESS`). Cada criadora é fixada num IP quando conecta o robô (o menos carregado) e nunca é
 trocada, porque a SuperLive amarra o token ao IP. A aba Agências mostra IPs, lives agora,
 fila mais longa e o tempo de detecção. Fila longa ou "lives agora" colado no máximo = hora de
 pôr outro IP. Sem pool nada muda: tudo sai pelo proxy único, e o intervalo de verificação

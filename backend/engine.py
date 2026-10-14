@@ -1324,6 +1324,27 @@ def _max_sessions() -> int:
         return 0
 
 
+def _sessions_per_egress() -> int:
+    """Robots allowed at once on ONE egress IP (0 = no per-IP cap). Measured with the real
+    rules of a production account (DEPLOY.md, "Medição"): past ~14 the shared queue stops
+    keeping up with chat messages every 60 s."""
+    try:
+        return max(0, int(os.getenv("SM_SESSIONS_PER_EGRESS", "14")))
+    except ValueError:
+        return 14
+
+
+def egress_of(client) -> str:
+    """The egress proxy a client sends through (empty string = direct / unknown)."""
+    probe = getattr(client, "_proxy", None)
+    if callable(probe):
+        try:
+            return str(probe() or "")
+        except Exception:  # noqa: BLE001
+            return ""
+    return str(getattr(client, "proxy_url", "") or "")
+
+
 class SessionManager:
     """Keeps at most one live session per portal user."""
 
@@ -1347,10 +1368,20 @@ class SessionManager:
         # Every session shares one egress IP and one serial request queue (see
         # superlive._dispatcher), so past a point each new robot only makes all
         # the others slower. 0 = no cap.
+        # Counted: every robot that holds a slot, INCLUDING the ones waiting for the streamer's
+        # next live (they turn into "running" by themselves, without passing through here, so
+        # leaving them out let the cap be exceeded). This user's own previous session is not
+        # counted against her.
+        others = [s for uid, s in self._sessions.items()
+                  if uid != user_id and (s.is_active or s.state == "stopping")]
         cap = _max_sessions()
-        if cap and sum(1 for s in self._sessions.values()
-                       if s.state in ("starting", "running", "stopping")) >= cap:
+        if cap and len(others) >= cap:
             raise RuntimeError("Capacidade de robôs simultâneos atingida; tente mais tarde.")
+        per_egress = _sessions_per_egress()
+        if per_egress:
+            mine = egress_of(client)
+            if sum(1 for s in others if egress_of(s.client) == mine) >= per_egress:
+                raise RuntimeError("Capacidade de robôs simultâneos atingida; tente mais tarde.")
         session = BotSession(user_id, client, robot_sl_id, livestream_id, ws_url_override)
         # Registered before the await below (not after) so a second, concurrent
         # call sees this "starting" session immediately and is rejected by the
