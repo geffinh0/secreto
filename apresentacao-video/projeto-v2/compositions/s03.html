@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--forest); overflow: hidden; }
+        #s03-glow { left: 0; top: 0; width: 1080px; height: 1920px; background: radial-gradient(ellipse 700px 800px at 50% 45%, rgba(45,82,66,.9), rgba(31,58,46,0) 70%); }
+        #s03-med { left: 370px; top: 300px; width: 340px; }
+        #s03-titlew { position: absolute; left: 0; top: 700px; width: 1080px; text-align: center; }
+        #s03-title { font-size: 124px; color: var(--paper); line-height: 1.1; }
+        #s03-sub { top: 880px; font-size: 54px; font-weight: 600; color: var(--goldL); }
+        #s03-orn { left: 240px; top: 1010px; }
+        #s03-stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; perspective: 1800px; }
+        #s03-phone { left: 300px; top: 251px; }
+        .s3lab { width: 270px; left: 70px; white-space: normal; line-height: 1.12; text-align: left; }
+        .s3ring { position: absolute; width: 19px; height: 19px; border-radius: 50%; border: 4px solid var(--terra); }
+        .s3ring { opacity:0; } #s03-l1 { top: 728px; } #s03-l2 { top: 877px; } #s03-l3 { top: 1057px; }
+        #s03-ld1 { left: 340px; top: 790px; width: 98px; } #s03-ld2 { left: 340px; top: 939px; width: 110px; } #s03-ld3 { left: 340px; top: 1119px; width: 220px; }
+        #s03-r1 { left: 429px; top: 781px; } #s03-r2 { left: 441px; top: 930px; } #s03-r3 { left: 551px; top: 1110px; }
+      </style>
+      <div id="root" data-composition-id="s03" data-width="1080" data-height="1920">
+        <div id="s03-glow" class="abs"></div>
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s03-v1" d="M-20 1700 C 140 1500, 60 1250, 170 1020 S 120 600, 60 300" opacity=".55"/>
+          <path id="s03-v2" d="M1100 1700 C 940 1500, 1020 1250, 910 1020 S 960 600, 1020 300" opacity=".55"/>
+          <path id="s03-v3" d="M-20 1300 C 80 1250, 150 1180, 190 1100" opacity=".4"/>
+          <path id="s03-v4" d="M1100 1300 C 1000 1250, 930 1180, 890 1100" opacity=".4"/>
+          <path id="s03-lf1" d="M170 1020 c-46 -8 -72 -40 -66 -80 c44 8 70 40 66 80z" fill="#D2B568" stroke="none" opacity=".6"/>
+          <path id="s03-lf2" d="M910 1020 c46 -8 72 -40 66 -80 c-44 8 -70 40 -66 80z" fill="#D2B568" stroke="none" opacity=".6"/>
+          <path id="s03-lf3" d="M120 650 c-44 -6 -68 -38 -62 -76 c42 6 66 38 62 76z" fill="#D2B568" stroke="none" opacity=".5"/>
+          <path id="s03-lf4" d="M960 650 c44 -6 68 -38 62 -76 c-42 6 -66 38 -62 76z" fill="#D2B568" stroke="none" opacity=".5"/>
+        </svg>
+        <img id="s03-med" class="abs" src="assets/fox_medallion_smile.webp" alt="" />
+        <div id="s03-titlew"><div id="s03-title" class="serif">Atila's Client</div></div>
+        <div id="s03-sub" class="center sans">Um robô que modera sua live.</div>
+        <svg id="s03-orn" class="abs" width="600" height="70" viewBox="0 0 600 70" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path d="M0 35 H230"/><path d="M370 35 H600"/><path d="M255 40 C 285 8, 320 12, 345 38"/><circle cx="300" cy="22" r="5" fill="#D2B568"/><path d="M322 28 c14 -14 22 -2 12 8"/>
+        </svg>
+        <div id="s03-stage">
+          <div id="s03-phone" class="phone">
+            <div class="screen"><video id="s03-vid" class="clip" src="assets/clips/k02b.mp4" data-start="3.2" data-duration="10.8" data-media-start="0" muted playsinline></video></div>
+          </div>
+        </div>
+        <div id="s03-l1" class="label-tag s3lab">Entra na live</div>
+        <div id="s03-l2" class="label-tag s3lab">Lê o chat em tempo real</div>
+        <div id="s03-l3" class="label-tag s3lab">Aplica as suas regras</div>
+        <div id="s03-ld1" class="leader"></div><div id="s03-ld2" class="leader"></div><div id="s03-ld3" class="leader"></div>
+        <div id="s03-r1" class="s3ring"></div><div id="s03-r2" class="s3ring"></div><div id="s03-r3" class="s3ring"></div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        ["#s03-v1","#s03-v2"].forEach((s,i)=>HF.draw(tl, s, 0.2+i*0.3, 3.0));
+        ["#s03-v3","#s03-v4"].forEach((s,i)=>HF.draw(tl, s, 1.6+i*0.3, 1.8));
+        tl.fromTo(["#s03-lf1","#s03-lf2","#s03-lf3","#s03-lf4"], { opacity:0, scale:0.3, transformOrigin:"50% 100%" }, { opacity:0.6, scale:1, duration:0.9, ease:"back.out(1.4)", stagger:0.2 }, 1.8);
+        tl.fromTo("#s03-glow", { opacity:0 }, { opacity:1, duration:1.5, ease:"power2.out" }, 0);
+        // revelação
+        tl.fromTo("#s03-med", { opacity:0, scale:0.8, y:40, transformOrigin:"0 0" }, { opacity:1, scale:1, y:0, duration:1.2, ease:"power3.out" }, 0.4);
+        HF.rise(tl, "#s03-title", 1.0, { y: 50, d: 1.0 });
+        tl.fromTo("#s03-orn", { opacity:0, scaleX:0.3, transformOrigin:"50% 50%" }, { opacity:1, scaleX:1, duration:0.9, ease:"power3.out" }, 1.7);
+        HF.rise(tl, "#s03-sub", 2.3, { y: 26, d: 0.8 });
+        // título sobe e encolhe; medalhão vai para a coluna
+        tl.to("#s03-sub", { opacity:0, y:-10, duration:0.5, ease:"power1.in" }, 3.3);
+        tl.to("#s03-orn", { opacity:0, duration:0.5 }, 3.3);
+        tl.fromTo("#s03-titlew", { y:0, scale:1, transformOrigin:"50% 0" }, { y:-450, scale:0.62, duration:1.2, ease:"power3.inOut" }, 3.5);
+        tl.to("#s03-med", { x:-290, y:130, scale:0.706, duration:1.2, ease:"power3.inOut" }, 3.5);
+        // celular sobe em câmera lenta com inclinação
+        tl.fromTo("#s03-phone", { opacity:0, y:300, scale:0.78, rotateY:-10, rotateX:3, transformOrigin:"50% 50%" }, { opacity:1, y:0, scale:0.86, rotateY:0, rotateX:0, duration:2.2, ease:"power2.out" }, 3.4);
+        // etiquetas
+        const tag = (i, t) => {
+          tl.fromTo("#s03-l"+i, { opacity:0, x:-30 }, { opacity:1, x:0, duration:0.7, ease:"power3.out" }, t);
+          tl.fromTo("#s03-ld"+i, { scaleX:0 }, { scaleX:1, duration:0.9, ease:"sine.inOut" }, t+0.4);
+          tl.fromTo("#s03-r"+i, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.4, ease:"power2.out" }, t+1.2);
+          tl.fromTo("#s03-r"+i, { scale:1, opacity:1 }, { scale:2.6, opacity:0, duration:1.1, ease:"power2.out", repeat:2, immediateRender:false }, t+1.5);
+        };
+        tag(1, 3.7); tag(2, 5.3); tag(3, 7.7);
+        ["#s03-l1","#s03-l2","#s03-l3","#s03-ld1","#s03-ld2","#s03-ld3","#s03-r1","#s03-r2","#s03-r3"].forEach(s=>tl.to(s, { opacity:0, duration:0.5, ease:"power1.inOut" }, 11.8));
+        tl.to("#s03-phone", { scale:0.87, duration:1.6, ease:"sine.inOut" }, 11.9);
+        window.__timelines["s03"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

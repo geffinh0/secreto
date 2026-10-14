@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s11-glow { left: 0; top: 0; width: 1080px; height: 1920px; background: radial-gradient(ellipse 620px 760px at 330px 860px, var(--sage) 0%, rgba(227,232,214,0) 100%); }
+        #s11-kick { top: 250px; font-size: 40px; }
+        #s11-pw { position: absolute; left: 40px; top: 306px; width: 600px; height: 1298px; transform-origin: 0 0; perspective: 1800px; }
+        #s11-phone { left: 0; top: 0; transform-origin: 50% 50%; }
+        .s11-vw { position: absolute; left: 0; top: 0; width: 568px; height: 1266px; }
+        #s11-live { left: 690px; top: 300px; height: 80px; font-size: 44px; padding: 0 30px; }
+        #s11-counters { left: 650px; top: 420px; width: 360px; height: 250px; background: var(--paper2); border: 3px solid var(--rule); border-radius: 30px; box-shadow: 0 26px 44px -22px rgba(31,58,46,.5); }
+        .s11-row { position: absolute; left: 28px; right: 28px; display: flex; justify-content: space-between; align-items: baseline; font-family: "Source Sans 3", sans-serif; font-weight: 700; font-size: 44px; color: var(--forest); }
+        .s11-row b { font-family: "Fraunces", serif; font-size: 84px; line-height: 1; }
+        #s11-r1 { top: 28px; } #s11-r2 { top: 138px; }
+        .s11-bub { position: absolute; left: 600px; width: 420px; background: var(--paper2); border: 3px solid var(--rule); border-radius: 30px 30px 30px 8px; padding: 22px 28px; box-shadow: 0 26px 44px -22px rgba(31,58,46,.5); font-family: "Source Sans 3", sans-serif; font-size: 46px; font-weight: 600; color: var(--forest); line-height: 1.2; }
+        .s11-bub small { display: block; font-size: 38px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+        #s11-b1 { top: 715px; }
+        #s11-b2 { top: 1015px; }
+        #s11-b2 span { color: var(--terra2); }
+        #s11-b1 span { color: var(--gold); }
+        #s11-st1 { left: 640px; top: 875px; font-size: 50px; padding: 4px 22px; }
+        #s11-st2 { left: 700px; top: 1215px; font-size: 62px; }
+        #s11-log { position: absolute; left: 620px; top: 1345px; width: 400px; box-sizing: border-box; padding: 18px 26px; background: var(--paper2); border: 3px solid var(--terra); border-radius: 22px; box-shadow: 0 22px 40px -20px rgba(31,58,46,.5); font-family: "Source Sans 3", sans-serif; font-weight: 700; font-size: 44px; color: var(--terra2); line-height: 1.15; }
+        #s11-lines { left: 0; top: 0; }
+      </style>
+      <div id="root" data-composition-id="s11" data-width="1080" data-height="1920">
+        <div id="s11-glow" class="abs" data-layout-allow-occlusion></div>
+        <div id="s11-kick" class="center kicker">Robô na live</div>
+        <svg id="s11-lines" class="abs" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s11-ln1" d="M520 960 C 560 920, 580 850, 610 830" />
+          <path id="s11-ln2" d="M520 1200 C 560 1200, 580 1150, 612 1140" />
+          <path id="s11-orn" d="M70 1540 H420 M660 1540 H1010 M470 1545 C 510 1500, 570 1500, 610 1545" stroke="#9A7B2F" />
+        </svg>
+        <div id="s11-pw">
+          <div id="s11-phone" class="phone">
+            <div class="screen">
+              <div class="s11-vw" id="s11-wa"><video id="s11-va" class="clip" src="assets/clips/k08.mp4" data-start="0.6" data-duration="6.5" data-media-start="0.8" muted playsinline></video></div>
+              <div class="s11-vw" id="s11-wb"><video id="s11-vb" class="clip" src="assets/clips/k08.mp4" data-start="6.6" data-duration="7.17" data-media-start="16.6" muted playsinline></video></div>
+            </div>
+          </div>
+        </div>
+        <div id="s11-live" class="pill forest"><span class="dot" id="s11-dot" style="background:#E3E8D6"></span>Ao vivo</div>
+        <div id="s11-counters" class="abs">
+          <div class="s11-row" id="s11-r1">Vistas<b id="s11-n1">0</b></div>
+          <div class="s11-row" id="s11-r2">Ações<b id="s11-n2">0</b></div>
+        </div>
+        <div id="s11-b1" class="s11-bub"><small>Marina</small><span>que live chata</span></div>
+        <div id="s11-st1" class="stamp mute" data-layout-allow-occlusion>Silenciado</div>
+        <div id="s11-b2" class="s11-bub"><small>bot77</small><span>SP4M compre seguidores aqui</span></div>
+        <div id="s11-st2" class="stamp ban">Banido</div>
+        <div id="s11-log">Baniu bot77 · palavra “spam”</div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        const c = { a: 0, b: 0 };
+        const upd = () => { document.getElementById("s11-n1").textContent = Math.round(c.a); document.getElementById("s11-n2").textContent = Math.round(c.b); };
+        HF.draw(tl, "#s11-orn", 0.3, 1.8);
+        tl.fromTo("#s11-glow", { opacity: 0 }, { opacity: 1, duration: 1.2 }, 0);
+        HF.rise(tl, "#s11-kick", 0.3, { y: 30, d: 0.9 });
+        tl.fromTo("#s11-pw", { opacity: 0, y: 90, scale: 0.86 }, { opacity: 1, y: 0, scale: 0.9, duration: 1.2, ease: "power3.out" }, 0.3);
+        tl.fromTo("#s11-phone", { rotateY: 14 }, { rotateY: 7, duration: 1.4, ease: "power3.out" }, 0.3);
+        tl.to("#s11-pw", { scale: 0.93, duration: 5, ease: "sine.inOut" }, 8.4);
+        tl.fromTo("#s11-wb", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.inOut" }, 6.6);
+        HF.pop(tl, "#s11-live", 3.5, { d: 0.7, y: 20 });
+        tl.to("#s11-dot", { scale: 1.5, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: 5, transformOrigin: "50% 50%" }, 4.4);
+        HF.pop(tl, "#s11-counters", 4.3, { d: 0.8, y: 30 });
+        tl.to(c, { a: 3, b: 1, duration: 1.2, ease: "none", onUpdate: upd }, 5.6);
+        tl.to(c, { a: 5, b: 2, duration: 1.0, ease: "none", onUpdate: upd }, 8.4);
+        tl.to(c, { a: 6, b: 3, duration: 1.0, ease: "none", onUpdate: upd }, 10.8);
+        HF.draw(tl, "#s11-ln1", 8.7, 0.7); HF.draw(tl, "#s11-ln2", 10.2, 0.7);
+        HF.pop(tl, "#s11-b1", 8.8, { d: 0.9, y: 40, origin: "0% 100%" });
+        tl.fromTo("#s11-st1", { opacity: 0, scale: 1.8, rotation: -2 }, { opacity: 0.95, scale: 1, rotation: -8, duration: 0.55, ease: "power4.out", transformOrigin: "50% 50%" }, 9.6);
+        HF.pop(tl, "#s11-b2", 10.3, { d: 0.9, y: 40, origin: "0% 100%" });
+        tl.fromTo("#s11-st2", { opacity: 0, scale: 1.8, rotation: -2 }, { opacity: 0.95, scale: 1, rotation: -8, duration: 0.55, ease: "power4.out", transformOrigin: "50% 50%" }, 11.1);
+        HF.rise(tl, "#s11-log", 11.9, { y: 24, d: 0.8 });
+        window.__timelines["s11"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

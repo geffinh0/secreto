@@ -1,0 +1,70 @@
+[
+[
+"s01",
+"Toda live tem um chat que não para."
+],
+[
+"s02",
+"E quem modera sozinha precisa ler tudo, o tempo todo, sem perder o ritmo da live. Basta uma palavra fora do lugar, e o clima muda."
+],
+[
+"s03",
+"Esse é o Átila Client: um robô que entra na sua live, lê o chat em tempo real, e aplica as regras que você escolheu."
+],
+[
+"s04",
+"Cada mensagem faz o mesmo caminho. O robô lê, compara com a sua lista, e, se bater, silencia ou bane. E tudo fica registrado."
+],
+[
+"s05",
+"No painel, você vê de relance: a live está no ar, quantas ações o robô já fez, quantas regras estão ativas, e quantas mensagens esperam na fila."
+],
+[
+"s06",
+"Você monta a sua lista em dois grupos: palavras para silenciar, e palavras para banir. Adicione uma a uma, ou várias de uma vez. Ative, desative, ou remova, quando quiser."
+],
+[
+"s07",
+"O robô não se deixa enganar por disfarces comuns: número no lugar de letra, letra esticada, pontos no meio. E antes de confiar nas regras ao vivo, você testa uma frase. Aqui, S P quatro M é pego como spam. Já chatas, sem o curinga, passa."
+],
+[
+"s08",
+"Você decide como o robô age. Pode desligar a moderação automática, e deixar o robô só observando. Ou ligar o banimento permanente, que vale além daquela live."
+],
+[
+"s09",
+"O robô também fala por você. Monte uma fila de mensagens, escolha o intervalo, a partir de dez segundos, e arraste para reordenar. Elas saem em ordem, em repetição, enquanto a live estiver no ar."
+],
+[
+"s10",
+"Para conectar a conta do robô, escolha como entrar: e-mail e senha, celular, ou código por e-mail. E lembre: a streamer precisa adicionar o robô como moderador da live."
+],
+[
+"s11",
+"Informe o ID da live, e inicie. O chat aparece em tempo real, e cada ação do robô fica marcada: silenciado, ou banido."
+],
+[
+"s12",
+"Não sabe o ID da live? Busque pelo ID público da streamer, e marque como favorita. O robô fica de olho em segundo plano, e quando ela abre a live, ele entra sozinho. Se a live acaba, ele espera a próxima."
+],
+[
+"s13",
+"Depois, as estatísticas: ações no total, palavras mais acionadas, lives recentes, e ações por dia, em sete, trinta, ou noventa dias."
+],
+[
+"s14",
+"E a cada live encerrada, um resumo no histórico da conta: duração, mensagens vistas, e moderações."
+],
+[
+"s17",
+"E tem mais, em Configurações: importar suas palavras e mensagens de um arquivo de backup, sem apagar nada, alterar a senha, e, se o seu navegador permitir, instalar o Átila Client como app no celular."
+],
+[
+"s15",
+"Pode fechar a aba. O robô roda no servidor, e continua trabalhando enquanto você descansa."
+],
+[
+"s16",
+"Átila Client. Moderação automática para as suas lives. Acesse atila client ponto tech."
+]
+]

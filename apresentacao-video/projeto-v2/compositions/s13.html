@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /></head><body>
+<template>
+<style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+#root{position:absolute;inset:0;background:var(--paper);overflow:hidden;}
+#s13-kick{top:236px;}
+#s13-title{top:276px;font-size:96px;line-height:1.1;color:var(--forest);}
+.chip{position:absolute;top:396px;height:80px;width:200px;border-radius:40px;display:flex;align-items:center;justify-content:center;font:700 44px "Source Sans 3",sans-serif;color:var(--forest);background:var(--paper2);border:3px solid var(--rule);}
+#s13-c7{left:220px}#s13-c30{left:440px}#s13-c90{left:660px}
+.cap{position:absolute;left:100px;font:700 38px "Source Sans 3",sans-serif;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;white-space:nowrap;}
+.box{position:absolute;left:70px;width:480px;border-radius:30px;background:var(--paper2);border:3px solid var(--rule);box-shadow:0 30px 50px -22px rgba(31,58,46,.55);}
+#s13-bxA{top:500px;height:335px}#s13-bxB{top:855px;height:456px}#s13-bxC{top:1331px;height:250px}
+#s13-bxD{left:570px;top:1478px;width:440px;height:200px}
+#s13-tot{left:100px;top:552px;font-size:150px;line-height:1;color:var(--forest);}
+#s13-totl{left:290px;top:575px;font:600 46px/1.15 "Source Sans 3",sans-serif;color:var(--forest2);width:240px}
+#s13-sil{left:100px;top:716px;font:700 46px "Source Sans 3",sans-serif;color:var(--terra);}
+#s13-ban{left:100px;top:768px;font:700 46px "Source Sans 3",sans-serif;color:var(--forest);}
+.row{position:absolute;left:100px;width:420px;height:70px;}
+.row .w{position:absolute;left:0;top:0;font:600 44px "Source Sans 3",sans-serif;color:var(--forest);}
+.row .n{position:absolute;right:0;top:0;font:700 44px "Fraunces",serif;color:var(--terra);}
+.row .trk{position:absolute;left:0;top:52px;width:420px;height:16px;border-radius:8px;background:var(--sage2);}
+.row .bar{position:absolute;left:0;top:52px;width:420px;height:16px;border-radius:8px;background:var(--terra);transform-origin:0 50%;}
+.lrow{position:absolute;left:100px;width:420px;height:50px;border-bottom:2px solid var(--rule);font:600 40px/1 "Source Sans 3",sans-serif;color:var(--forest);display:flex;justify-content:space-between;white-space:nowrap}
+.lrow b{color:var(--terra);font-weight:700}
+.dbar{position:absolute;width:36px;bottom:272px;height:100px;border-radius:8px 8px 0 0;background:var(--forest2);transform-origin:50% 100%;}
+#s13-note{white-space:nowrap;left:70px;top:1606px;font:600 36px "Source Sans 3",sans-serif;color:#4A5B4F;width:400px;text-align:center}
+#s13-pw{position:absolute;left:0;top:0;width:1080px;height:1920px;perspective:1800px;}
+#s13-ph{left:446px;top:448px;}
+</style>
+<div id="root" data-composition-id="s13" data-width="1080" data-height="1920">
+<svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+<path id="s13-rule" d="M70 376 H1010" opacity=".8"/>
+<path id="s13-v1" d="M1040 1720 C 1000 1500, 1060 1200, 1030 900 S 1040 640, 1020 520" opacity=".6"/>
+</svg>
+<div id="s13-kick" class="center kicker">Prancha XIII</div>
+<div id="s13-title" class="center serif">Estatísticas</div>
+<div class="chip" id="s13-c7">7 dias</div><div class="chip" id="s13-c30">30 dias</div><div class="chip" id="s13-c90">90 dias</div>
+<div id="s13-pw"><div class="phone" id="s13-ph"><div class="screen"><video class="clip" id="s13-v" src="assets/clips/k10.mp4" data-start="0" data-duration="14.77" data-media-start="8.4" muted playsinline></video></div></div></div>
+<div class="box" id="s13-bxA"></div>
+<div class="cap" id="s13-cap1" style="top:520px">I · Ações</div>
+<div id="s13-tot" class="abs serif">0</div>
+<div id="s13-totl" class="abs">ações no total</div>
+<div id="s13-sil" class="abs"><span id="s13-sv">48</span> silenciadas</div>
+<div id="s13-ban" class="abs"><span id="s13-bv">19</span> banidas</div>
+<div class="box" id="s13-bxB"></div>
+<div class="cap" id="s13-cap2" style="top:875px">II · Mais acionadas</div>
+<div class="row" id="s13-r0" style="top:931px"><span class="w">chata</span><span class="n" id="s13-n0">0</span><div class="trk"></div><div class="bar" id="s13-b0"></div></div>
+<div class="row" id="s13-r1" style="top:1003px"><span class="w">spam</span><span class="n" id="s13-n1">0</span><div class="trk"></div><div class="bar" id="s13-b1"></div></div>
+<div class="row" id="s13-r2" style="top:1075px"><span class="w">mal educada</span><span class="n" id="s13-n2">0</span><div class="trk"></div><div class="bar" id="s13-b2"></div></div>
+<div class="row" id="s13-r3" style="top:1147px"><span class="w">passa zap</span><span class="n" id="s13-n3">0</span><div class="trk"></div><div class="bar" id="s13-b3"></div></div>
+<div class="row" id="s13-r4" style="top:1219px"><span class="w">feia</span><span class="n" id="s13-n4">0</span><div class="trk"></div><div class="bar" id="s13-b4"></div></div>
+<div class="box" id="s13-bxC"></div>
+<div class="cap" id="s13-cap3" style="top:1351px">III · Lives recentes</div>
+<div class="lrow" id="s13-L0" style="top:1407px"><span>14/10 às 10:10</span><b>4 ações</b></div>
+<div class="lrow" id="s13-L1" style="top:1457px"><span>12/10 às 07:14</span><b>13 ações</b></div>
+<div class="lrow" id="s13-L2" style="top:1507px"><span>09/10 às 08:08</span><b>6 ações</b></div>
+<div class="box" id="s13-bxD"></div>
+<div class="cap" id="s13-cap4" style="top:1496px;left:600px">IV · Ações por dia</div>
+<div class="dbar" id="s13-d0" style="left:600px"></div><div class="dbar" id="s13-d1" style="left:656px"></div><div class="dbar" id="s13-d2" style="left:712px"></div><div class="dbar" id="s13-d3" style="left:768px"></div><div class="dbar" id="s13-d4" style="left:824px"></div><div class="dbar" id="s13-d5" style="left:880px"></div><div class="dbar" id="s13-d6" style="left:936px"></div>
+<div id="s13-note" class="abs">dados de demonstração</div>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+const D30=[21,19,12,8,7], D7=[6,7,4,4,2];
+const H30=[.55,.7,.4,.85,.6,1,.5], H7=[.4,.8,.55,.3,.9,.6,1], H90=[.8,.5,.95,.6,.7,.45,.9];
+const $=s=>document.querySelector(s);
+const st={tot:0,sv:0,bv:0,v0:0,v1:0,v2:0,v3:0,v4:0,f0:0,f1:0,f2:0,f3:0,f4:0,h0:0,h1:0,h2:0,h3:0,h4:0,h5:0,h6:0};
+function paint(){ $("#s13-tot").textContent=Math.round(st.tot); $("#s13-sv").textContent=Math.round(st.sv); $("#s13-bv").textContent=Math.round(st.bv);
+ for(let i=0;i<5;i++){ $("#s13-n"+i).textContent=Math.round(st["v"+i]); $("#s13-b"+i).style.transform="scaleX("+st["f"+i].toFixed(4)+")"; }
+ for(let i=0;i<7;i++){ $("#s13-d"+i).style.transform="scaleY("+st["h"+i].toFixed(4)+")"; } }
+function go(t,from,to,dur,ease){ const f={},o={}; Object.keys(to).forEach(k=>{f[k]=from[k];o[k]=to[k];}); o.duration=dur; o.ease=ease||"power2.out"; o.onUpdate=paint; o.immediateRender=false; tl.fromTo(st,f,o,t); }
+function days(t,a,b){ const f={},o={}; for(let i=0;i<7;i++){f["h"+i]=a[i];o["h"+i]=b[i];} go(t,f,o,1.0,"power3.out"); }
+function setSet(t,d,tot,sv,bv,fromTot,fromSv,fromBv,fd,hFrom,hTo){
+ const mx=Math.max(...d), fm=Math.max(...fd);
+ d.forEach((x,i)=>{ go(t+i*0.08,{["v"+i]:fd[i],["f"+i]:fd[i]/fm},{["v"+i]:x,["f"+i]:x/mx},1.2,"power3.out"); });
+ go(t,{tot:fromTot,sv:fromSv,bv:fromBv},{tot:tot,sv:sv,bv:bv},1.1);
+ days(t,hFrom,hTo);
+}
+paint();
+HF.draw(tl,"#s13-rule",0.5,1.4); HF.draw(tl,"#s13-v1",1.0,2.4);
+HF.rise(tl,"#s13-kick",0.3,{y:20,d:.7}); HF.rise(tl,"#s13-title",0.6,{y:40,d:.9});
+HF.pop(tl,"#s13-c7",1.5,{d:.6,y:16}); HF.pop(tl,"#s13-c30",1.65,{d:.6,y:16}); HF.pop(tl,"#s13-c90",1.8,{d:.6,y:16});
+tl.set("#s13-c30",{background:"#1F3A2E",color:"#FBF6EA"},1.9);
+tl.fromTo("#s13-pw",{opacity:0,x:110},{opacity:1,x:0,duration:1.3,ease:"power3.out"},1.0);
+tl.fromTo("#s13-ph",{scale:.88,rotateY:-16,rotateX:3,transformOrigin:"50% 50%"},{scale:.92,rotateY:-8,rotateX:2,duration:12.5,ease:"sine.inOut"},1.0);
+// I
+["#s13-bxA","#s13-cap1","#s13-tot","#s13-totl"].forEach((s,i)=>HF.rise(tl,s,2.5+i*0.12,{y:36,d:.8}));
+go(2.9,{tot:0},{tot:67},1.5);
+HF.rise(tl,"#s13-sil",3.6,{y:20,d:.7}); HF.rise(tl,"#s13-ban",3.8,{y:20,d:.7});
+go(3.7,{sv:0,bv:0},{sv:48,bv:19},1.2);
+// II
+["#s13-bxB","#s13-cap2"].forEach((s,i)=>HF.rise(tl,s,4.2+i*0.1,{y:36,d:.8}));
+for(let i=0;i<5;i++){ HF.rise(tl,"#s13-r"+i,4.6+i*0.18,{y:24,d:.6}); go(4.7+i*0.18,{["v"+i]:0,["f"+i]:0},{["v"+i]:D30[i],["f"+i]:D30[i]/21},1.4,"power3.out"); }
+// III
+["#s13-bxC","#s13-cap3"].forEach((s,i)=>HF.rise(tl,s,6.3+i*0.1,{y:36,d:.8}));
+for(let i=0;i<3;i++) HF.rise(tl,"#s13-L"+i,6.8+i*0.3,{y:20,d:.6});
+// IV
+["#s13-bxD","#s13-cap4"].forEach((s,i)=>HF.rise(tl,s,8.0+i*0.1,{y:36,d:.8}));
+for(let i=0;i<7;i++) tl.fromTo("#s13-d"+i,{opacity:0},{opacity:1,duration:.3},8.3+i*0.07);
+days(8.3,[0,0,0,0,0,0,0],H30);
+HF.rise(tl,"#s13-note",5.8,{y:14,d:.7});
+// períodos
+function chip(t,a,b){ tl.set(a,{background:"#FBF6EA",color:"#1F3A2E"},t); tl.set(b,{background:"#1F3A2E",color:"#FBF6EA"},t); tl.fromTo(b,{scale:1.0},{scale:1.08,duration:.35,yoyo:true,repeat:1,ease:"sine.inOut"},t); }
+chip(9.65,"#s13-c30","#s13-c7"); setSet(9.7,D7,23,16,7,67,48,19,D30,H30,H7);
+chip(10.65,"#s13-c7","#s13-c30"); setSet(10.7,D30,67,48,19,23,16,7,D7,H7,H30);
+chip(11.7,"#s13-c30","#s13-c90"); days(11.75,H30,H90);
+window.__timelines["s13"]=tl;
+</script>
+</template></body></html>

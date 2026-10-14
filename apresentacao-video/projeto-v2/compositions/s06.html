@@ -1,0 +1,143 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /></head><body><template>
+<style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+#root { position:absolute; inset:0; background:var(--paper); overflow:hidden; }
+.head { top:250px; font-size:100px; color:var(--forest); line-height:120px; white-space:nowrap; }
+#s06-stage { position:absolute; inset:0; perspective:1800px; perspective-origin:722px 1045px; }
+#s06-phone { left:422px; top:396px; }
+.vw { position:absolute; left:0; top:0; width:568px; height:1266px; }
+.book { position:absolute; left:70px; width:400px; background:var(--paper2); border:3px solid var(--rule); border-radius:14px 26px 26px 14px; box-shadow:0 44px 60px -24px rgba(31,58,46,.65); }
+.book .spine { position:absolute; left:0; top:0; bottom:0; width:34px; border-radius:11px 0 0 11px; }
+.book .band { position:absolute; left:34px; right:0; top:104px; height:3px; background:var(--rule); }
+.book .ttl { position:absolute; left:112px; top:22px; font-family:"Fraunces",serif; font-weight:700; font-size:46px; letter-spacing:.01em; color:var(--forest); line-height:64px; }
+.book svg.ic { position:absolute; left:46px; top:26px; }
+.badge { position:absolute; right:-48px; top:-58px; width:96px; height:96px; border-radius:48px; display:flex; align-items:center; justify-content:center; font-family:"Fraunces",serif; font-weight:700; font-size:56px; color:var(--paper2); border:5px solid var(--paper); }
+.row { position:absolute; left:60px; font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:44px; line-height:56px; color:var(--forest); white-space:nowrap; }
+.chip { position:absolute; left:0; top:0; font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:52px; line-height:60px; padding:6px 26px; border-radius:44px; background:var(--paper2); border:5px solid; white-space:nowrap; opacity:0; box-shadow:0 22px 34px -14px rgba(0,0,0,.55); }
+#s06-scrim { position:absolute; inset:0; background:rgba(244,236,220,.8); opacity:0; }
+#s06-card { position:absolute; left:140px; top:680px; width:800px; height:540px; background:var(--forest); border-radius:34px; box-shadow:0 50px 70px -20px rgba(0,0,0,.6); opacity:0; }
+#s06-card .bt { position:absolute; left:0; width:800px; text-align:center; top:26px; font-family:"Fraunces",serif; font-weight:700; font-size:60px; color:var(--goldL); line-height:80px; }
+.bl { position:absolute; left:190px; width:700px; height:96px; border-radius:48px; background:var(--paper2); border:4px solid var(--goldL); font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:58px; line-height:88px; padding-left:44px; color:var(--forest); opacity:0; }
+.trail { fill:none; stroke:#D2B568; stroke-width:7; stroke-linecap:round; opacity:0; }
+#s06-trash { position:absolute; left:330px; top:706px; opacity:0; }
+.strike { position:absolute; left:52px; height:4px; background:var(--terra); width:150px; top:280px; transform-origin:0 50%; opacity:0; }
+</style>
+<div id="root" data-composition-id="s06" data-width="1080" data-height="1920">
+ <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+  <path id="s06-v1" d="M-20 1560 C 120 1530, 200 1470, 230 1400" opacity=".6"/>
+  <path id="s06-v2" d="M1100 1640 C 1000 1600, 960 1540, 950 1480" opacity=".6"/>
+  <path id="s06-lf1" d="M230 1400 c-40 -8 -58 -38 -54 -70 c38 6 60 34 54 70z" fill="#D2B568" stroke="none" opacity=".7"/>
+  <path id="s06-lf2" d="M950 1480 c36 -10 54 -38 50 -70 c-36 8 -56 36 -50 70z" fill="#D2B568" stroke="none" opacity=".7"/>
+ </svg>
+ <div id="s06-h1" class="center serif head">Duas listas</div>
+ <div id="s06-h2" class="center serif head" data-layout-allow-overlap style="opacity:0">Uma ou várias</div>
+ <div id="s06-h3" class="center serif head" data-layout-allow-overlap style="opacity:0">Você manda na lista</div>
+
+ <div id="s06-stage"><div id="s06-phone" class="phone"><div class="screen">
+  <div class="vw" id="s06-wA"><video id="s06-vA" class="clip" src="assets/clips/k03.mp4" data-start="0.4" data-duration="5.4" data-media-start="0" muted playsinline></video></div>
+  <div class="vw" id="s06-wC"><video id="s06-vC" class="clip" src="assets/clips/k03.mp4" data-start="5.4" data-duration="7.0" data-media-start="19" muted playsinline></video></div>
+  <div class="vw" id="s06-wD"><video id="s06-vD" class="clip" src="assets/clips/k03.mp4" data-start="12.2" data-duration="6.3" data-media-start="8.8" muted playsinline></video></div>
+ </div></div></div>
+
+ <div id="s06-bk1" class="book" style="top:450px;height:480px">
+  <div class="spine" style="background:var(--goldL)"></div><div class="band"></div>
+  <div class="ttl">SILENCIAR</div>
+  <svg class="ic" width="52" height="52" viewBox="0 0 64 64" fill="none" stroke="#9A7B2F" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 24h12l16-12v40L20 40H8z"/><path d="M46 24l12 16M58 24L46 40"/></svg>
+  <div class="badge" id="s06-n1" style="background:var(--gold)"><span id="s06-n1t">2</span></div>
+  <div class="row r1" id="s06-a0" style="top:140px">mal educada</div><div class="row r1" id="s06-a1" style="top:196px">chata</div><div class="row r1" id="s06-a2" style="top:252px">feia</div><div class="row r1" id="s06-a3" style="top:308px">feio</div><div class="row r1" id="s06-a4" style="top:364px">chato</div><div class="row r1" id="s06-a5" style="top:420px">bobo</div><div class="strike" id="s06-st1"></div>
+ </div>
+ <div id="s06-bk2" class="book" style="top:980px;height:380px">
+  <div class="spine" style="background:var(--terra)"></div><div class="band"></div>
+  <div class="ttl">BANIR</div>
+  <svg class="ic" width="52" height="52" viewBox="0 0 64 64" fill="none" stroke="#A8461F" stroke-width="5" stroke-linecap="round"><circle cx="32" cy="32" r="24"/><path d="M15 49L49 15"/></svg>
+  <div class="badge" id="s06-n2" style="background:var(--terra)"><span id="s06-n2t">1</span></div>
+  <div class="row r2" data-layout-allow-overlap id="s06-b0" style="top:140px">spam</div><div class="row r2" data-layout-allow-overlap id="s06-b1" style="top:196px">passa zap</div>
+ </div>
+ <svg id="s06-trash" width="52" height="52" viewBox="0 0 64 64" fill="none" stroke="#A8461F" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18h40M24 18v-6h16v6M16 18l3 38h26l3-38M28 28v18M36 28v18"/></svg>
+
+ <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <path id="s06-tr1" class="trail" d="M722 850 C 640 560, 380 500, 205 730"/>
+  <path id="s06-tr2" class="trail" d="M722 850 C 620 1120, 440 1270, 255 1204"/>
+ </svg>
+ <div id="s06-cf" class="chip" data-layout-allow-overlap style="color:var(--forest);border-color:#9A7B2F">feia</div>
+ <div id="s06-cp" class="chip" data-layout-allow-overlap style="color:var(--forest);border-color:#A8461F">passa zap</div>
+
+ <div id="s06-scrim"></div>
+ <div id="s06-card" data-layout-allow-overlap><div class="bt">Adicionar várias</div></div>
+ <div class="bl" data-layout-allow-overlap id="s06-bl0" style="top:830px">feio</div><div class="bl" data-layout-allow-overlap id="s06-bl1" style="top:950px">chato</div><div class="bl" data-layout-allow-overlap id="s06-bl2" style="top:1070px">bobo</div>
+</div>
+<script>
+const tl=gsap.timeline({paused:true});
+const R=(s,d)=>gsap.utils.interpolate; 
+HF.draw(tl,"#s06-v1",0.3,2.2);HF.draw(tl,"#s06-v2",0.6,2.2);
+tl.fromTo(["#s06-lf1","#s06-lf2"],{opacity:0,scale:.4,transformOrigin:"50% 100%"},{opacity:.7,scale:1,duration:.8,ease:"back.out(1.4)",stagger:.2},2.0);
+HF.rise(tl,"#s06-h1",0.3,{y:40,d:.9});
+tl.fromTo("#s06-phone",{opacity:0,scale:.8,rotateY:-26,rotateX:0,y:90},{opacity:1,scale:1.03,rotateY:-10,rotateX:3,y:0,duration:1.4,ease:"power3.out",transformOrigin:"50% 50%"},0.2);
+tl.to("#s06-phone",{rotateY:-5,duration:12,ease:"sine.inOut"},2);
+// books with parallax
+tl.fromTo("#s06-bk1",{opacity:0,x:-120,rotate:-6},{opacity:1,x:0,rotate:-1.5,duration:1.1,ease:"power3.out"},2.0);
+tl.to("#s06-bk1",{y:-14,duration:5,ease:"sine.inOut",yoyo:true,repeat:1},3.2);
+tl.fromTo(["#s06-a0","#s06-a1"],{opacity:0,x:-20},{opacity:1,x:0,duration:.6,stagger:.25},2.8);
+tl.fromTo("#s06-n1",{scale:0},{scale:1,duration:.6,ease:"back.out(1.6)"},2.6);
+tl.fromTo("#s06-bk2",{opacity:0,x:-120,rotate:6},{opacity:1,x:0,rotate:1.5,duration:1.1,ease:"power3.out"},5.9);
+tl.to("#s06-bk2",{y:12,duration:5,ease:"sine.inOut",yoyo:true,repeat:1},7.2);
+tl.fromTo("#s06-b0",{opacity:0,x:-20},{opacity:1,x:0,duration:.6},6.7);
+tl.fromTo("#s06-n2",{scale:0},{scale:1,duration:.6,ease:"back.out(1.6)"},6.5);
+// arc flight helper
+function fly(chip,trail,t0,dur,endX){
+  const o={p:0};
+  tl.set(chip,{opacity:0},0);
+  tl.to(chip,{opacity:1,duration:.25},t0-.1);
+  tl.to(trail,{opacity:.95,duration:.2},t0);
+  tl.to(o,{p:1,duration:dur,ease:"power2.inOut",onUpdate(){
+    const el=document.querySelector(trail); if(!el) return;
+    const L=el.getTotalLength(); const pt=el.getPointAtLength(o.p*L);
+    el.style.strokeDasharray=L; el.style.strokeDashoffset=L*(1-o.p);
+    gsap.set(chip,{x:pt.x,y:pt.y,xPercent:-50,yPercent:-50,rotate:(1-o.p)*-6,scale:1+Math.sin(o.p*Math.PI)*.18});
+  }},t0);
+  tl.to(trail,{opacity:0,duration:.6},t0+dur);
+}
+fly("#s06-cf","#s06-tr1",4.2,1.0);
+tl.fromTo("#s06-a2",{opacity:0},{opacity:1,duration:.3},5.15);
+tl.to("#s06-cf",{opacity:0,duration:.3},5.2);
+tl.to("#s06-n1t",{innerText:3,snap:{innerText:1},duration:.4},5.2);
+tl.fromTo("#s06-n1",{scale:1},{scale:1.3,duration:.25,yoyo:true,repeat:1,ease:"power2.out"},5.2);
+fly("#s06-cp","#s06-tr2",9.1,1.0);
+tl.fromTo("#s06-b1",{opacity:0},{opacity:1,duration:.3},10.05);
+tl.to("#s06-cp",{opacity:0,duration:.3},10.1);
+tl.to("#s06-n2t",{innerText:2,snap:{innerText:1},duration:.4},10.1);
+tl.fromTo("#s06-n2",{scale:1},{scale:1.3,duration:.25,yoyo:true,repeat:1,ease:"power2.out"},10.1);
+// headings
+tl.to("#s06-h1",{opacity:0,y:-20,duration:.5},7.8);
+tl.fromTo("#s06-h2",{opacity:0,y:40},{opacity:1,y:0,duration:.8,ease:"power3.out"},8.1);
+tl.to("#s06-h2",{opacity:0,y:-20,duration:.5},13.0);
+tl.fromTo("#s06-h3",{opacity:0,y:40},{opacity:1,y:0,duration:.8,ease:"power3.out"},13.3);
+["C","D"].forEach((k,i)=>tl.fromTo("#s06-w"+k,{opacity:0},{opacity:1,duration:.3},[5.4,12.2][i]));
+// batch moment
+tl.to("#s06-scrim",{opacity:1,duration:.5},10.3);
+tl.fromTo("#s06-card",{opacity:0,y:60,scale:.92},{opacity:1,y:0,scale:1,duration:.7,ease:"back.out(1.2)",transformOrigin:"50% 50%"},10.4);
+for(let i=0;i<3;i++){
+  tl.fromTo("#s06-bl"+i,{opacity:0,y:-300},{opacity:1,y:0,duration:.6,ease:"bounce.out"},10.6+i*.2);
+  const tgt=(590+i*56+28)-(830+i*120+48);
+  tl.to("#s06-bl"+i,{x:-100,y:tgt,scale:.38,transformOrigin:"0% 50%",duration:.85,ease:"power3.inOut"},12.4);
+  tl.to("#s06-bl"+i,{opacity:0,duration:.25},13.05);
+}
+tl.to("#s06-card",{opacity:0,y:-40,duration:.6,ease:"power2.in"},12.4);
+tl.to("#s06-scrim",{opacity:0,duration:.6},12.5);
+tl.fromTo(["#s06-a3","#s06-a4","#s06-a5"],{opacity:0,x:-20},{opacity:1,x:0,duration:.35,stagger:.1},13.0);
+tl.to("#s06-n1t",{innerText:6,snap:{innerText:1},duration:.5},13.1);
+tl.fromTo("#s06-n1",{scale:1},{scale:1.35,duration:.25,yoyo:true,repeat:1,ease:"power2.out"},13.1);
+// chata: off, leaves the book, returns
+tl.to("#s06-a1",{color:"#4A5B4F",opacity:.4,x:-52,rotate:-4,duration:.7,ease:"power2.inOut"},13.1);
+tl.to("#s06-a1",{color:"#1F3A2E",opacity:1,x:0,rotate:0,duration:.8,ease:"back.out(1.3)"},15.0);
+// remover feia
+tl.fromTo("#s06-st1",{opacity:1,scaleX:0},{scaleX:1,duration:.5,ease:"power2.out"},14.4);
+tl.to("#s06-a2",{opacity:0,x:60,duration:.5},15.0);
+tl.to("#s06-st1",{opacity:0,duration:.3},15.1);
+tl.fromTo("#s06-trash",{opacity:0,scale:.5,transformOrigin:"50% 50%"},{opacity:1,scale:1,duration:.4,ease:"back.out(1.6)"},14.5);
+tl.to("#s06-trash",{opacity:0,duration:.4},15.8);
+tl.to("#s06-n1t",{innerText:5,snap:{innerText:1},duration:.4},15.1);
+window.__timelines["s06"]=tl;
+</script></template></body></html>

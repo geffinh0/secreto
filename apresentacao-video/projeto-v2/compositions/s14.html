@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s14-title { top: 250px; font-size: 112px; color: var(--forest); line-height: 1.1; }
+        #s14-card { left: 80px; top: 385px; width: 920px; height: 300px; }
+        #s14-img { position: absolute; left: 0; top: 0; width: 920px; height: auto; }
+        #s14-hl { position: absolute; left: 14px; top: 50px; width: 890px; height: 210px; border: 6px solid var(--terra); border-radius: 18px; opacity: 0; }
+        #s14-link { left: 520px; top: 690px; width: 3px; height: 36px; background: var(--terra); }
+        #s14-zoom { left: 80px; top: 725px; width: 920px; height: 250px; border-color: var(--terra); }
+        #s14-zimg { position: absolute; left: -60px; top: -1835px; width: 1053px; height: auto; }
+        #s14-zlabel { left: 100px; top: 984px; font-size: 40px; font-weight: 700; color: var(--muted); }
+        #s14-rodT { left: 60px; top: 1052px; }
+        #s14-scr { position: absolute; left: 90px; top: 1088px; width: 900px; height: 0; }
+        #s14-body { position: absolute; inset: 0; overflow: hidden; background: var(--paper2); border-left: 4px solid var(--goldL); border-right: 4px solid var(--goldL); box-shadow: inset 0 0 60px rgba(154,123,47,.18); }
+        .s14-row { position: absolute; left: 0; width: 892px; height: 140px; display: flex; align-items: center; gap: 24px; padding-left: 40px; opacity: 0; }
+        .s14-row .t { font-family: "Fraunces", serif; font-weight: 700; font-size: 62px; white-space: nowrap; color: var(--forest); letter-spacing: -0.01em; }
+        .s14-row .v { position: absolute; right: 40px; font-family: "Fraunces", serif; font-weight: 700; font-size: 58px; color: var(--terra); white-space: nowrap; }
+        #s14-r1 { top: 10px; } #s14-r2 { top: 155px; } #s14-r3 { top: 300px; }
+        .s14-sep { position: absolute; left: 40px; width: 810px; height: 3px; background: var(--rule); opacity: 0; }
+        #s14-rodB { position: absolute; left: -30px; bottom: -26px; }
+        #s14-fox { left: 790px; top: 1575px; width: 200px; }
+        #s14-exemplo { left: 90px; top: 1585px; font-size: 40px; font-weight: 700; color: var(--muted); }
+      </style>
+      <div id="root" data-composition-id="s14" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s14-v1" d="M-20 1900 C 80 1760, 20 1620, 80 1500" opacity=".7"/>
+          <path id="s14-v2" d="M1100 300 C 1020 220, 1030 160, 1000 100" opacity=".6"/>
+          <path id="s14-v3" d="M140 1760 C 300 1700, 420 1780, 600 1730 S 780 1690, 900 1740" opacity=".7"/>
+          <path id="s14-l1" d="M80 1500 c-34 -8 -52 -34 -48 -64 c34 6 54 30 48 64z" fill="#D2B568" stroke="none" opacity=".8"/>
+          <path id="s14-l2" d="M600 1730 c8 -34 34 -50 62 -44 c-6 34 -30 52 -62 44z" fill="#D2B568" stroke="none" opacity=".8"/>
+        </svg>
+        <div id="s14-title" class="center serif">Resumo da live</div>
+
+        <div id="s14-card" class="card">
+          <img id="s14-img" src="assets/stills/atividade.png" alt="" />
+          <div id="s14-hl"></div>
+        </div>
+        <div id="s14-link" class="abs"></div>
+        <div id="s14-zoom" class="card">
+          <img id="s14-zimg" src="assets/stills/atividade.png" alt="" />
+        </div>
+        <div id="s14-zlabel" class="abs sans">Em detalhe: Resumo da Transmissão</div>
+
+        <svg id="s14-rodT" class="abs" width="960" height="40" viewBox="0 0 960 40"><rect x="20" y="8" width="920" height="24" rx="12" fill="#9A7B2F"/><circle cx="16" cy="20" r="16" fill="#D2B568" stroke="#9A7B2F" stroke-width="3"/><circle cx="944" cy="20" r="16" fill="#D2B568" stroke="#9A7B2F" stroke-width="3"/></svg>
+        <div id="s14-scr">
+          <div id="s14-body">
+            <div id="s14-r1" class="s14-row">
+              <svg width="80" height="80" viewBox="0 0 92 92" fill="none" stroke="#A8461F" stroke-width="6" stroke-linecap="round"><circle cx="46" cy="46" r="36"/><path d="M46 24 V46 L62 56"/></svg>
+              <div class="t">duração</div><div class="v" id="s14-v1t">0m 00s</div>
+            </div>
+            <div class="s14-sep" id="s14-s1" style="top:150px"></div>
+            <div id="s14-r2" class="s14-row">
+              <svg width="80" height="80" viewBox="0 0 92 92" fill="none" stroke="#A8461F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18 H80 V62 H44 L26 78 V62 H12Z"/><path d="M28 34 H64 M28 46 H52"/></svg>
+              <div class="t">mensagens vistas</div><div class="v" id="s14-v2t">0 msgs</div>
+            </div>
+            <div class="s14-sep" id="s14-s2" style="top:295px"></div>
+            <div id="s14-r3" class="s14-row">
+              <svg width="80" height="80" viewBox="0 0 92 92" fill="none" stroke="#A8461F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M46 8 L78 20 V46 C78 66 62 78 46 85 C30 78 14 66 14 46 V20Z"/><path d="M32 46 L42 56 L61 36"/></svg>
+              <div class="t">moderações</div>
+            </div>
+          </div>
+          <svg id="s14-rodB" width="960" height="40" viewBox="0 0 960 40"><rect x="20" y="8" width="920" height="24" rx="12" fill="#9A7B2F"/><circle cx="16" cy="20" r="16" fill="#D2B568" stroke="#9A7B2F" stroke-width="3"/><circle cx="944" cy="20" r="16" fill="#D2B568" stroke="#9A7B2F" stroke-width="3"/></svg>
+        </div>
+        <div id="s14-exemplo" class="abs sans">valores de exemplo</div>
+        <img id="s14-fox" class="abs" src="assets/fox_head_calm.webp" alt="" />
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        HF.draw(tl, "#s14-v1", 0.3, 2.4); HF.draw(tl, "#s14-v2", 0.6, 1.6); HF.draw(tl, "#s14-v3", 9.4, 1.6);
+        tl.fromTo(["#s14-l1", "#s14-l2"], { opacity: 0, scale: 0.4, transformOrigin: "50% 100%" }, { opacity: 0.8, scale: 1, duration: 0.8, ease: "back.out(1.4)", stagger: 0.3 }, 2.2);
+        HF.rise(tl, "#s14-title", 0.8, { y: 40, d: 1.0 });
+        tl.fromTo("#s14-card", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 2.4);
+        // img escala 920/780 = 1.18: linha Resumo em y 1368..1532 -> 1614..1807
+        tl.fromTo("#s14-img", { y: -1180 }, { y: -1180, duration: 0.01 }, 0);
+        tl.to("#s14-img", { y: -1555, duration: 2.2, ease: "power2.inOut" }, 3.3);
+        tl.fromTo("#s14-hl", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 5.0);
+        tl.fromTo("#s14-link", { opacity: 0, scaleY: 0, transformOrigin: "50% 0%" }, { opacity: 1, scaleY: 1, duration: 0.4 }, 5.3);
+        tl.fromTo("#s14-zoom", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 5.5);
+        tl.fromTo("#s14-zlabel", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 6.0);
+        // pergaminho
+        tl.fromTo("#s14-rodT", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 5.6);
+        tl.fromTo("#s14-scr", { height: 0 }, { height: 440, duration: 1.4, ease: "power2.inOut" }, 5.6);
+        tl.fromTo("#s14-rodB", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 5.7);
+        tl.fromTo("#s14-r1", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, 6.0);
+        tl.fromTo("#s14-s1", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 6.6);
+        tl.fromTo("#s14-r2", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, 7.1);
+        tl.fromTo("#s14-s2", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 7.7);
+        tl.fromTo("#s14-r3", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, 9.2);
+        // contagens
+        const c1 = { s: 0 }, c2 = { n: 0 };
+        const e1 = document.getElementById("s14-v1t"), e2 = document.getElementById("s14-v2t");
+        const f1 = () => { const s = Math.round(c1.s); e1.textContent = Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s"; };
+        const f2 = () => { e2.textContent = Math.round(c2.n) + " msgs"; };
+        tl.to(c1, { s: 84, duration: 1.6, ease: "power2.out", onUpdate: f1 }, 6.2);
+        tl.to(c2, { n: 7, duration: 1.2, ease: "power2.out", onUpdate: f2 }, 7.5);
+        tl.fromTo("#s14-exemplo", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 8.2);
+        HF.pop ? HF.pop(tl, "#s14-fox", 9.6, { d: 0.9, y: 40 }) : tl.fromTo("#s14-fox", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.9 }, 9.6);
+        window.__timelines["s14"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,46 +1,47 @@
-# Atila's Client — vídeo de apresentação (9:16)
+# Atila's Client — filme de apresentação v2 (9:16)
 
-**Entrega:** `atila-apresentacao-9x16.mp4` — 1080×1920, 30 fps, H.264 + AAC, 63,5 s, −13,8 LUFS, pico −1,5 dBFS.
-Destino exibido no vídeo: **atilaclient.tech**.
+**Entrega:** `atila-apresentacao-v2-9x16.mp4` — 1080×1920, 30 fps, H.264 + AAC, **4 min 29 s**, −14 LUFS.
+Destino exibido no filme: **atilaclient.tech**.
 
-## Conceito
-"A raposa de guarda" (conceito A do diretor criativo): a raposa do herbário guia a leitura; o app é o protagonista.
-Narrativa: gancho (o chat não para) → problema (moderar sozinha cansa) → solução (conta robô) → 3 funções
-(silenciar/banir, mensagens automáticas, robô + streamer favorita) → tranquilidade (pode fechar a aba) → CTA.
+## O que mudou em relação à v1
+A v1 foi considerada "simples, muito print, pouco desenvolvimento gráfico, rápida demais e sem aprofundar no app". A v2:
+- **Aprofunda o app inteiro** (17 cenas): painel, lista de silenciar/banir, "Testar uma frase", opções de moderação,
+  mensagens automáticas, conexão do robô (3 formas de entrar), chat ao vivo com ações marcadas, streamer favorita (sentinela),
+  estatísticas, resumo da live, configurações (importar backup, alterar senha, instalar como app) e "pode fechar a aba".
+- **Usa o app real em movimento**: gravações de interação (digitando, ativando, buscando, favoritando), não prints parados.
+- **Desenvolve o grafismo**: cada cena tem uma ideia própria — prancha de herbário na abertura, sobrecarga de chat, diagrama do caminho
+  da mensagem, tipografia cinética do "normalizador" (SP4M → spam), livros de registro, anel de intervalo + carrossel de mensagens,
+  linha do tempo da sentinela, gráfico de barras redesenhado, pergaminho do resumo, caderno de configurações.
+- **Ritmo calmo**: locução ~2 palavras/s, textos-chave ≥1,6 s na tela, respiros finais em cada cena.
 
-## Direção de arte
-Identidade real do app ("Herbário da raposa"): papel `#F4ECDC`, floresta `#1F3A2E`, terracota `#A8461F`, ouro `#9A7B2F/#D2B568`,
-Fraunces nos títulos e Source Sans 3 no corpo (as mesmas fontes do app). Raposa = ilustrações originais do app.
-Telas = **capturas reais** do app em viewport de celular (390×844 @3x), recortadas em cartões e animadas por cima.
-Transição entre cenas: painel verde-floresta com filete de ouro e folhas subindo (um único motivo, repetido).
-Sem neon, glitch, partículas ou vidro. Textura de papel discreta em todo o quadro.
+## Direção de arte e som
+Identidade real do app (Herbário da raposa, Art Nouveau, tema claro): papel, floresta, terracota, ouro; Fraunces + Source Sans 3;
+raposa original do app. Transição única entre cenas (painel floresta com filete dourado). Textura de papel discreta.
+Narração pt-BR gerada com Gemini TTS (voz "Kore"; modelos 3.1 nas cenas 1–9 e 3.8 nas cenas 10–17, com ritmo igualado). Trilha (Ré maior, 76 bpm) e
+efeitos sintetizados por código — sem material de terceiros.
 
-## Som
-Narração em pt-BR gerada com Gemini TTS (voz "Kore"), uma faixa por cena. Trilha (Ré maior, 76 bpm: pluck, pad, sinos) e efeitos
-(whoosh, ticks, pops, carimbo, sino) **sintetizados por código** — sem material de terceiros. Trilha reduz sob a voz (ducking).
-Fontes: `fonte-audio/` (`tts.py`, `mix.py`, locuções por cena).
+## Fidelidade — real × ilustração
+- **Real:** todas as telas do app, os textos de interface e as ações do robô (silenciar/banir) gravados contra um SuperLive simulado.
+- **Dados de demonstração:** usuária fictícia "Aurora", números das estatísticas, histórico e usuários de chat. Onde há números,
+  o filme avisa "dados de demonstração".
+- **Ilustração:** bolhas de chat das cenas 1–2, diagramas, ícones, gráficos redesenhados e a cena "pode fechar a aba".
+- Nada de métricas de clientes, depoimentos, preços ou integrações inventadas.
 
-## Fidelidade ao app — o que é real e o que é ilustração
-- Real: todas as telas mostradas (Painel, Moderação, Mensagens automáticas, Robô). Textos, ícones e componentes vêm direto do app.
-- Dados de demonstração: usuária fictícia "Aurora"; palavras e mensagens são exemplos do próprio app; o robô foi conectado a um
-  SuperLive **simulado**, e as ações "Baniu bot77" vieram de um chat de teste. Nenhum dado de cliente real aparece.
-- Ilustração (não é tela do app): as bolhas de chat das cenas 1 e 2 e as etiquetas/pílulas ("Entra na live", "Palavra inteira", etc.).
-- Nenhuma métrica de uso, depoimento, preço ou integração foi inventada.
-
-## Limitações (sinalizadas, não escondidas)
-- A tela de **streamer favorita já cadastrada** (botão de favoritar) não foi capturada: a cena mostra as seções reais "Live" e
-  "Streamer" do app, cujo texto menciona o streamer favoritado, e a locução descreve o comportamento. Vale gravar essa tela em um
-  próximo corte, se quiser mostrar o interruptor em si.
-- A afirmação "pode fechar a aba, a moderação continua" vem da documentação do app (o robô roda no servidor); a cena é ilustrativa.
-- O áudio foi verificado **por medições** (loudness, pico, silêncio, cortes). A pronúncia de "Átila Client" e de
-  "atila client ponto tech" precisa de uma escuta humana antes de publicar.
+## Pontos de atenção (para revisão humana antes de publicar)
+1. **Escute a locução inteira.** Foi verificada só por medições (volume, pico, silêncio). Pronúncia de "Átila Client" e de
+   "atila client ponto tech" precisa de ouvido humano. As cenas 10–17 usam outro modelo de voz e foram aceleradas para igualar o ritmo.
+2. **Regra fixa do nome "w"**: o robô bane quem tem exatamente o nome "w" (código `engine.py`), regra que não é configurável nem citada no portal ou na
+   documentação. O filme diz "aplica as regras que você escolheu"; a regra fixa existe além delas.
+3. **O que o produto não faz** (e o filme não afirma): não apaga mensagens, não é inteligência artificial (compara palavras cadastradas), não avisa por
+   e-mail/celular, a vigia da streamer favorita não é instantânea (consulta em intervalos), a imunidade por diamantes não foi confirmada contra o serviço real,
+   e o produto depende de uma API não oficial do SuperLive (pode mudar ou violar termos).
+4. A exigência "o robô precisa ser moderador da live" é mostrada como aviso; no ambiente de gravação o mock não recusa ações.
 
 ## Revisão e correções
-Tribunal de revisão (arte, edição, QA, som/pós). Correções aplicadas após a primeira rodada: rodapé do celular fora da zona de
-interface (celular subiu ~130 px), pílulas sobre a tela do app trocadas por uma legenda única, sobreposição de cartões na cena do robô,
-raposa aparecendo antes da hora, movimento lento nas cenas longas, textura/filetes mais discretos.
-Não aceitos: encurtar para 50 s (a duração é livre e a locução precisa dos ~54 s) e trocar os blocos verdes por papel (o contraste
-claro/escuro dá ritmo; o escuro é usado em 2 de 8 cenas).
+Revisores (arte/ritmo, QA visual, fatos, som/pós). Correções aplicadas: frase sem respaldo removida (cena 10), títulos que exageravam
+("não se deixa enganar" → "Reconhece disfarces comuns"; "Registra tudo" → "Registra as ações"), celular vazio na cena 10, celulares maiores e quadros mais
+cheios nas cenas 5, 6, 8, 12, 13 e 14, nova cena 17 (Configurações), lint (fontes e animações por transform) e normalização de loudness (−14 LUFS).
+Limitações conhecidas: algumas linhas-guia das etiquetas foram posicionadas à mão sobre a inclinação 3D; a vozes das cenas 10–17 soam um pouco diferentes das 1–9.
 
 ## Editável
-`projeto/` é um projeto HyperFrames (HTML + GSAP): `index.html` + `assets/`. Re-render: `npx hyperframes@0.8.155 render --quality delivery --fps 30`.
+`projeto-v2/` é um projeto HyperFrames (HTML + GSAP): cenas em `compositions/`, `timing.json`, `assets/` (clips reduzidos), scripts em `fonte-v2/` (análises do app em `fonte-v2/analise-do-app/`).

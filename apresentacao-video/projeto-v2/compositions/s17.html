@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /></head><body>
+<template>
+<style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+#root{position:absolute;inset:0;background:var(--sage);overflow:hidden;}
+#s17-kick{position:absolute;left:70px;top:236px;}
+#s17-title{position:absolute;left:70px;top:286px;font-size:98px;line-height:1.1;color:var(--forest);white-space:nowrap;}
+#s17-fox{left:790px;top:236px;width:230px;transform-origin:50% 100%;}
+.c{position:absolute;left:70px;width:540px;border-radius:30px;background:var(--paper2);border:4px solid var(--rule);box-shadow:0 26px 44px -26px rgba(31,58,46,.5);overflow:hidden;}
+.c .num{position:absolute;left:0;top:0;width:96px;height:90px;display:flex;align-items:center;justify-content:center;font:700 46px "Fraunces",serif;color:var(--paper2);background:#7C6120;border-bottom-right-radius:30px;}
+.c .ic{position:absolute;right:20px;top:6px;}
+.c .ttl{position:absolute;left:118px;top:12px;font:700 54px "Fraunces",serif;color:var(--forest);white-space:nowrap;}
+.c .txt,.btn{opacity:0}
+.c .txt{position:absolute;left:28px;top:104px;width:484px;font:600 38px/1.25 "Source Sans 3",sans-serif;color:var(--forest2);}
+.btn{position:absolute;height:66px;border-radius:33px;display:flex;align-items:center;justify-content:center;font:700 38px "Source Sans 3",sans-serif;white-space:nowrap;}
+.btn.o{border:3px solid var(--forest);color:var(--forest);background:var(--paper2);}
+.btn.t{background:var(--terra);color:var(--paper2);}
+#s17-c1{top:440px;height:300px;} #s17-c2{top:756px;height:196px;} #s17-c3{top:968px;height:262px;} #s17-c4{top:1246px;height:256px;}
+#s17-pw{position:absolute;left:0;top:0;width:1080px;height:1920px;perspective:1800px;}
+#s17-ph{left:530px;top:381px;}
+</style>
+<div id="root" data-composition-id="s17" data-width="1080" data-height="1920">
+<svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#9A7B2F" stroke-width="3" stroke-linecap="round">
+<path id="s17-rule" d="M70 410 H730" opacity=".8"/>
+<path id="s17-v1" d="M1050 1500 C 1000 1420, 1040 1300, 1005 1200" stroke="#D2B568" opacity=".8"/>
+<path id="s17-v2" d="M30 1500 C 60 1520, 80 1500, 110 1510" stroke="#D2B568" opacity=".0"/>
+</svg>
+<div id="s17-kick" class="kicker">E tem mais</div>
+<div id="s17-title" class="serif">Configurações</div>
+<img id="s17-fox" class="abs" src="assets/fox_head_calm.webp" alt="" />
+
+<div class="c" id="s17-c1"><div class="num">I</div><div class="ttl">Importar</div>
+<svg class="ic" width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#A8461F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 46 v20 h56 v-20"/><path d="M40 8 v36"/><path d="M26 30 l14 14 l14 -14"/></svg>
+<div class="txt" id="s17-d1">Nada é apagado: o que já existe é mantido.</div>
+<div class="btn o" id="s17-b1" style="left:20px;top:208px;width:300px">Conferir arquivo</div>
+<div class="btn t" id="s17-b2" style="left:332px;top:208px;width:184px">Importar</div></div>
+
+<div class="c" id="s17-c2"><div class="num">II</div><div class="ttl">Senha</div>
+<svg class="ic" width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#A8461F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="26" cy="40" r="14"/><path d="M40 40 H72"/><path d="M60 40 v12"/><path d="M69 40 v8"/></svg>
+<div class="btn o" id="s17-b3" style="left:28px;top:104px;width:276px">Alterar senha</div></div>
+
+<div class="c" id="s17-c3"><div class="num">III</div><div class="ttl">Instalar</div>
+<svg class="ic" width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#A8461F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="22" y="6" width="36" height="68" rx="9"/><path d="M40 22 v26"/><path d="M30 38 l10 10 l10 -10"/></svg>
+<div class="txt" id="s17-d3">Quando o navegador oferece: abre em tela cheia, com ícone próprio.</div></div>
+
+<div class="c" id="s17-c4"><div class="num">IV</div><div class="ttl">Sair</div>
+<svg class="ic" width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#A8461F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M44 10 H20 v60 h24"/><path d="M34 40 H72"/><path d="M60 28 l12 12 l-12 12"/></svg>
+<div class="txt" id="s17-d4">Encerra a sessão neste dispositivo. O robô continua como está.</div></div>
+
+<div id="s17-pw"><div class="phone" id="s17-ph"><div class="screen"><video class="clip" id="s17-v" src="assets/clips/k11.mp4" data-start="0" data-duration="18.4" data-media-start="0" muted playsinline></video></div></div></div>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+HF.draw(tl,"#s17-rule",0.6,1.4); HF.draw(tl,"#s17-v1",2.0,2.0);
+HF.rise(tl,"#s17-kick",0.3,{y:20,d:.7}); HF.rise(tl,"#s17-title",0.6,{y:40,d:.9});
+tl.fromTo("#s17-fox",{opacity:0,y:60},{opacity:1,y:0,duration:1.1,ease:"power3.out"},1.0);
+tl.fromTo("#s17-fox",{rotation:-3},{rotation:3,duration:3.5,ease:"sine.inOut",yoyo:true,repeat:3},2.2);
+tl.fromTo("#s17-pw",{opacity:0,x:80},{opacity:1,x:0,duration:1.2,ease:"power3.out"},1.4);
+tl.fromTo("#s17-ph",{scale:.58,rotateY:-16,rotateX:3,transformOrigin:"50% 50%"},{scale:.62,rotateY:-9,rotateX:2,duration:16.5,ease:"sine.inOut"},1.4);
+const ids=["c1","c2","c3","c4"], T=[3.0,8.9,12.3,16.0];
+ids.forEach((c,i)=>{ tl.fromTo("#s17-"+c,{opacity:0,y:40,x:-30},{opacity:.88,y:0,x:0,duration:.8,ease:"power3.out"},1.7+i*0.3); });
+const detail={c1:["#s17-d1","#s17-b1","#s17-b2"],c2:["#s17-b3"],c3:["#s17-d3"],c4:["#s17-d4"]};
+ids.forEach((c,i)=>{
+  const t=T[i];
+  if(i>0) tl.fromTo("#s17-"+ids[i-1],{opacity:1,borderColor:"#A8461F"},{opacity:.88,borderColor:"#CFC3A8",duration:.6,immediateRender:false},t);
+  tl.fromTo("#s17-"+c,{opacity:.88,borderColor:"#CFC3A8"},{opacity:1,borderColor:"#A8461F",duration:.6,immediateRender:false},t);
+  tl.fromTo("#s17-"+c+" .num",{scale:.8},{scale:1,duration:.6,ease:"back.out(2)",transformOrigin:"0 0",immediateRender:false},t);
+  detail[c].forEach((s,k)=>tl.fromTo(s,{opacity:0,y:16},{opacity:1,y:0,duration:.7,ease:"power3.out"},t+.3+k*.35));
+});
+tl.to("#s17-b2",{scale:1.05,duration:.4,yoyo:true,repeat:1,ease:"sine.inOut",transformOrigin:"50% 50%"},6.9);
+window.__timelines["s17"]=tl;
+</script>
+</template></body></html>

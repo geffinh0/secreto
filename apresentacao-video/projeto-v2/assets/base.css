@@ -1,0 +1,32 @@
+/* Atila's Client — design system do vídeo (Herbário da raposa) */
+@font-face { font-family: "Fraunces"; src: url("Fraunces72ptSoft-SemiBold.ttf"); font-weight: 600; }
+@font-face { font-family: "Fraunces"; src: url("Fraunces72ptSoft-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "Source Sans 3"; src: url("SourceSans3VF-Upright.ttf"); font-weight: 200 900; }
+:root {
+  --paper:#F4ECDC; --paper2:#FBF6EA; --sage:#E3E8D6; --sage2:#D3DBC2; --forest:#1F3A2E; --forest2:#2D5242;
+  --terra:#A8461F; --terra2:#8F3A18; --gold:#9A7B2F; --goldL:#D2B568; --muted:#4A5B4F; --rule:#CFC3A8; --ok:#2F6B3F; --warn:#8A5A00; --danger:#A82A24;
+}
+.serif { font-family:"Fraunces",serif; font-weight:700; letter-spacing:-0.01em; }
+.sans { font-family:"Source Sans 3",sans-serif; }
+.abs { position:absolute; }
+.center { left:0; width:1080px; text-align:center; position:absolute; }
+.kicker { font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:36px; letter-spacing:0.24em; color:var(--gold); text-transform:uppercase; }
+/* cartão com recorte real do app */
+.card { position:absolute; border-radius:34px; overflow:hidden; background:var(--paper); border:3px solid rgba(207,195,168,.95);
+  box-shadow:0 34px 60px -26px rgba(31,58,46,.5); }
+.card img, .card video { display:block; width:100%; }
+/* celular com tela real (vídeo ou imagem); tamanho padrão 600x1298; escale com GSAP (scale) */
+.phone { position:absolute; width:600px; height:1298px; border-radius:84px; background:#14271e; padding:16px; box-shadow:0 70px 100px -34px rgba(0,0,0,.55), inset 0 0 0 4px #2D5242; overflow:hidden; }
+.phone .screen { position:relative; width:568px; height:1266px; border-radius:68px; overflow:hidden; background:var(--paper); }
+.phone .screen video, .phone .screen img { position:absolute; left:0; top:0; width:568px; height:1229px; object-fit:cover; }
+/* pílulas e rótulos */
+.pill { position:absolute; display:flex; align-items:center; gap:16px; height:92px; padding:0 34px; border-radius:46px; font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:42px; white-space:nowrap; }
+.pill.paper { background:var(--paper2); color:var(--forest); border:3px solid var(--rule); box-shadow:0 22px 40px -18px rgba(0,0,0,.5); }
+.pill.gold { background:var(--goldL); color:var(--forest); } .pill.terra { background:var(--terra); color:var(--paper2); } .pill.forest { background:var(--forest); color:var(--paper2); }
+.dot { width:22px; height:22px; border-radius:11px; background:var(--terra); flex:none; } .dot.green { background:var(--ok); }
+/* etiqueta de herbário: texto + linha-guia terminando em ponto */
+.leader { position:absolute; height:3px; background:var(--gold); transform-origin:0 50%; }
+.leader::after { content:""; position:absolute; right:-9px; top:-8px; width:19px; height:19px; border-radius:50%; background:var(--terra); border:3px solid var(--paper2); }
+.label-tag { position:absolute; font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:40px; color:var(--forest); background:var(--paper2); border:3px solid var(--gold); padding:10px 26px; border-radius:14px; box-shadow:0 14px 30px -14px rgba(0,0,0,.45); white-space:nowrap; }
+.stamp { position:absolute; font-family:"Fraunces",serif; font-weight:700; font-size:64px; letter-spacing:.06em; text-transform:uppercase; padding:6px 30px; border:8px solid currentColor; border-radius:14px; transform:rotate(-8deg); mix-blend-mode:multiply; opacity:.92; }
+.stamp.ban { color:var(--terra); } .stamp.mute { color:var(--gold); }

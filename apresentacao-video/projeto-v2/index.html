@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="UTF-8"/><meta name="viewport" content="width=1080, height=1920"/><title>Atila's Client</title>
+<link rel="stylesheet" href="assets/base.css"/><link rel="stylesheet" href="assets/base.css"/><script src="assets/gsap.min.js"></script><script src="assets/lib.js"></script>
+<style>
+@font-face{font-family:'Fraunces';src:url('assets/Fraunces72ptSoft-SemiBold.ttf');font-weight:600} @font-face{font-family:'Fraunces';src:url('assets/Fraunces72ptSoft-Bold.ttf');font-weight:700} @font-face{font-family:'Source Sans 3';src:url('assets/SourceSans3VF-Upright.ttf');font-weight:200 900}
+*{margin:0;padding:0;box-sizing:border-box} html,body{width:1080px;height:1920px;overflow:hidden;background:#F4ECDC}
+#root{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+#grain{position:absolute;inset:0;z-index:60;pointer-events:none;mix-blend-mode:multiply;opacity:.2;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.55 0'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")}
+#wipe{position:absolute;left:0;top:0;width:1080px;height:2100px;background:#1F3A2E;z-index:50;border-top:14px solid #D2B568;border-bottom:14px solid #D2B568}
+</style></head><body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="268.6" data-width="1080" data-height="1920">
+<div id="s01" data-composition-id="s01" data-composition-src="compositions/s01.html" data-start="0.0" data-duration="6.166666666666667" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s02" data-composition-id="s02" data-composition-src="compositions/s02.html" data-start="6.167" data-duration="13.9" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s03" data-composition-id="s03" data-composition-src="compositions/s03.html" data-start="20.067" data-duration="14.0" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s04" data-composition-id="s04" data-composition-src="compositions/s04.html" data-start="34.067" data-duration="15.6" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s05" data-composition-id="s05" data-composition-src="compositions/s05.html" data-start="49.667" data-duration="15.4" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s06" data-composition-id="s06" data-composition-src="compositions/s06.html" data-start="65.067" data-duration="18.533333333333335" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s07" data-composition-id="s07" data-composition-src="compositions/s07.html" data-start="83.6" data-duration="26.0" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s08" data-composition-id="s08" data-composition-src="compositions/s08.html" data-start="109.6" data-duration="16.0" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s09" data-composition-id="s09" data-composition-src="compositions/s09.html" data-start="125.6" data-duration="17.933333333333334" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s10" data-composition-id="s10" data-composition-src="compositions/s10.html" data-start="143.533" data-duration="15.6" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s11" data-composition-id="s11" data-composition-src="compositions/s11.html" data-start="159.133" data-duration="13.766666666666667" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s12" data-composition-id="s12" data-composition-src="compositions/s12.html" data-start="172.9" data-duration="21.333333333333332" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s13" data-composition-id="s13" data-composition-src="compositions/s13.html" data-start="194.233" data-duration="14.766666666666667" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s14" data-composition-id="s14" data-composition-src="compositions/s14.html" data-start="209.0" data-duration="12.666666666666666" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s17" data-composition-id="s17" data-composition-src="compositions/s17.html" data-start="221.667" data-duration="18.466666666666665" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="s15" data-composition-id="s15" data-composition-src="compositions/s15.html" data-start="240.133" data-duration="13.466666666666667" data-track-index="2" data-width="1080" data-height="1920"></div>
+<div id="s16" data-composition-id="s16" data-composition-src="compositions/s16.html" data-start="253.6" data-duration="15.0" data-track-index="1" data-width="1080" data-height="1920"></div>
+<div id="wipe"></div><div id="grain"></div>
+<audio id="mix" data-start="0" data-duration="268.6" data-track-index="9" src="assets/mix.wav" data-volume="1"></audio>
+</div>
+<script>
+const E={press:"power2.inOut"}; const tl=gsap.timeline({paused:true});
+tl.set("#wipe",{yPercent:100},0);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},5.717);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},19.617);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},33.617);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},49.217);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},64.61699999999999);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},83.14999999999999);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},109.14999999999999);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},125.14999999999999);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},143.083);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},158.68300000000002);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},172.45000000000002);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},193.78300000000002);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},208.55);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},221.217);
+tl.fromTo("#wipe",{yPercent:100},{yPercent:-100,duration:0.9,ease:E.press,immediateRender:false},239.68300000000002);
+tl.fromTo("#wipe",{yPercent:-100},{yPercent:100,duration:0.9,ease:E.press,immediateRender:false},253.15);
+window.__timelines=window.__timelines||{}; window.__timelines["main"]=tl;
+</script></body></html>

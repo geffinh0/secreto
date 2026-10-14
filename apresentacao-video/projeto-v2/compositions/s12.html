@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s12-kick { top: 250px; }
+        #s12-title { top: 292px; font-size: 104px; color: var(--forest); line-height: 1.1; }
+        .s12-mk { position: absolute; left: 0; width: 500px; height: 200px; }
+        .s12-ic { position: absolute; left: 70px; top: 0; width: 96px; height: 96px; border-radius: 48px; background: var(--paper2); border: 4px solid var(--goldL); display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 14px 24px -14px rgba(31,58,46,.55); }
+        .s12-t { position: absolute; left: 190px; top: -4px; width: 300px; }
+        .s12-h { font-family: "Fraunces", serif; font-weight: 700; font-size: 46px; color: var(--forest); line-height: 1.05; }
+        .s12-s { font-family: "Source Sans 3", sans-serif; font-weight: 600; font-size: 40px; color: var(--muted); line-height: 1.1; margin-top: 6px; }
+        #s12-m1 { top: 450px; } #s12-m2 { top: 665px; } #s12-m3 { top: 880px; } #s12-m4 { top: 1095px; } #s12-m5 { top: 1310px; }
+        #s12-ring { position: absolute; left: 70px; top: 0; width: 96px; height: 96px; border-radius: 48px; border: 5px solid var(--goldL); }
+        #s12-ph { position: absolute; left: 506px; top: 440px; width: 504px; height: 1090px; perspective: 1800px; }
+        #s12-ph .phone { left: 0; top: 0; }
+        .s12-fade { position: absolute; left: 0; top: 0; width: 568px; height: 1266px; }
+        #s12-note { left: 100px; top: 1570px; width: 880px; height: 110px; }
+        #s12-note .tx { position: absolute; left: 140px; top: 2px; width: 740px; font-family: "Source Sans 3", sans-serif; font-weight: 700; font-size: 46px; line-height: 1.15; color: var(--forest); }
+</style>
+      <div id="root" data-composition-id="s12" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke-linecap="round">
+          <path id="s12-stem" d="M118 440 C 100 700, 136 900, 118 1150 S 100 1330, 118 1500" stroke="#D2B568" stroke-width="3" />
+          <path id="s12-loop" d="M0 0" stroke="none" />
+          <path id="s12-loopA" d="M70 1372 C 38 1320, 38 1000, 70 940" stroke="#A8461F" stroke-width="4" />
+          <path id="s12-arr" d="M52 962 L70 938 L90 958" stroke="#A8461F" stroke-width="4" />
+        </svg>
+        <div id="s12-kick" class="center kicker">Streamer favorita</div>
+        <div id="s12-title" class="center serif">A sentinela</div>
+
+        <div id="s12-m1" class="s12-mk"><div class="s12-ic" id="s12-i1"><svg width="54" height="54" viewBox="0 0 62 62" fill="none" stroke="#1F3A2E" stroke-width="5" stroke-linecap="round"><circle cx="26" cy="26" r="17"/><path d="M39 39 L54 54"/></svg></div>
+          <div class="s12-t"><div class="s12-h">Buscar pelo ID</div><div class="s12-s">ID público da streamer</div></div></div>
+        <div id="s12-m2" class="s12-mk"><div class="s12-ic" id="s12-i2"><svg width="64" height="60" viewBox="0 0 64 60"><path id="s12-heart" d="M32 56 C8 38 2 24 8 14 C14 4 28 6 32 18 C36 6 50 4 56 14 C62 24 56 38 32 56z" fill="#A8461F"/></svg></div>
+          <div class="s12-t"><div class="s12-h">Favoritar</div><div class="s12-s">marque como favorita</div></div></div>
+        <div id="s12-m3" class="s12-mk"><div id="s12-ring"></div><div class="s12-ic" id="s12-i3"><img src="assets/fox_head_calm.webp" alt="" style="width:80px;margin-top:16px" /></div>
+          <div class="s12-t"><div class="s12-h">Sentinela armada</div><div class="s12-s">de olho em segundo plano</div></div></div>
+        <div id="s12-m4" class="s12-mk"><div class="s12-ic" id="s12-i4"><svg width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="14" fill="#A8461F"/><circle cx="30" cy="30" r="25" fill="none" stroke="#A8461F" stroke-width="4"/></svg></div>
+          <div class="s12-t"><div class="s12-h">Ela abre a live</div><div class="s12-s">o robô entra sozinho</div></div></div>
+        <div id="s12-m5" class="s12-mk"><div class="s12-ic" id="s12-i5"><svg width="54" height="54" viewBox="0 0 62 62" fill="none" stroke="#1F3A2E" stroke-width="5" stroke-linecap="round"><path d="M50 22 A21 21 0 1 0 52 34"/><path d="M52 8 V23 H37"/></svg></div>
+          <div class="s12-t"><div class="s12-h">A live acaba</div><div class="s12-s">espera a próxima</div></div></div>
+
+        <div id="s12-ph">
+          <div class="phone"><div class="screen">
+            <video id="s12-vA" class="clip" src="assets/clips/k09.mp4" data-start="0" data-duration="6.05" data-media-start="5.4" muted playsinline></video>
+            <div id="s12-w2" class="s12-fade"><video id="s12-vC" class="clip" src="assets/clips/k09.mp4" data-start="5.7" data-duration="3.2" data-media-start="14.2" muted playsinline></video></div>
+            <div id="s12-w3" class="s12-fade"><video id="s12-vB" class="clip" src="assets/clips/k09.mp4" data-start="8.5" data-duration="12.8" data-media-start="20.6" muted playsinline></video></div>
+          </div></div>
+        </div>
+
+        <div id="s12-note" class="abs">
+          <svg class="abs" style="left:0;top:0" width="110" height="110" viewBox="0 0 130 130" fill="none" stroke="#9A7B2F" stroke-width="6" stroke-linecap="round"><circle cx="65" cy="65" r="52" fill="#FBF6EA"/><path d="M65 30 V65 L88 80" id="s12-hand"/><path d="M65 14 V22 M65 108 V116 M14 65 H22 M108 65 H116"/></svg>
+          <div class="tx">Não é instantâneo: o robô verifica em intervalos</div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        HF.rise(tl, "#s12-kick", 0.3, { y: 24, d: 0.8 });
+        HF.rise(tl, "#s12-title", 0.5, { y: 40, d: 1.0 });
+        HF.draw(tl, "#s12-stem", 1.0, 15.5, "none");
+        tl.fromTo("#s12-w2", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "none" }, 5.7);
+        tl.fromTo("#s12-w3", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "none" }, 8.5);
+        tl.fromTo("#s12-ph", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 1.2, ease: "power3.out" }, 0.9);
+        tl.set(".phone", { scale: 0.84, rotationY: -8, rotationX: 2, transformOrigin: "0 0" }, 0);
+        tl.to(".phone", { rotationY: -3, duration: 18, ease: "sine.inOut" }, 1);
+        const mk = (n, t) => {
+          tl.fromTo("#s12-m" + n, { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, t);
+          tl.fromTo("#s12-i" + n, { scale: 0.6 }, { scale: 1, duration: 0.8, ease: "back.out(1.5)" }, t);
+          tl.to("#s12-i" + n, { backgroundColor: "#E3E8D6", borderColor: "#9A7B2F", duration: 0.6 }, t + 0.5);
+        };
+        mk(1, 2.3); mk(2, 5.9); mk(3, 8.1); mk(4, 11.9); mk(5, 15.6);
+        tl.fromTo("#s12-heart", { scale: 1, transformOrigin: "50% 50%" }, { scale: 1.3, duration: 0.5, ease: "sine.inOut", yoyo: true, repeat: 1 }, 6.6);
+        tl.fromTo("#s12-ring", { opacity: 0.8, scale: 1 }, { opacity: 0, scale: 1.6, duration: 1.3, ease: "sine.out", repeat: 5, transformOrigin: "50% 50%" }, 8.6);
+        tl.to("#s12-i4 circle:first-child", { scale: 1.25, transformOrigin: "30px 30px", duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 3 }, 12.8);
+        HF.pop(tl, "#s12-note", 9.4, { d: 0.9, y: 30 });
+        tl.fromTo("#s12-hand", { rotation: 0, transformOrigin: "65px 65px" }, { rotation: 360, duration: 6, ease: "none" }, 10.3);
+        tl.fromTo("#s12-loopA", { strokeDasharray: 400, strokeDashoffset: 400, opacity: 0 }, { opacity: 1, strokeDashoffset: 0, duration: 1.5, ease: "sine.inOut" }, 17.4);
+        tl.fromTo("#s12-arr", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 18.7);
+        tl.fromTo("#s12-i3", { boxShadow: "0 0 0 0 rgba(210,181,104,0)" }, { boxShadow: "0 0 0 14px rgba(210,181,104,.55)", duration: 0.8, ease: "sine.inOut", yoyo: true, repeat: 1 }, 18.6);
+        window.__timelines["s12"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

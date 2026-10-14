@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s16-fox { left: 280px; top: 250px; width: 520px; }
+        #s16-name { top: 1010px; font-size: 134px; color: var(--forest); }
+        #s16-sub { top: 1500px; font-size: 44px; font-weight: 600; color: var(--muted); }
+        #s16-url { left: 170px; top: 1300px; width: 740px; height: 138px; justify-content: center; border-radius: 69px; font-family: "Fraunces", serif; font-size: 74px; padding: 0; }
+      </style>
+      <div id="root" data-composition-id="s16" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s16-v1" d="M-20 1180 C 140 1060, 90 860, 210 740 S 330 480, 250 300" opacity=".7" />
+          <path id="s16-v2" d="M1100 1180 C 940 1060, 990 860, 870 740 S 750 480, 830 300" opacity=".7" />
+          <path id="s16-l1" d="M210 740 c-40 -10 -62 -40 -58 -76 c40 8 64 36 58 76z" fill="#D2B568" stroke="none" opacity=".8" />
+          <path id="s16-l2" d="M870 740 c40 -10 62 -40 58 -76 c-40 8 -64 36 -58 76z" fill="#D2B568" stroke="none" opacity=".8" />
+        </svg>
+        <img id="s16-fox" class="abs" src="assets/fox_garden_sitting.webp" alt="" />
+        <div id="s16-name" class="center serif">Atila's Client</div>
+        <svg id="s16-orn" class="abs" style="left:240px;top:1180px" width="600" height="70" viewBox="0 0 600 70" fill="none" stroke="#9A7B2F" stroke-width="3" stroke-linecap="round">
+          <path d="M0 35 H230"/><path d="M370 35 H600"/><path d="M255 40 C 285 8, 320 12, 345 38"/><circle cx="300" cy="22" r="5" fill="#9A7B2F"/><path d="M322 28 c14 -14 22 -2 12 8" />
+        </svg>
+        <div id="s16-url" class="pill terra">atilaclient.tech</div>
+        <div id="s16-sub" class="center sans">Moderação automática para lives do SuperLive</div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        HF.draw(tl, "#s16-v1", 0.4, 2.4); HF.draw(tl, "#s16-v2", 0.7, 2.4);
+        tl.fromTo(["#s16-l1", "#s16-l2"], { opacity: 0, scale: 0.4, transformOrigin: "50% 100%" }, { opacity: 0.8, scale: 1, duration: 0.8, ease: "back.out(1.4)", stagger: 0.2 }, 2.2);
+        tl.fromTo("#s16-fox", { opacity: 0, y: 80 }, { opacity: 1, y: 0, duration: 1.1, ease: "power3.out" }, 0.8);
+        tl.to("#s16-fox", { y: -10, duration: 3.2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 2.6);
+        HF.rise(tl, "#s16-name", 2.0, { y: 40, d: 0.9 });
+        tl.fromTo("#s16-orn", { opacity: 0, scaleX: 0.3, transformOrigin: "50% 50%" }, { opacity: 1, scaleX: 1, duration: 0.9, ease: "power3.out" }, 2.9);
+        HF.rise(tl, "#s16-sub", 3.3, { y: 24, d: 0.8 });
+        HF.pop(tl, "#s16-url", 5.6, { d: 0.8, y: 30 });
+        tl.to("#s16-url", { scale: 1.035, duration: 1.1, ease: "sine.inOut", yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, 6.8);
+        window.__timelines["s16"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

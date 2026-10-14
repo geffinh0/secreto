@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s10-kick { top: 252px; }
+        .s10-door { position:absolute; left:70px; width:400px; height:300px; border-radius:34px; background:var(--paper2); border:4px solid var(--rule); box-shadow:0 26px 44px -24px rgba(31,58,46,.45); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+        .s10-door svg { width:150px; height:130px; }
+        .s10-door .lb { font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:46px; color:var(--forest); text-align:center; line-height:1.05; }
+        #s10-d1 { top:350px; } #s10-d2 { top:690px; } #s10-d3 { top:1030px; }
+        .s10-num { position:absolute; left:-18px; top:-18px; width:64px; height:64px; border-radius:32px; background:var(--forest); color:var(--paper2); font-family:"Fraunces",serif; font-weight:700; font-size:40px; display:flex; align-items:center; justify-content:center; }
+        #s10-stage { position:absolute; left:0; top:0; width:1080px; height:1920px; perspective:1800px; }
+        #s10-phone { left:460px; top:223px; transform-origin:50% 50%; }
+        #s10-tap { position:absolute; left:0; top:0; width:1080px; height:1920px; }
+        #s10-card { position:absolute; left:70px; top:400px; width:940px; height:800px; border-radius:48px; background:var(--forest); box-shadow:0 44px 70px -30px rgba(31,58,46,.65); border:6px solid var(--goldL); }
+        #s10-shield { left:70px; top:440px; width:300px; height:330px; }
+        #s10-h { position:absolute; left:390px; top:450px; width:560px; font-family:"Fraunces",serif; font-weight:700; font-size:82px; line-height:1.06; color:var(--paper2); }
+        #s10-h2 { position:absolute; left:110px; top:850px; width:540px; font-family:"Source Sans 3",sans-serif; font-weight:600; font-size:46px; line-height:1.2; color:#E3E8D6; }
+        #s10-fox { left:690px; top:860px; width:313px; }
+        #s10-seal { position:absolute; left:110px; top:1350px; width:860px; padding:26px 36px; border-radius:30px; background:var(--paper2); border:5px solid var(--terra); display:flex; align-items:center; gap:28px; box-shadow:0 26px 44px -22px rgba(0,0,0,.4); }
+        #s10-seal .t { font-family:"Source Sans 3",sans-serif; font-weight:700; font-size:46px; line-height:1.15; color:var(--terra2); }
+        #s10-seal .t small { display:block; font-size:44px; font-weight:600; color:var(--muted); margin-top:6px; }
+      </style>
+      <div id="root" data-composition-id="s10" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s10-v1" d="M-20 1600 C 120 1500, 60 1380, 40 1250" opacity=".6"/>
+          <path id="s10-v2" d="M1100 340 C 1000 290, 990 250, 1040 200" opacity=".6"/>
+          <path id="s10-v3" d="M120 1560 H960" opacity=".7"/>
+        </svg>
+        <div id="s10-kick" class="center kicker">Conectar o robô</div>
+
+        <div id="s10-p1">
+          <div class="s10-door" id="s10-d1"><div class="s10-num">1</div>
+            <svg viewBox="0 0 150 130" fill="none" stroke="#1F3A2E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="22" width="108" height="76" rx="10" fill="#E3E8D6"/><path d="M8 30 L62 68 L116 30"/><rect x="92" y="68" width="46" height="40" rx="8" fill="#D2B568"/><path d="M102 68 v-10 a13 13 0 0 1 26 0 v10"/><circle cx="115" cy="88" r="5" fill="#1F3A2E"/></svg>
+            <div class="lb">E-mail e senha</div></div>
+          <div class="s10-door" id="s10-d2"><div class="s10-num">2</div>
+            <svg viewBox="0 0 150 130" fill="none" stroke="#1F3A2E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="22" y="6" width="62" height="116" rx="12" fill="#E3E8D6"/><path d="M44 108 h18"/><path d="M70 40 h60 a8 8 0 0 1 8 8 v28 a8 8 0 0 1 -8 8 h-34 l-14 12 v-12 h-12 a8 8 0 0 1 -8 -8 v-28 a8 8 0 0 1 8 -8z" fill="#D2B568"/><path d="M84 60 h40 M84 72 h26"/></svg>
+            <div class="lb">Celular</div></div>
+          <div class="s10-door" id="s10-d3"><div class="s10-num">3</div>
+            <svg viewBox="0 0 150 130" fill="none" stroke="#1F3A2E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="122" height="96" rx="10" fill="#E3E8D6"/><path d="M14 22 L75 66 L136 22"/><rect x="40" y="62" width="70" height="40" rx="8" fill="#D2B568"/><path d="M54 82 h6 M72 82 h6 M90 82 h6"/></svg>
+            <div class="lb">Código por e-mail</div></div>
+          <div id="s10-stage"><div class="phone" id="s10-phone"><div class="screen">
+            <video id="s10-vA" class="clip" src="assets/clips/k07.mp4" data-start="3.2" data-duration="3.5" data-media-start="0" muted playsinline></video>
+            <video id="s10-vB" class="clip" src="assets/clips/k07.mp4" data-start="6.7" data-duration="3.2" data-media-start="5.9" muted playsinline></video>
+          </div></div></div>
+        </div>
+
+        <div id="s10-p2">
+          <div id="s10-card"></div>
+          <svg id="s10-shield" class="abs" viewBox="0 0 300 330" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path id="s10-sh" d="M150 20 L262 62 V160 C262 236 212 288 150 312 C88 288 38 236 38 160 V62 Z" fill="#2D5242" stroke="#D2B568" stroke-width="6"/>
+            <path id="s10-ck" d="M92 168 L137 214 L212 120" stroke="#D2B568" stroke-width="20"/>
+          </svg>
+          <div id="s10-h">A streamer adiciona o robô como moderador</div>
+          <img id="s10-fox" class="abs" src="assets/fox_head_calm.webp" alt="" />
+          <div id="s10-seal">
+            <svg width="70" height="70" viewBox="0 0 70 70" fill="none" stroke="#A8461F" stroke-width="6" stroke-linecap="round"><circle cx="35" cy="35" r="28"/><path d="M35 18 V38 M35 48 V50"/></svg>
+            <div class="t">O robô precisa ser moderador desta live<small>Sem isso, ele não consegue silenciar nem banir.</small></div>
+          </div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        HF.draw(tl, "#s10-v1", 0.3, 2.0); HF.draw(tl, "#s10-v2", 0.5, 2.0); HF.draw(tl, "#s10-v3", 0.8, 1.6);
+        HF.rise(tl, "#s10-kick", 0.6, { y: 30, d: 0.9 });
+        tl.fromTo("#s10-p2", { opacity: 0 }, { opacity: 0, duration: 0.01 }, 0);
+        ["#s10-d1", "#s10-d2", "#s10-d3"].forEach((s, i) => HF.pop(tl, s, 2.4 + i * 0.5, { d: 0.9, y: 50 }));
+        tl.fromTo("#s10-phone", { opacity: 0, y: 70, rotateY: -22, scale: 0.7 }, { opacity: 1, y: 0, rotateY: -11, rotateX: 3, scale: 0.82, duration: 1.2, ease: "power3.out" }, 3.2);
+        tl.to("#s10-phone", { rotateY: -7, duration: 5.4, ease: "sine.inOut" }, 4.4);
+        tl.to("#s10-phone", { opacity: 0, y: 40, duration: 0.6, ease: "power2.in" }, 9.2);
+        // acender cada porta
+        [[4.3, "#s10-d1"], [5.5, "#s10-d2"], [6.7, "#s10-d3"]].forEach(([t, s], i, arr) => {
+          tl.to(s, { backgroundColor: "#D2B568", borderColor: "#1F3A2E", scale: 1.06, duration: 0.6, ease: "power2.out" }, t);
+          if (i < arr.length - 1) tl.to(s, { backgroundColor: "#FBF6EA", borderColor: "#CFC3A8", scale: 1, duration: 0.6, ease: "power2.inOut" }, arr[i + 1][0] + 0.1);
+        });
+        // fase 2
+        tl.to("#s10-p1", { opacity: 0, x: -60, duration: 0.8, ease: "power2.in" }, 9.0);
+        tl.set("#s10-p2", { opacity: 1 }, 9.0);
+        tl.fromTo("#s10-card", { opacity: 0, y: 70, scale: 0.95, transformOrigin: "50% 50%" }, { opacity: 1, y: 0, scale: 1, duration: 1.1, ease: "power3.out" }, 9.3);
+        tl.fromTo("#s10-shield", { opacity: 0, scale: 0.6, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.9, ease: "back.out(1.4)" }, 9.9);
+        HF.draw(tl, "#s10-ck", 11.0, 0.9);
+        tl.fromTo("#s10-h", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.9, ease: "power3.out" }, 10.4);
+        tl.fromTo("#s10-fox", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 12.2);
+        tl.fromTo("#s10-seal", { opacity: 0, scale: 1.25, rotation: -4, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, rotation: -1.5, duration: 0.6, ease: "back.out(1.6)" }, 12.9);
+        window.__timelines["s10"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

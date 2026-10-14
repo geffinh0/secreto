@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s01-kick { top: 236px; }
+        #s01-fox { left: 365px; top: 345px; width: 350px; height: 351px; }
+        #s01-halo { left: 330px; top: 318px; width: 420px; height: 420px; border-radius: 210px; background: var(--sage); }
+        #s01-cap { top: 742px; font-size: 44px; font-weight: 600; color: var(--muted); }
+        #s01-title { position: absolute; left: 0; width: 1080px; top: 812px; text-align: center; font-size: 106px; line-height: 122px; color: var(--forest); }
+        #s01-title .ln { display: block; height: 122px; }
+        #s01-title .w { display: inline-block; margin: 0 .14em; }
+        #s01-title .t { color: var(--terra); }
+        .s01-clip { position: absolute; left: 96px; width: 888px; height: 150px; overflow: hidden; }
+        .s01-row { position: absolute; top: 0; left: 0; display: flex; gap: 28px; align-items: center; height: 150px; width: 3600px; }
+        .s01-b { display: flex; align-items: center; gap: 16px; flex: none; }
+        .s01-av { width: 72px; height: 72px; border-radius: 36px; color: #1F3A2E; font: 700 40px/72px "Fraunces", serif; text-align: center; flex: none; }
+        .s01-bub { background: var(--paper2); border: 3px solid var(--rule); border-radius: 30px; padding: 8px 26px 10px; box-shadow: 0 12px 24px -14px rgba(31,58,46,.45); }
+        .s01-nm { font: 700 38px/44px "Source Sans 3", sans-serif; color: var(--gold); }
+        .s01-tx { font: 600 44px/52px "Source Sans 3", sans-serif; color: var(--forest); white-space: nowrap; }
+      </style>
+      <div id="root" data-composition-id="s01" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke-linecap="round">
+          <rect id="s01-f1" x="70" y="300" width="940" height="1190" rx="36" stroke="#D2B568" stroke-width="3" pathLength="2000"/>
+          <rect id="s01-f2" x="90" y="320" width="900" height="1150" rx="24" stroke="#9A7B2F" stroke-width="3" pathLength="2000"/>
+          <g stroke="#D2B568" stroke-width="3">
+            <path id="s01-v1" d="M96 330 C 130 460, 250 520, 230 690" pathLength="2000"/>
+            <path id="s01-v2" d="M984 330 C 950 460, 830 520, 850 690" pathLength="2000"/>
+            <path id="s01-v3" d="M96 1050 C 130 960, 190 920, 180 820" pathLength="2000"/>
+            <path id="s01-v4" d="M984 1050 C 950 960, 890 920, 900 820" pathLength="2000"/>
+          </g>
+          <g fill="#D2B568" opacity=".85">
+            <path class="s01-lf" d="M150 440 c-40 -6 -60 -34 -56 -70 c40 6 62 32 56 70z"/>
+            <path class="s01-lf" d="M930 440 c40 -6 60 -34 56 -70 c-40 6 -62 32 -56 70z"/>
+            <path class="s01-lf" d="M236 560 c40 4 66 -20 68 -58 c-40 -4 -66 20 -68 58z"/>
+            <path class="s01-lf" d="M844 560 c-40 4 -66 -20 -68 -58 c40 -4 66 20 68 58z"/>
+            <path class="s01-lf" d="M230 690 c-30 14 -58 4 -72 -24 c30 -14 58 -4 72 24z"/>
+            <path class="s01-lf" d="M850 690 c30 14 58 4 72 -24 c-30 -14 -58 -4 -72 24z"/>
+            <path class="s01-lf" d="M182 900 c-34 -2 -54 -24 -52 -54 c34 2 54 24 52 54z"/>
+            <path class="s01-lf" d="M898 900 c34 -2 54 -24 52 -54 c-34 2 -54 24 -52 54z"/>
+          </g>
+        </svg>
+        <div id="s01-kick" class="center kicker">Prancha I</div>
+        <div id="s01-halo" class="abs"></div>
+        <img id="s01-fox" class="abs" src="assets/fox_medallion_smile.webp" alt="" />
+        <div id="s01-cap" class="center sans">Atila's Client — moderação de lives</div>
+        <div id="s01-title" class="serif">
+          <span class="ln"><span class="w">Toda</span><span class="w">live</span><span class="w">tem</span></span>
+          <span class="ln"><span class="w">um</span><span class="w">chat</span><span class="w">que</span></span>
+          <span class="ln"><span class="w t">não</span><span class="w t">para.</span></span>
+        </div>
+        <div class="s01-clip" style="top:1212px"><div id="s01-r1" class="s01-row">
+          <div class="s01-b"><div class="s01-av" style="background:#E9B79C">A</div><div class="s01-bub"><div class="s01-nm">ana_luz</div><div class="s01-tx">oi Aurora!</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#B9CDB0">M</div><div class="s01-bub"><div class="s01-nm">mel.sol</div><div class="s01-tx">quando começa o sorteio?</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#E3CE8C">J</div><div class="s01-bub"><div class="s01-nm">jujuba</div><div class="s01-tx">que live linda</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#D2C0DE">L</div><div class="s01-bub"><div class="s01-nm">lele</div><div class="s01-tx">oi oi oi</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#E9B79C">P</div><div class="s01-bub"><div class="s01-nm">pedrinho</div><div class="s01-tx">sigam o perfil</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#B9CDB0">B</div><div class="s01-bub"><div class="s01-nm">bia_c</div><div class="s01-tx">boa noite pessoal</div></div></div>
+        </div></div>
+        <div class="s01-clip" style="top:1338px"><div id="s01-r2" class="s01-row">
+          <div class="s01-b"><div class="s01-av" style="background:#B9CDB0">B</div><div class="s01-bub"><div class="s01-nm">bia_c</div><div class="s01-tx">boa noite pessoal</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#D2C0DE">L</div><div class="s01-bub"><div class="s01-nm">lele</div><div class="s01-tx">oi oi oi</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#E9B79C">A</div><div class="s01-bub"><div class="s01-nm">ana_luz</div><div class="s01-tx">oi Aurora!</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#E3CE8C">J</div><div class="s01-bub"><div class="s01-nm">jujuba</div><div class="s01-tx">que live linda</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#E9B79C">P</div><div class="s01-bub"><div class="s01-nm">pedrinho</div><div class="s01-tx">sigam o perfil</div></div></div>
+          <div class="s01-b"><div class="s01-av" style="background:#B9CDB0">M</div><div class="s01-bub"><div class="s01-nm">mel.sol</div><div class="s01-tx">quando começa o sorteio?</div></div></div>
+        </div></div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        HF.draw(tl, "#s01-f1", 0.0, 1.8); HF.draw(tl, "#s01-f2", 0.25, 1.8);
+        ["#s01-v1","#s01-v2","#s01-v3","#s01-v4"].forEach((s,i)=>HF.draw(tl, s, 0.6+i*0.15, 1.6));
+        tl.fromTo(".s01-lf", { opacity:0, scale:0.3, transformOrigin:"50% 100%" }, { opacity:0.85, scale:1, duration:0.7, ease:"back.out(1.4)", stagger:0.12 }, 1.2);
+        HF.rise(tl, "#s01-kick", 0.3, { y: 20, d: 0.9 });
+        tl.fromTo("#s01-halo", { opacity:0, scale:0.7, transformOrigin:"50% 50%" }, { opacity:1, scale:1, duration:1.1, ease:"power3.out" }, 0.3);
+        tl.fromTo("#s01-fox", { opacity:0, scale:0.82, y:30, transformOrigin:"50% 50%" }, { opacity:1, scale:1, y:0, duration:1.1, ease:"power3.out" }, 0.4);
+        tl.to("#s01-fox", { y:-10, duration:5.0, ease:"sine.inOut" }, 1.5);
+        HF.rise(tl, "#s01-cap", 1.0, { y: 20, d: 0.9 });
+        const words = [[".ln:nth-child(1) .w:nth-child(1)",0.25],[".ln:nth-child(1) .w:nth-child(2)",0.65],[".ln:nth-child(1) .w:nth-child(3)",1.05],
+          [".ln:nth-child(2) .w:nth-child(1)",1.3],[".ln:nth-child(2) .w:nth-child(2)",1.5],[".ln:nth-child(2) .w:nth-child(3)",1.9],
+          [".ln:nth-child(3) .w:nth-child(1)",2.2],[".ln:nth-child(3) .w:nth-child(2)",2.5]];
+        words.forEach(([s,t])=>tl.fromTo("#s01-title "+s, { opacity:0, y:40 }, { opacity:1, y:0, duration:0.8, ease:"power3.out" }, t));
+        tl.to("#s01-title .t", { scale:1.05, duration:1.0, ease:"sine.inOut", transformOrigin:"50% 60%" }, 3.2);
+        tl.to("#s01-title .t", { scale:1, duration:1.0, ease:"sine.inOut" }, 4.2);
+        tl.fromTo(".s01-clip", { opacity:0 }, { opacity:1, duration:0.9, ease:"power2.out", stagger:0.2 }, 0.8);
+        tl.fromTo("#s01-r1", { x:40 }, { x:-1500, duration:5.4, ease:"power1.in" }, 0.8);
+        tl.fromTo("#s01-r2", { x:-2400 }, { x:-900, duration:5.4, ease:"power1.in" }, 0.8);
+        window.__timelines["s01"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

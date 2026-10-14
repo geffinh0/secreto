@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s02-title { top: 250px; font-size: 104px; line-height: 1.04; color: var(--forest); z-index: 9; }
+        #s02-title span { color: var(--terra); }
+        #s02-stream { position:absolute; left:0; top:640px; width:1080px; height:800px; overflow:hidden;
+          -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 90px, #000 710px, transparent 800px);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 90px, #000 710px, transparent 800px); }
+        .s02-layer { position:absolute; left:0; top:0; width:1080px; }
+        .s02-b { position:absolute; display:flex; align-items:center; gap:18px; background:var(--paper2); border:3px solid var(--rule);
+          border-radius:40px; box-shadow:0 18px 30px -18px rgba(31,58,46,.45); font-family:"Source Sans 3",sans-serif; font-weight:600; color:var(--forest); white-space:nowrap; }
+        .s02-b i { flex:none; border-radius:50%; display:block; }
+        #s02-back { filter: blur(3px); opacity:.55; }
+        #s02-mid { filter: blur(0.8px); opacity:.85; }
+        #s02-vig { position:absolute; inset:0; opacity:0; z-index:4; pointer-events:none;
+          background: radial-gradient(ellipse 62% 40% at 50% 54%, rgba(31,58,46,0) 0%, rgba(31,58,46,.12) 55%, rgba(31,58,46,.42) 100%); }
+        #s02-heroWrap { position:absolute; left:0; width:1080px; top:760px; height:240px; display:flex; justify-content:center; z-index:6; }
+        #s02-hero { position:relative; height:190px; padding:0 48px 0 30px; gap:26px; font-size:60px; border:8px solid var(--terra); border-radius:60px; background:var(--paper2);
+          display:flex; align-items:center; font-family:"Source Sans 3",sans-serif; font-weight:700; color:var(--forest); white-space:nowrap; margin-top:20px;
+          box-shadow:0 36px 50px -22px rgba(0,0,0,.55); }
+        #s02-hero i { width:90px; height:90px; border-radius:50%; background:var(--gold); flex:none; }
+        #s02-htag { position:absolute; right:-14px; top:-58px; height:78px; padding:0 30px; border-radius:39px; background:var(--terra); color:var(--paper2);
+          font-family:"Source Sans 3",sans-serif; font-weight:800; font-size:48px; display:flex; align-items:center; letter-spacing:.04em; }
+        .s02-w { position:absolute; z-index:6; height:112px; padding:0 28px 0 22px; gap:20px; font-size:46px; border:6px solid var(--terra); border-radius:46px; background:var(--paper2); display:flex; align-items:center;
+          font-family:"Source Sans 3",sans-serif; font-weight:700; color:var(--forest); white-space:nowrap; box-shadow:0 22px 34px -18px rgba(0,0,0,.5); }
+        .s02-w i { width:58px; height:58px; border-radius:50%; background:var(--gold); flex:none; }
+        .s02-w b { position:absolute; right:-6px; top:-44px; height:56px; padding:0 20px; border-radius:28px; background:var(--terra); color:var(--paper2); font-size:40px; display:flex; align-items:center; font-weight:800; }
+        #s02-fox { left:700px; top:1010px; width:310px; z-index:8; transform-origin:50% 100%; }
+        #s02-sub { position:absolute; left:70px; top:1448px; width:640px; text-align:left; font-size:52px; line-height:1.15; font-weight:700; color:var(--forest); z-index:9; }
+        #s02-orn { left:240px; top:520px; z-index:9; }
+      </style>
+      <div id="root" data-composition-id="s02" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s02-v1" d="M-20 1700 C 80 1500, 30 1250, 70 1000 S 30 600, 60 380" opacity=".6" />
+          <path id="s02-v2" d="M1100 1700 C 1000 1500, 1050 1250, 1010 1000 S 1050 600, 1020 380" opacity=".6" />
+        </svg>
+        <div id="s02-title" class="center serif">Moderar sozinha <span>cansa.</span></div>
+        <svg id="s02-orn" class="abs" width="600" height="70" viewBox="0 0 600 70" fill="none" stroke="#9A7B2F" stroke-width="3" stroke-linecap="round">
+          <path d="M0 35 H230"/><path d="M370 35 H600"/><path d="M255 40 C 285 8, 320 12, 345 38"/><circle cx="300" cy="22" r="5" fill="#9A7B2F"/><path d="M322 28 c14 -14 22 -2 12 8" />
+        </svg>
+        <div id="s02-stream">
+          <div id="s02-back" class="s02-layer"></div>
+          <div id="s02-mid" class="s02-layer"></div>
+          <div id="s02-front" class="s02-layer"></div>
+        </div>
+        <div id="s02-vig"></div>
+        <div id="s02-heroWrap"><div id="s02-hero"><i></i>compra seguidores aqui!<div id="s02-htag">spam</div></div></div>
+        <div class="s02-w" id="s02-w1" style="left:70px;top:1090px"><i></i>chata demais<b>chata</b></div>
+        <div class="s02-w" id="s02-w2" style="left:150px;top:1226px"><i></i>passa zap!!<b>spam</b></div>
+        <div class="s02-w" id="s02-w3" style="left:90px;top:1362px"><i></i>ch4t4 sem graça<b>chata</b></div>
+        <img id="s02-fox" class="abs" src="assets/fox_lookback.webp" alt="" />
+        <div id="s02-sub" class="sans">sem perder o ritmo da live.</div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        // gerador determinístico de balões
+        const MSG = ["oi gente!","quem é essa?","primeira vez aqui","manda um salve","que lindo","cadê o sorteio?","boa noite","olha o chat","amei demais","alguém viu?","tô chegando","bora!","tá demais","de onde você é?","kkkkk","ela voltou","som tá bom?","segue lá","muito bom","eita"];
+        const COL = ["#D2B568","#8FA67C","#C98A6A","#9A7B2F","#6E8B74"];
+        let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        function build(id, n, gap, fs, h, avatar) {
+          const el = document.getElementById(id); let html = "";
+          for (let k = 0; k < n; k++) {
+            const m = MSG[(k * 7 + id.length * 3) % MSG.length]; const left = k % 2 === 0;
+            const w = Math.round(fs * (m.length * 0.5 + 2.4) + avatar + 40);
+            const x = left ? 70 + Math.round(rnd() * 120) : 1080 - 70 - w - Math.round(rnd() * 120);
+            html += '<div class="s02-b" style="left:' + x + 'px;top:' + (k * gap) + 'px;height:' + h + 'px;padding:0 ' + Math.round(h * 0.3) + 'px 0 ' + Math.round(h * 0.2) + 'px;font-size:' + fs + 'px"><i style="width:' + avatar + 'px;height:' + avatar + 'px;background:' + COL[k % 5] + '"></i>' + m + '</div>';
+          }
+          el.innerHTML = html; el.style.height = (n * gap) + "px";
+        }
+        build("s02-back", 30, 110, 34, 70, 40);
+        build("s02-mid", 28, 150, 40, 94, 54);
+        build("s02-front", 26, 200, 46, 120, 70);
+        // fluxo: acelera até 7,0 s, desacelera até quase parar em 8,7 s
+        [["#s02-back", 1300, 150], ["#s02-mid", 2200, 240], ["#s02-front", 3300, 380]].forEach(([s, d1, d2]) => {
+          tl.fromTo(s, { y: 0 }, { y: -d1, duration: 7.0, ease: "power2.in" }, 0);
+          tl.to(s, { y: -d1 - d2, duration: 1.8, ease: "power3.out" }, 7.0);
+        });
+        tl.fromTo("#s02-stream", { opacity: 0 }, { opacity: 1, duration: 0.8, ease: "power1.out" }, 0.1);
+        HF.draw(tl, "#s02-v1", 0.3, 2.4); HF.draw(tl, "#s02-v2", 0.6, 2.4);
+        // título
+        HF.rise(tl, "#s02-title", 0.8, { y: 50, d: 1.0 });
+        tl.fromTo("#s02-orn", { opacity: 0, scaleX: 0.3, transformOrigin: "50% 50%" }, { opacity: 1, scaleX: 1, duration: 0.9, ease: "power3.out" }, 1.6);
+        // raposa cansada
+        tl.fromTo("#s02-fox", { opacity: 0, y: 70, rotation: 0 }, { opacity: 1, y: 0, rotation: 0, duration: 1.0, ease: "power3.out" }, 0.9);
+        tl.to("#s02-fox", { rotation: -4, y: 6, duration: 3.0, ease: "sine.inOut", yoyo: true, repeat: 1 }, 2.4);
+        tl.to("#s02-fox", { rotation: 0, y: 0, duration: 1.0, ease: "sine.inOut" }, 8.6);
+        // apoio
+        HF.rise(tl, "#s02-sub", 5.0, { y: 30, d: 0.9 });
+        // vinheta + balão em destaque
+        tl.fromTo("#s02-vig", { opacity: 0 }, { opacity: 1, duration: 1.2, ease: "sine.inOut" }, 7.6);
+        tl.to("#s02-sub", { opacity: 0, duration: 0.6, ease: "power1.inOut" }, 7.9);
+        tl.fromTo("#s02-heroWrap", { opacity: 0, scale: 0.7, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.3)" }, 8.3);
+        tl.fromTo("#s02-htag", { opacity: 0, scale: 0.3, rotation: -12, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, rotation: -6, duration: 0.7, ease: "back.out(1.8)" }, 9.5);
+        tl.to("#s02-heroWrap", { scale: 1.05, duration: 1.4, ease: "sine.inOut", transformOrigin: "50% 50%" }, 9.6);
+        // o clima muda: vinheta some, hero recua, onda de marcados
+        tl.to("#s02-vig", { opacity: 0.2, duration: 1.0, ease: "sine.inOut" }, 11.0);
+        tl.to("#s02-heroWrap", { scale: 0.92, duration: 0.9, ease: "power2.inOut" }, 11.1);
+        tl.fromTo(["#s02-w1", "#s02-w2", "#s02-w3"], { opacity: 0, x: -80, scale: 0.9, transformOrigin: "0% 50%" }, { opacity: 1, x: 0, scale: 1, duration: 0.7, ease: "back.out(1.3)", stagger: 0.4 }, 11.0);
+        window.__timelines["s02"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--paper); overflow: hidden; }
+        #s05-persp { position: absolute; left: -24px; top: 250px; width: 660px; height: 1428px; perspective: 1800px; }
+        #s05-phone { left: 30px; top: 65px; }
+        #s05-zoom { position: absolute; left: 0; top: 0; width: 568px; height: 1266px; }
+        #s05-zoom video { position: absolute; left: 0; top: 0; width: 568px; height: 1229px; object-fit: cover; }
+        .ring { position: absolute; border: 6px solid var(--terra); border-radius: 26px; box-shadow: 0 0 0 6px rgba(251,246,234,.75); opacity: 0; }
+        #s05-r0 { left: 364px; top: 18px; width: 190px; height: 60px; border-radius: 30px; }
+        #s05-r1 { left: 14px; top: 236px; width: 544px; height: 640px; border-radius: 40px; }
+        #s05-r2 { left: 10px; top: 898px; width: 162px; height: 104px; }
+        #s05-r3 { left: 182px; top: 898px; width: 140px; height: 104px; }
+        #s05-r4 { left: 340px; top: 536px; width: 214px; height: 78px; }
+        #s05-r5 { left: 10px; top: 1054px; width: 330px; height: 70px; }
+        .lab { position: absolute; left: 650px; width: 360px; min-height: 176px; box-sizing: border-box; padding: 18px 14px 18px 18px; display: flex; gap: 10px; align-items: flex-start; background: var(--paper2); border: 3px solid var(--gold); border-radius: 22px; box-shadow: 0 24px 40px -22px rgba(31,58,46,.5); opacity: 0; }
+        .lab .num { font-family: "Fraunces", serif; font-weight: 700; font-size: 68px; line-height: 1.1; color: var(--terra); width: 92px; flex: none; text-align: center; }
+        .lab .nm { font-family: "Source Sans 3", sans-serif; font-weight: 700; font-size: 46px; line-height: 1.1; color: var(--forest); }
+        .lab .sb { font-family: "Source Sans 3", sans-serif; font-weight: 600; font-size: 40px; line-height: 1.15; color: var(--muted); margin-top: 6px; }
+        #s05-lab1 { top: 290px; } #s05-lab2 { top: 590px; } #s05-lab3 { top: 890px; } #s05-lab4 { top: 1190px; }
+        .ld { opacity: 0; }
+        #s05-kick { left: 650px; top: 340px; width: 360px; }
+        #s05-title { left: 650px; top: 400px; width: 360px; font-size: 92px; line-height: 1.02; color: var(--forest); }
+        #s05-demo { left: 650px; width: 380px; top: 1500px; text-align: left; font-size: 36px; font-weight: 600; color: var(--muted); opacity: 0; }
+        #s05-recap { position: absolute; left: 70px; top: 270px; width: 940px; padding: 56px 44px 40px; box-sizing: border-box; background: var(--paper2); border: 4px solid var(--gold); border-radius: 40px; box-shadow: 0 40px 70px -34px rgba(31,58,46,.55); opacity: 0; }
+        #s05-recap h2 { margin: 0 0 36px; text-align: center; font-family: "Fraunces", serif; font-weight: 700; font-size: 132px; color: var(--forest); line-height: 1; }
+        .rrow { display: flex; align-items: center; gap: 24px; height: 230px; border-top: 3px solid var(--rule); opacity: 0; }
+        .rrow .num { font-family: "Fraunces", serif; font-weight: 700; font-size: 104px; color: var(--terra); width: 150px; text-align: center; }
+        .rrow .nm { flex: 1; font-family: "Source Sans 3", sans-serif; font-weight: 700; font-size: 54px; color: var(--forest); line-height: 1.1; }
+        .rrow .vl { font-family: "Fraunces", serif; font-weight: 700; font-size: 110px; color: var(--forest2); }
+        #s05-rr1 .vl { font-size: 76px; }
+        #s05-demo2 { text-align: center; font-size: 38px; font-weight: 600; color: var(--muted); margin-top: 26px; opacity: 0; }
+      </style>
+      <div id="root" data-composition-id="s05" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s05-v1" d="M30 1700 C 60 1480, 30 1260, 70 1000 S 40 560, 90 250" opacity=".6" />
+          <path id="s05-v2" d="M1050 1700 C 1020 1500, 1056 1300, 1030 1100 S 1050 640, 1020 250" opacity=".6" />
+          <path id="s05-l1" d="M70 980 c-42 -6 -66 -34 -64 -70 c42 4 68 30 64 70z" fill="#D2B568" stroke="none" opacity=".7" />
+          <path id="s05-l2" d="M1030 1080 c42 -6 66 -34 64 -70 c-42 4 -68 30 -64 70z" fill="#D2B568" stroke="none" opacity=".7" />
+          <path id="s05-l3" d="M60 640 c-34 -6 -52 -28 -50 -56 c34 4 54 24 50 56z" fill="#D2B568" stroke="none" opacity=".6" />
+          <path id="s05-l4" d="M1036 740 c34 -6 52 -28 50 -56 c-34 4 -54 24 -50 56z" fill="#D2B568" stroke="none" opacity=".6" />
+        </svg>
+        <div id="s05-persp">
+          <div id="s05-phone" class="phone">
+            <div class="screen">
+              <div id="s05-zoom">
+                <video id="s05-vid" class="clip" src="assets/clips/k02b.mp4" data-start="0" data-duration="12.9" data-media-start="0" muted playsinline></video>
+                <div id="s05-r0" class="ring"></div><div id="s05-r1" class="ring"></div><div id="s05-r2" class="ring"></div>
+                <div id="s05-r3" class="ring"></div><div id="s05-r4" class="ring"></div><div id="s05-r5" class="ring"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s05-kick" class="abs kicker">O painel</div>
+        <div id="s05-title" class="abs serif">de relance</div>
+        <div id="s05-ld1" class="leader ld"></div><div id="s05-ld2" class="leader ld"></div><div id="s05-ld3" class="leader ld"></div><div id="s05-ld4" class="leader ld"></div>
+        <div id="s05-lab1" class="lab"><div class="num">I</div><div><div class="nm">Status da live</div><div class="sb">Ao vivo agora</div></div></div>
+        <div id="s05-lab2" class="lab"><div class="num">II</div><div><div class="nm">Ações realizadas</div><div class="sb">pelo robô</div></div></div>
+        <div id="s05-lab3" class="lab"><div class="num">III</div><div><div class="nm">Regras ativas</div><div class="sb">em vigor</div></div></div>
+        <div id="s05-lab4" class="lab"><div class="num">IV</div><div><div class="nm">Fila de mensagens</div><div class="sb">à espera</div></div></div>
+        <div id="s05-recap">
+          <h2>Num relance</h2>
+          <div id="s05-rr1" class="rrow"><div class="num">I</div><div class="nm">Status da live</div><div class="vl">Ao vivo</div></div>
+          <div id="s05-rr2" class="rrow"><div class="num">II</div><div class="nm">Ações realizadas</div><div class="vl">67</div></div>
+          <div id="s05-rr3" class="rrow"><div class="num">III</div><div class="nm">Regras ativas</div><div class="vl">3</div></div>
+          <div id="s05-rr4" class="rrow"><div class="num">IV</div><div class="nm">Mensagens na fila</div><div class="vl">4</div></div>
+          <div id="s05-demo2" class="sans">dados de demonstração</div>
+        </div>
+        <div id="s05-demo" class="abs sans">dados de demonstração</div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        const S = 1.1;
+        // ponto da tela do app (x,y) -> página, dado o zoom
+        const P = (x, y, z, ox, oy) => [-6.4 + (ox + (x - ox) * z) * S, 267.7 + (oy + (y - oy) * z) * S];
+        function leader(id, labY, tx, ty, t, fadeAt) {
+          const x0 = 650, y0 = labY + 88;
+          const dx = tx - x0, dy = ty - y0, len = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+          gsap.set(id, { left: x0, top: y0, width: len, rotation: ang, transformOrigin: "0% 50%" });
+          tl.fromTo(id, { opacity: 1, scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power2.out" }, t);
+          tl.to(id, { opacity: 0, duration: 0.4 }, fadeAt);
+        }
+        // ornamento
+        HF.draw(tl, "#s05-v1", 0.2, 3.2); HF.draw(tl, "#s05-v2", 0.5, 3.2);
+        tl.fromTo(["#s05-l1", "#s05-l2", "#s05-l3", "#s05-l4"], { opacity: 0, scale: 0.4, transformOrigin: "50% 100%" }, { opacity: 0.7, scale: 1, duration: 0.9, ease: "back.out(1.4)", stagger: 0.25 }, 1.8);
+        tl.to(["#s05-l1", "#s05-l3"], { rotation: 4, duration: 6, ease: "sine.inOut", transformOrigin: "50% 100%", yoyo: true, repeat: 1 }, 3);
+        // celular: entrada e leve inclinação 3D
+        tl.fromTo("#s05-phone", { opacity: 0, y: 120, scale: S, rotationY: -12, rotationX: 3 }, { opacity: 1, y: 0, scale: S, rotationY: -6, rotationX: 2, duration: 1.3, ease: "power3.out" }, 0.1);
+        tl.to("#s05-phone", { rotationY: -3, rotationX: 0, duration: 11, ease: "sine.inOut" }, 1.5);
+        tl.to("#s05-phone", { y: 60, opacity: 0, duration: 0.7, ease: "power2.in" }, 12.6);
+        // título
+        HF.rise(tl, "#s05-kick", 0.9, { y: 30, d: 0.8 });
+        HF.rise(tl, "#s05-title", 1.1, { y: 50, d: 1.0 });
+        tl.to(["#s05-kick", "#s05-title"], { opacity: 0, duration: 0.5 }, 3.1);
+        // cabeçalho: Robô online
+        tl.fromTo("#s05-r0", { opacity: 0, scale: 1.4, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.3)" }, 1.5);
+        tl.to("#s05-r0", { opacity: 0, duration: 0.5 }, 2.9);
+        // I: status da live (zoom no card)
+        tl.fromTo("#s05-zoom", { scale: 1, transformOrigin: "284px 560px" }, { scale: 1.1, duration: 1.2, ease: "power2.inOut" }, 2.9);
+        tl.fromTo("#s05-r1", { opacity: 0, scale: 1.05, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.7, ease: "power2.out" }, 3.3);
+        tl.fromTo("#s05-lab1", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 3.2);
+        { const [tx, ty] = P(544, 560, 1.1, 284, 560); leader("#s05-ld1", 290, tx, ty, 3.6, 4.9); }
+        tl.to("#s05-r1", { opacity: 0, duration: 0.5 }, 4.9);
+        tl.to("#s05-lab1", { opacity: 0.55, duration: 0.5 }, 5.0);
+        // II: ações realizadas
+        tl.set("#s05-zoom", { transformOrigin: "284px 560px" }, 4.4);
+        tl.to("#s05-zoom", { scale: 1.1, transformOrigin: "284px 950px", duration: 1.2, ease: "power2.inOut" }, 4.4);
+        tl.fromTo("#s05-r2", { opacity: 0, scale: 1.2, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.3)" }, 5.2);
+        tl.fromTo("#s05-lab2", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 5.1);
+        { const [tx, ty] = P(172, 950, 1.1, 284, 950); leader("#s05-ld2", 590, tx, ty, 5.5, 7.3); }
+        tl.to("#s05-r2", { opacity: 0, duration: 0.4 }, 7.3);
+        tl.to("#s05-lab2", { opacity: 0.55, duration: 0.5 }, 7.5);
+        // III: regras ativas
+        tl.fromTo("#s05-r3", { opacity: 0, scale: 1.2, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.3)" }, 7.5);
+        tl.fromTo("#s05-lab3", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 7.6);
+        { const [tx, ty] = P(322, 950, 1.1, 284, 950); leader("#s05-ld3", 890, tx, ty, 7.9, 8.2); }
+        tl.to("#s05-r3", { opacity: 0, duration: 0.3 }, 8.2);
+        tl.to("#s05-lab3", { opacity: 0.55, duration: 0.5 }, 10.2);
+        // câmera acompanha a rolagem da gravação
+        tl.to("#s05-zoom", { scale: 1.0, transformOrigin: "284px 700px", duration: 1.0, ease: "power2.inOut" }, 7.6);
+        tl.to("#s05-zoom", { scale: 1.05, transformOrigin: "284px 820px", duration: 1.0, ease: "power2.inOut" }, 10.0);
+        // IV: fila de mensagens
+        tl.fromTo("#s05-r4", { opacity: 0, scale: 1.2, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.3)" }, 10.9);
+        tl.fromTo("#s05-r5", { opacity: 0, scale: 1.15, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.3)" }, 11.2);
+        tl.fromTo("#s05-lab4", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 10.8);
+        { const [tx, ty] = P(340, 1089, 1.05, 284, 820); leader("#s05-ld4", 1190, tx, ty, 11.2, 12.4); }
+        tl.to(["#s05-r4", "#s05-r5"], { opacity: 0, duration: 0.4 }, 12.5);
+        // saída: tudo cede lugar ao resumo
+        tl.to(["#s05-lab1", "#s05-lab2", "#s05-lab3", "#s05-lab4"], { opacity: 0, x: 30, duration: 0.5, ease: "power2.in" }, 12.5);
+        tl.to("#s05-ld4", { opacity: 0, duration: 0.3 }, 12.4);
+        tl.fromTo("#s05-recap", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.9, ease: "power3.out" }, 13.0);
+        ["#s05-rr1", "#s05-rr2", "#s05-rr3", "#s05-rr4"].forEach((s, i) => tl.fromTo(s, { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 13.3 + i * 0.25));
+        // nota
+        tl.to("#s05-demo", { opacity: 1, duration: 0.8 }, 4.0);
+        tl.to("#s05-demo", { opacity: 0, duration: 0.4 }, 12.5);
+        tl.fromTo("#s05-demo2", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 14.0);
+        window.__timelines["s05"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

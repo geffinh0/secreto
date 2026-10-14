@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-SemiBold.ttf'); font-weight: 600; } @font-face { font-family: 'Fraunces'; src: url('assets/Fraunces72ptSoft-Bold.ttf'); font-weight: 700; } @font-face { font-family: 'Source Sans 3'; src: url('assets/SourceSans3VF-Upright.ttf'); font-weight: 200 900; }
+
+        #root { position: absolute; inset: 0; background: var(--sage); overflow: hidden; }
+        #s08-kick { top: 252px; }
+        #s08-head { top: 296px; font-size: 104px; color: var(--forest); line-height: 1.1; }
+        .s08-card { z-index: 1; position: absolute; left: 70px; width: 600px; box-sizing: border-box; background: var(--paper2); border: 3px solid var(--rule); border-radius: 30px; padding: 26px 30px 26px 44px; box-shadow: 0 30px 50px -26px rgba(31,58,46,.55); overflow: hidden; }
+        .s08-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 14px; background: var(--goldL); }
+        .s08-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+        .s08-t { font-family: "Fraunces", serif; font-weight: 700; font-size: 50px; line-height: 58px; color: var(--forest); width: 380px; }
+        .s08-cap { font-family: "Source Sans 3", sans-serif; font-weight: 600; font-size: 44px; line-height: 54px; color: var(--muted); margin-top: 8px; }
+        .s08-sw { position: relative; flex: none; width: 112px; height: 62px; border-radius: 31px; background: #8E9A8D; margin-top: 4px; }
+        .s08-kn { position: absolute; left: 6px; top: 6px; width: 50px; height: 50px; border-radius: 25px; background: var(--paper2); box-shadow: 0 4px 8px rgba(0,0,0,.3); }
+        #s08-A { top: 430px; height: 290px; } #s08-B { z-index: 5; top: 742px; height: 344px; } #s08-C { top: 1108px; height: 236px; }
+        #s08-pw { position: absolute; z-index: 3; left: 425px; top: 388px; width: 600px; height: 1298px; perspective: 1800px; }
+        #s08-pw .phone { left: 0; top: 0; }
+        #s08-fox { left: 700px; top: 640px; width: 300px; }
+        #s08-obs { left: 690px; top: 540px; }
+        #s08-warn { z-index: 6; position: absolute; left: 70px; top: 1372px; width: 940px; box-sizing: border-box; padding: 18px 34px; border-radius: 22px; background: var(--terra); color: var(--paper2); font-family: "Source Sans 3", sans-serif; font-weight: 700; font-size: 44px; line-height: 54px; box-shadow: 0 22px 40px -18px rgba(0,0,0,.5); }
+        #s08-far { left: 664px; top: 540px; font-size: 38px; height: 76px; }
+      </style>
+      <div id="root" data-composition-id="s08" data-width="1080" data-height="1920">
+        <svg class="abs" style="left:0;top:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#9A7B2F" stroke-width="3" stroke-linecap="round">
+          <path id="s08-v1" d="M1090 1400 C 960 1300, 1040 1120, 930 1000 S 1040 760, 900 560 S 980 380, 880 300" opacity=".55" />
+          <path id="s08-v2" d="M1100 1500 C 1000 1400, 1060 1250, 1000 1150" opacity=".45" />
+          <path id="s08-l1" d="M930 1000 c-46 -8 -70 -40 -64 -78 c44 8 70 38 64 78z" fill="#D2B568" stroke="none" opacity=".75" />
+          <path id="s08-l2" d="M900 560 c46 -8 70 -40 64 -78 c-44 8 -70 38 -64 78z" fill="#D2B568" stroke="none" opacity=".75" />
+        </svg>
+        <div id="s08-kick" class="center kicker">Opções do robô</div>
+        <div id="s08-head" class="center serif">Você decide.</div>
+
+        <div id="s08-pw" data-layout-allow-overflow style="opacity:0"><div class="phone" id="s08-phone" data-layout-allow-overflow data-layout-allow-occlusion><div class="screen">
+          <video id="s08-vid" class="clip" src="assets/clips/k05.mp4" data-start="4.9" data-duration="7.0" data-media-start="0" muted playsinline></video>
+        </div></div></div>
+
+        <img id="s08-fox" class="abs" src="assets/fox_head_calm.webp" alt="" style="opacity:0" />
+        <div id="s08-obs" class="label-tag" style="opacity:0">só observando</div>
+
+        <div id="s08-A" data-layout-allow-occlusion class="s08-card" style="opacity:0">
+          <div class="s08-top"><div class="s08-t" data-layout-allow-occlusion>Moderação automática</div><div class="s08-sw" id="s08-swA" style="background:#A8461F"><div class="s08-kn" id="s08-knA" style="left:6px"></div></div></div>
+          <div class="s08-cap" data-layout-allow-occlusion>Desligada, o robô só observa o chat.</div>
+        </div>
+        <div id="s08-B" class="s08-card" style="opacity:0">
+          <div class="s08-top"><div class="s08-t" data-layout-allow-occlusion>Banimento permanente</div><div class="s08-sw" id="s08-swB"><div class="s08-kn" id="s08-knB"></div></div></div>
+          <div class="s08-cap" data-layout-allow-occlusion>Remove o usuário de forma permanente, e não só nesta live.</div>
+        </div>
+        <div id="s08-C" data-layout-allow-occlusion class="s08-card" style="opacity:0">
+          <div class="s08-top"><div class="s08-t" data-layout-allow-occlusion>Imunidade por diamantes</div><div class="s08-sw" id="s08-swC"><div class="s08-kn"></div></div></div>
+          <div class="s08-cap" data-layout-allow-occlusion>Mais uma opção nas regras.</div>
+        </div>
+        <div id="s08-far" class="pill gold" style="opacity:0">vale além da live</div>
+        <div id="s08-warn" style="opacity:0">Cuidado com palavras que peguem mensagens normais.</div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        HF.draw(tl, "#s08-v1", 0.3, 3.0); HF.draw(tl, "#s08-v2", 0.9, 2.2);
+        tl.fromTo(["#s08-l1", "#s08-l2"], { opacity: 0, scale: 0.4, transformOrigin: "50% 100%" }, { opacity: 0.75, scale: 1, duration: 0.8, ease: "back.out(1.4)", stagger: 0.25 }, 2.4);
+        HF.rise(tl, "#s08-kick", 0.3, { y: 24, d: 0.8 });
+        HF.rise(tl, "#s08-head", 0.5, { y: 50, d: 1.0 });
+        HF.pop(tl, "#s08-A", 2.0, { d: 0.9, y: 50 });
+        HF.pop(tl, "#s08-B", 2.5, { d: 0.9, y: 50 });
+        HF.pop(tl, "#s08-C", 3.0, { d: 0.9, y: 50 });
+        // A desliga
+        tl.fromTo("#s08-knA", { x: 44 }, { x: 0, duration: 0.7, ease: "back.out(2.4)", immediateRender: true }, 4.3);
+        tl.to("#s08-swA", { backgroundColor: "#8E9A8D", duration: 0.5, ease: "power1.inOut" }, 4.3);
+        tl.to("#s08-A", { borderColor: "#9A7B2F", duration: 0.5 }, 4.3);
+        tl.fromTo("#s08-A", { scale: 1, transformOrigin: "50% 50%" }, { scale: 1.03, duration: 0.5, ease: "sine.out", yoyo: true, repeat: 1 }, 4.2);
+        // raposa só observando
+        tl.fromTo("#s08-fox", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 6.6);
+        HF.pop(tl, "#s08-obs", 7.4, { d: 0.7, y: 20 });
+        tl.to("#s08-fox", { y: -10, duration: 1.4, ease: "sine.inOut", yoyo: true, repeat: 1 }, 7.6);
+        tl.to(["#s08-A", "#s08-C"], { opacity: 0.5, duration: 0.8 }, 7.9);
+        // celular entra, raposa encolhe
+        tl.to("#s08-obs", { opacity: 0, duration: 0.4 }, 7.9);
+        tl.to("#s08-fox", { opacity: 0, duration: 0.4 }, 8.0);
+        tl.fromTo("#s08-pw", { opacity: 0, x: 760 }, { opacity: 1, x: 0, duration: 1.2, ease: "power3.out" }, 7.9);
+        tl.fromTo("#s08-phone", { scale: 0.95, rotateY: -22, rotateX: 3, transformOrigin: "50% 50%" }, { scale: 0.95, rotateY: -10, rotateX: 3, duration: 1.3, ease: "power3.out", transformOrigin: "50% 50%" }, 7.9);
+        // B liga (toggle real do clip em ~10.0)
+        tl.fromTo("#s08-B", { scale: 1, transformOrigin: "50% 50%" }, { scale: 1.035, duration: 0.7, ease: "sine.out" }, 9.2);
+        tl.to("#s08-B", { borderColor: "#A8461F", duration: 0.5 }, 9.8);
+        tl.fromTo("#s08-knB", { x: 0 }, { x: 44, duration: 0.7, ease: "back.out(2.4)", immediateRender: false }, 9.75);
+        tl.to("#s08-swB", { backgroundColor: "#A8461F", duration: 0.5, ease: "power1.inOut" }, 10.0);
+        HF.pop(tl, "#s08-warn", 10.8, { d: 0.8, y: 30 });
+        tl.to("#s08-pw", { x: 760, duration: 1.0, ease: "power2.inOut" }, 11.5);
+        tl.fromTo("#s08-fox", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.8, ease: "power3.out", immediateRender: false }, 12.9);
+        HF.pop(tl, "#s08-far", 13.0, { d: 0.6, y: 20 });
+        window.__timelines["s08"] = tl;
+      </script>
+    </template>
+  </body>
+</html>
