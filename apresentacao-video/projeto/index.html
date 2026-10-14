@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Atila's Client</title>
+    <script src="assets/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Fraunces"; src: url("assets/Fraunces72ptSoft-SemiBold.ttf"); font-weight: 600; }
+      @font-face { font-family: "Fraunces"; src: url("assets/Fraunces72ptSoft-Bold.ttf"); font-weight: 700; }
+      @font-face { font-family: "Source Sans 3"; src: url("assets/SourceSans3VF-Upright.ttf"); font-weight: 200 900; }
+      :root {
+        --paper: #F4ECDC; --paper2: #FBF6EA; --sage: #E3E8D6; --sage2: #D3DBC2;
+        --forest: #1F3A2E; --forest2: #2D5242; --terra: #A8461F; --gold: #9A7B2F; --goldL: #D2B568;
+        --muted: #4A5B4F; --rule: #CFC3A8;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--paper); }
+      body { font-family: "Source Sans 3", sans-serif; color: var(--forest); }
+      #root { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+      .scene { position: absolute; inset: 0; overflow: hidden; }
+      .bg { position: absolute; inset: 0; }
+      .abs { position: absolute; }
+      .serif { font-family: "Fraunces", serif; font-weight: 700; letter-spacing: -0.01em; }
+      .label { position: absolute; left: 0; width: 1080px; text-align: center; font-weight: 700; font-size: 38px; letter-spacing: 0.22em; color: var(--gold); }
+      .title { position: absolute; left: 0; width: 1080px; text-align: center; line-height: 1.04; }
+      .card { position: absolute; border-radius: 34px; overflow: hidden; background: var(--paper);
+        border: 3px solid rgba(207,195,168,0.95);
+        box-shadow: 0 34px 60px -26px rgba(31,58,46,0.5), 0 3px 0 rgba(255,255,255,0.4) inset; }
+      .card img { display: block; width: 100%; }
+      .card.pad { padding: 16px 0; }
+      .pill { position: absolute; display: flex; align-items: center; gap: 16px; height: 92px; padding: 0 34px; border-radius: 46px;
+        font-weight: 700; font-size: 42px; white-space: nowrap; }
+      .pill.paper { background: var(--paper2); color: var(--forest); box-shadow: 0 22px 40px -18px rgba(0,0,0,0.5); border: 3px solid var(--rule); }
+      .pill.gold { background: var(--goldL); color: var(--forest); }
+      .pill.terra { background: var(--terra); color: var(--paper2); }
+      .pill.forest { background: var(--forest); color: var(--paper2); }
+      .dot { width: 22px; height: 22px; border-radius: 11px; background: var(--terra); flex: none; }
+      .dot.green { background: #2F6B3F; }
+      .msg { position: absolute; display: flex; align-items: center; gap: 22px; }
+      .av { width: 76px; height: 76px; border-radius: 38px; flex: none; display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 36px; color: var(--paper2); }
+      .bub { background: var(--paper2); border: 3px solid var(--rule); border-radius: 34px; padding: 12px 30px 14px; line-height: 1.12; }
+      .bub b { display: block; font-size: 28px; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
+      .bub span { font-size: 42px; font-weight: 600; }
+      .bub.flag { border-color: var(--terra); background: #FBEBDD; }
+      .flagtag { position: absolute; right: -6px; top: -22px; background: var(--terra); color: var(--paper2); font-size: 28px; font-weight: 700; padding: 4px 18px; border-radius: 18px; letter-spacing: 0.04em; }
+      #grain { position: absolute; inset: 0; z-index: 60; pointer-events: none; mix-blend-mode: multiply; opacity: 0.22;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.55 0'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>"); }
+      #wipe { position: absolute; left: 0; top: 0; width: 1080px; height: 2100px; background: var(--forest); z-index: 50; border-top: 14px solid var(--goldL); }
+      #wipe svg { position: absolute; left: 0; top: -70px; width: 1080px; height: 60px; }
+      .phone { position: absolute; width: 600px; height: 1261px; border-radius: 82px; background: #14271e; padding: 16px;
+        box-shadow: 0 60px 90px -30px rgba(0,0,0,0.6), 0 0 0 4px #2D5242 inset; }
+      .phone img { display: block; width: 568px; height: 1229px; border-radius: 66px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="63.5" data-width="1080" data-height="1920">
+
+      <!-- ============ CENA 1 — Gancho ============ -->
+      <div id="s1" class="clip scene" data-start="0" data-duration="4.0" data-track-index="1">
+        <div class="bg" style="background: var(--paper)"></div>
+        <div id="s1-title" class="title serif" style="top: 250px; font-size: 156px; color: var(--forest)">
+          <div id="s1-t1">O chat</div><div id="s1-t2">não para<span style="color: var(--terra)">.</span></div>
+        </div>
+        <div id="s1-rows"></div>
+        <img id="s1-fox" class="abs" src="assets/fox_head_calm.webp" style="left: 790px; top: 1560px; width: 220px" alt="" />
+      </div>
+
+      <!-- ============ CENA 2 — Problema ============ -->
+      <div id="s2" class="clip scene" data-start="4.0" data-duration="5.0" data-track-index="1">
+        <div class="bg" style="background: var(--paper)"></div>
+        <div id="s2-title" class="title serif" style="top: 250px; font-size: 112px"><div id="s2-t1">Moderar sozinha</div><div id="s2-t2">cansa<span style="color: var(--terra)">.</span></div></div>
+        <div id="s2-sub" class="title" style="top: 540px; font-size: 52px; font-weight: 600; color: var(--muted)">e você perde o ritmo da live.</div>
+        <div id="s2-rows"></div>
+        <img id="s2-fox" class="abs" src="assets/fox_lookback.webp" style="left: 800px; top: 1470px; width: 200px" alt="" />
+      </div>
+
+      <!-- ============ CENA 3 — Solução ============ -->
+      <div id="s3" class="clip scene" data-start="9.0" data-duration="11.0" data-track-index="1">
+        <div class="bg" style="background: var(--forest)"></div>
+        <svg class="abs" style="left: 0; top: 0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round">
+          <path id="s3-vine1" d="M-20 1500 C 160 1380, 120 1180, 260 1060 S 420 760, 300 560" opacity="0.26" />
+          <path id="s3-vine2" d="M1100 1560 C 920 1420, 960 1220, 820 1100 S 660 800, 780 600" opacity="0.26" />
+        </svg>
+        <img id="s3-seal" class="abs" src="assets/fox_medallion_smile.webp" style="left: 440px; top: 230px; width: 200px" alt="" />
+        <div id="s3-name" class="title serif" style="top: 440px; font-size: 104px; color: var(--paper2)">Atila's Client</div>
+        <div id="s3-tag" class="title" style="top: 565px; font-size: 48px; font-weight: 600; color: var(--goldL)">Um robô que modera sua live.</div>
+        <div id="s3-phone" class="phone" style="left: 240px; top: 800px"><img src="assets/full_dash_live.jpg" alt="" /></div>
+        <div id="s3-c1" class="pill paper" style="left: 50%; top: 660px"><span class="dot green"></span>Entra na live</div>
+        <div id="s3-c2" class="pill paper" style="left: 50%; top: 660px"><span class="dot green"></span>Lê o chat em tempo real</div>
+        <div id="s3-c3" class="pill paper" style="left: 50%; top: 660px"><span class="dot green"></span>Aplica suas regras</div>
+        <div id="s3-act" class="card" style="left: 160px; top: 1330px; width: 760px; background: var(--sage)"><img src="assets/dash_action.jpg" alt="" /></div>
+      </div>
+
+      <!-- ============ CENA 4 — Moderação ============ -->
+      <div id="s4" class="clip scene" data-start="20.0" data-duration="9.2" data-track-index="1">
+        <div class="bg" style="background: var(--paper)"></div>
+        <div class="label" style="top: 262px">MODERAÇÃO</div>
+        <div id="s4-title" class="title serif" style="top: 318px; font-size: 98px">Silenciar ou banir</div>
+        <div id="s4-chips" class="card" style="left: 110px; top: 470px; width: 860px"><img src="assets/chips.jpg" alt="" /></div>
+        <div id="s4-sil" class="card pad" style="left: 110px; top: 650px; width: 860px"><img src="assets/silenciar_rows.jpg" alt="" /></div>
+        <div id="s4-silt" class="pill gold" style="left: 150px; top: 604px; height: 74px; font-size: 36px">Silenciar</div>
+        <div id="s4-ban" class="card pad" style="left: 110px; top: 1040px; width: 860px"><img src="assets/banir_rows.jpg" alt="" /></div>
+        <div id="s4-bant" class="pill terra" style="left: 150px; top: 994px; height: 74px; font-size: 36px">Banir</div>
+        <div id="s4-p1" class="pill paper" style="left: 110px; top: 1420px; height: 84px; font-size: 38px">Palavra inteira</div>
+        <div id="s4-p2" class="pill paper" style="left: 440px; top: 1420px; height: 84px; font-size: 38px">Sem diferenciar maiúsculas</div>
+      </div>
+
+      <!-- ============ CENA 5 — Mensagens automáticas ============ -->
+      <div id="s5" class="clip scene" data-start="29.2" data-duration="9.0" data-track-index="1">
+        <div class="bg" style="background: var(--sage)"></div>
+        <div class="label" style="top: 262px">MENSAGENS AUTOMÁTICAS</div>
+        <div id="s5-title" class="title serif" style="top: 318px; font-size: 98px">Fila em repetição</div>
+        <div id="s5-q" class="card" style="left: 200px; top: 490px; width: 680px"><img src="assets/fila_rows.jpg" alt="" /></div>
+        <div id="s5-hl" class="abs" style="left: 203px; top: 493px; width: 674px; height: 158px; background: rgba(168,70,31,0.13); border-left: 10px solid var(--terra); border-radius: 6px"></div>
+        <div id="s5-iv" class="card" style="left: 150px; top: 1215px; width: 780px"><img src="assets/interval.jpg" alt="" /></div>
+        <div id="s5-min" class="pill terra" style="left: 580px; top: 1170px; height: 80px; font-size: 38px">mínimo 10 segundos</div>
+      </div>
+
+      <!-- ============ CENA 6 — Robô e streamer favorita ============ -->
+      <div id="s6" class="clip scene" data-start="38.2" data-duration="13.8" data-track-index="1">
+        <div class="bg" style="background: var(--paper)"></div>
+        <div class="label" style="top: 262px">ROBÔ</div>
+        <div id="s6-t1" class="title serif" style="top: 318px; font-size: 98px">Conecte o robô</div>
+        <div id="s6-t2" class="title serif" style="top: 318px; font-size: 98px">Streamer favorita</div>
+        <div id="s6-t3" class="title serif" style="top: 318px; font-size: 98px">Modera sozinho</div>
+        <div id="s6-hero" class="card" style="left: 80px; top: 620px; width: 920px"><img src="assets/robo_hero.jpg" alt="" /></div>
+        <div id="s6-a" class="card pad" style="left: 110px; top: 500px; width: 860px"><img src="assets/live_a.jpg" alt="" /></div>
+        <div id="s6-b" class="card pad" style="left: 110px; top: 1100px; width: 860px"><img src="assets/streamer_b.jpg" alt="" /></div>
+        <div id="s6-fav" class="pill gold" style="left: 150px; top: 1012px; height: 74px; font-size: 36px">Streamer favorita</div>
+        <div id="s6-dash" class="card" style="left: 110px; top: 530px; width: 860px; background: var(--forest)"><img src="assets/dash_top.jpg" alt="" /></div>
+        <img id="s6-fox" class="abs" src="assets/fox_head_laugh.webp" style="left: 770px; top: 1500px; width: 240px" alt="" />
+        <div id="s6-mod" class="pill forest" style="left: 110px; top: 1420px">
+          <svg width="40" height="44" viewBox="0 0 24 26" fill="none" stroke="#D2B568" stroke-width="2.2" stroke-linejoin="round"><path d="M12 2 L21 5.5 V12.5 C21 18 17 22 12 24 C7 22 3 18 3 12.5 V5.5 Z"/><path d="M8 13 l3 3 5-6" stroke-linecap="round"/></svg>
+          Ela adiciona o robô como moderador
+        </div>
+      </div>
+
+      <!-- ============ CENA 7 — Tranquilidade ============ -->
+      <div id="s7" class="clip scene" data-start="52.0" data-duration="5.0" data-track-index="1">
+        <div class="bg" style="background: var(--forest2)"></div>
+        <div id="s7-t1" class="title serif" style="top: 300px; font-size: 112px; color: var(--paper2)">Pode fechar a aba<span style="color: var(--goldL)">.</span></div>
+        <div id="s7-t2" class="title serif" style="top: 300px; font-size: 112px; color: var(--paper2)">O robô continua<span style="color: var(--goldL)">.</span></div>
+        <img id="s7-fox" class="abs" src="assets/fox_sleeping.webp" style="left: 300px; top: 650px; width: 480px" alt="" />
+        <div id="s7-tab" class="abs" style="left: 190px; top: 1280px; width: 700px; height: 96px; border-radius: 48px; background: var(--paper2); display: flex; align-items: center; justify-content: space-between; padding: 0 38px; color: var(--forest); font-weight: 700; font-size: 40px">
+          <span>atilaclient.tech</span><span id="s7-x" style="font-size: 52px; color: var(--terra); line-height: 1">×</span>
+        </div>
+        <div id="s7-live" class="pill paper" style="left: 150px; top: 1280px"><span id="s7-dot" class="dot green"></span>Ao vivo</div>
+        <div id="s7-mod" class="pill paper" style="left: 440px; top: 1280px; font-size: 40px">Moderando a live</div>
+      </div>
+
+      <!-- ============ CENA 8 — Encerramento ============ -->
+      <div id="s8" class="clip scene" data-start="57.0" data-duration="6.5" data-track-index="1">
+        <div class="bg" style="background: var(--paper)"></div>
+        <img id="s8-fox" class="abs" src="assets/fox_garden_sitting.webp" style="left: 300px; top: 270px; width: 480px" alt="" />
+        <div id="s8-name" class="title serif" style="top: 1020px; font-size: 130px">Atila's Client</div>
+        <svg id="s8-orn" class="abs" style="left: 240px; top: 1190px" width="600" height="70" viewBox="0 0 600 70" fill="none" stroke="#9A7B2F" stroke-width="3" stroke-linecap="round">
+          <path d="M0 35 H230"/><path d="M370 35 H600"/><path d="M255 40 C 285 8, 320 12, 345 38"/><circle cx="300" cy="22" r="5" fill="#9A7B2F"/><path d="M322 28 c14 -14 22 -2 12 8" />
+        </svg>
+        <div id="s8-url" class="pill terra" style="left: 190px; top: 1290px; width: 700px; height: 130px; justify-content: center; border-radius: 65px; font-family: Fraunces, serif; font-size: 70px; padding: 0">atilaclient.tech</div>
+        <div id="s8-sub" class="title" style="top: 1470px; font-size: 44px; font-weight: 600; color: var(--muted)">Moderação automática para lives do SuperLive</div>
+      </div>
+
+      <div id="wipe"><svg viewBox="0 0 1080 60" fill="none" stroke="#D2B568" stroke-width="3" stroke-linecap="round"><path d="M0 52 C 160 20, 300 60, 460 34 S 760 8, 1080 40"/><path d="M500 36 c 10 -22 26 -26 40 -22 c -6 16 -22 24 -40 22z" fill="#D2B568"/><path d="M820 20 c 12 -20 28 -22 42 -16 c -8 16 -24 22 -42 16z" fill="#D2B568"/></svg></div>
+      <div id="grain"></div>
+
+      <audio id="mix" data-start="0" data-duration="63.5" data-track-index="9" src="assets/mix.wav" data-volume="1"></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const E = { leaf: "power3.out", stem: "sine.inOut", press: "power2.inOut", rest: "back.out(1.2)", cut: "power2.in" };
+      const $ = (s) => document.querySelector(s);
+
+      // ---------- helpers
+      const rise = (sel, t, o = {}) => tl.fromTo(sel, { opacity: 0, y: o.y ?? 60 }, { opacity: 1, y: 0, duration: o.d ?? 0.55, ease: o.e ?? E.leaf }, t);
+      const pop = (sel, t, o = {}) => tl.fromTo(sel, { opacity: 0, scale: 0.86, y: o.y ?? 24, transformOrigin: o.origin ?? "50% 50%" }, { opacity: 1, scale: 1, y: 0, duration: o.d ?? 0.5, ease: E.rest }, t);
+      const fade = (sel, t, to, d = 0.3) => tl.to(sel, { opacity: to, duration: d, ease: "power1.inOut" }, t);
+
+      // ---------- chat rows (cenas 1 e 2)
+      const colors = ["#6F8A6A", "#A8461F", "#9A7B2F", "#2D5242", "#8F3A18", "#4A5B4F", "#6F8A6A", "#9A7B2F"];
+      function buildRows(host, rows, top, step, left) {
+        const h = $(host);
+        rows.forEach((r, i) => {
+          const d = document.createElement("div");
+          d.className = "msg"; d.id = host.slice(1) + "-r" + i;
+          d.style.left = left + (i % 2 ? 70 : 0) + "px"; d.style.top = top + i * step + "px";
+          d.innerHTML = `<div class="av" style="background:${colors[i % colors.length]}">${r[0][0].toUpperCase()}</div><div class="bub ${r[2] ? "flag" : ""}" style="position:relative"><b>${r[0]}</b><span>${r[1]}</span>${r[2] ? `<div class="flagtag">${r[2]}</div>` : ""}</div>`;
+          h.appendChild(d);
+        });
+      }
+      const rows1 = [["Lucas", "oi Aurora!"], ["Marina", "quando começa o sorteio?"], ["bot77", "compre seguidores aqui"], ["Bruno", "que live linda"], ["Ana", "oi oi oi"], ["Marina", "que live chata"], ["Davi", "sigam o perfil"], ["bot77", "spam spam spam"]];
+      buildRows("#s1-rows", rows1, 700, 112, 90);
+      const t1 = [0.55, 0.83, 1.11, 1.39, 1.67, 1.95, 2.23, 2.51];
+      rows1.forEach((r, i) => rise("#s1-rows-r" + i, t1[i], { y: 70, d: 0.45 }));
+      tl.fromTo("#s1-t1", { opacity: 0, y: 70 }, { opacity: 1, y: 0, duration: 0.7, ease: E.leaf }, 0.3);
+      tl.fromTo("#s1-t2", { opacity: 0, y: 70 }, { opacity: 1, y: 0, duration: 0.7, ease: E.leaf }, 0.55);
+      tl.fromTo("#s1-fox", { y: 300, opacity: 0 }, { y: 0, opacity: 1, duration: 0.9, ease: E.rest }, 1.4);
+      tl.to("#s1-rows", { y: -40, duration: 3.4, ease: "none" }, 0.5);
+
+      const rows2 = [["Lucas", "salve!"], ["bot77", "ganhe seguidores grátis", "spam"], ["Ana", "boa noite pessoal"], ["Marina", "que live chata", "chata"], ["Davi", "cadê o sorteio?"], ["bot77", "spam spam spam", "spam"], ["Bruno", "oi gente"]];
+      buildRows("#s2-rows", rows2, 700, 116, 90);
+      const t2 = [4.3, 4.9, 5.4, 5.8, 6.3, 6.6, 7.1];
+      rows2.forEach((r, i) => rise("#s2-rows-r" + i, t2[i], { y: 60, d: 0.4 }));
+      tl.fromTo("#s2-t1", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 4.15);
+      tl.fromTo("#s2-t2", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 4.4);
+      tl.fromTo("#s2-sub", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 5.9);
+      tl.fromTo("#s2-fox", { x: 260 }, { x: 0, duration: 0.8, ease: E.leaf }, 5.0);
+      // flags tremem para chamar atenção
+      [1, 3, 5].forEach((i, k) => tl.fromTo("#s2-rows-r" + i + " .flagtag", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: E.rest }, 7.3 + k * 0.35));
+
+      // ---------- cena 3
+      tl.fromTo("#s3-vine1", { strokeDasharray: 1600, strokeDashoffset: 1600 }, { strokeDashoffset: 0, duration: 3.2, ease: E.stem }, 9.2);
+      tl.fromTo("#s3-vine2", { strokeDasharray: 1600, strokeDashoffset: 1600 }, { strokeDashoffset: 0, duration: 3.2, ease: E.stem }, 9.5);
+      pop("#s3-seal", 9.3, { d: 0.7 });
+      rise("#s3-name", 9.5, { y: 40, d: 0.7 });
+      rise("#s3-tag", 10.2, { y: 30, d: 0.6 });
+      tl.fromTo("#s3-phone", { y: 1100, opacity: 1 }, { y: 0, duration: 1.1, ease: E.leaf }, 10.4);
+      tl.fromTo("#s3-phone", { scale: 1, transformOrigin: "50% 0%" }, { scale: 1.05, duration: 8.5, ease: "none" }, 11.5);
+      tl.set(["#s3-c1","#s3-c2","#s3-c3"], { xPercent: -50 }, 0);
+      [["#s3-c1", 12.7], ["#s3-c2", 14.0], ["#s3-c3", 15.4]].forEach(([s, t], i, arr) => { pop(s, t, { d: 0.45, y: 30 }); if (i < 2) tl.to(s, { opacity: 0, y: -20, duration: 0.25, ease: E.cut }, arr[i + 1][1] - 0.05); });
+      tl.fromTo("#s3-act", { opacity: 0, scale: 0.8, y: 60, transformOrigin: "50% 100%" }, { opacity: 1, scale: 1, y: 0, duration: 0.55, ease: E.rest }, 16.5);
+      tl.to("#s3-act", { y: -8, duration: 1.8, ease: E.stem, yoyo: true, repeat: 1 }, 17.2);
+
+      // ---------- cena 4
+      rise("#s4-title", 20.2, { y: 40 });
+      pop("#s4-chips", 20.35, { d: 0.5 });
+      pop("#s4-sil", 20.9, { d: 0.55 }); pop("#s4-silt", 21.2, { d: 0.45, y: 14 });
+      tl.fromTo("#s4-sil", { boxShadow: "0 34px 60px -26px rgba(31,58,46,.5), 0 0 0 0px rgba(154,123,47,0)" }, { boxShadow: "0 34px 60px -26px rgba(31,58,46,.5), 0 0 0 10px rgba(154,123,47,.9)", duration: 0.3, yoyo: true, repeat: 1, ease: E.press }, 22.0);
+      pop("#s4-ban", 22.9, { d: 0.55 }); pop("#s4-bant", 23.2, { d: 0.45, y: 14 });
+      tl.fromTo("#s4-ban", { boxShadow: "0 34px 60px -26px rgba(31,58,46,.5), 0 0 0 0px rgba(168,70,31,0)" }, { boxShadow: "0 34px 60px -26px rgba(31,58,46,.5), 0 0 0 10px rgba(168,70,31,.9)", duration: 0.3, yoyo: true, repeat: 1, ease: E.press }, 23.6);
+      tl.fromTo(["#s4-chips","#s4-sil","#s4-ban"], { y: 0 }, { y: -10, duration: 8, ease: "none", immediateRender: false }, 21.2);
+      pop("#s4-p1", 24.5, { d: 0.45, y: 20 }); pop("#s4-p2", 26.4, { d: 0.45, y: 20 });
+
+      // ---------- cena 5
+      rise("#s5-title", 29.35, { y: 40 });
+      pop("#s5-q", 29.5, { d: 0.55 });
+      tl.set("#s5-hl", { opacity: 0 }, 0);
+      [32.6, 33.3, 34.0, 34.7].forEach((t, i) => {
+        tl.fromTo("#s5-hl", { y: i * 160.4, opacity: 0 }, { y: i * 160.4, opacity: 1, duration: 0.18, ease: "power1.out" }, t);
+        tl.to("#s5-hl", { opacity: 0, duration: 0.18 }, t + 0.5);
+      });
+      pop("#s5-iv", 34.85, { d: 0.55 });
+      pop("#s5-min", 36.5, { d: 0.5, y: 20 });
+
+      // ---------- cena 6
+      tl.fromTo("#s6-t1", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 38.4);
+      pop("#s6-hero", 38.5, { d: 0.55 });
+      tl.to("#s6-t1", { opacity: 0, duration: 0.25 }, 41.8);
+      tl.to("#s6-hero", { opacity: 0, y: -40, duration: 0.35, ease: E.cut }, 40.1);
+      pop("#s6-a", 40.4, { d: 0.5 });
+      pop("#s6-b", 41.0, { d: 0.5 });
+      tl.fromTo("#s6-t2", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 42.0);
+      pop("#s6-fav", 42.1, { d: 0.45, y: 14 });
+      tl.to(["#s6-a", "#s6-b", "#s6-fav", "#s6-t2"], { opacity: 0, y: 30, duration: 0.4, ease: E.cut }, 44.1);
+      tl.fromTo("#s6-t3", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 44.4);
+      pop("#s6-dash", 44.4, { d: 0.6 });
+      tl.fromTo("#s6-fox", { y: 330, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: E.rest }, 45.0);
+      pop("#s6-mod", 48.45, { d: 0.5, y: 20 });
+      tl.fromTo("#s6-dash", { scale: 1, transformOrigin: "50% 0%" }, { scale: 1.035, duration: 7, ease: "none" }, 45.0);
+      tl.fromTo("#s6-hero", { scale: 1, transformOrigin: "50% 50%" }, { scale: 1.03, duration: 1.7, ease: "none" }, 38.5);
+
+      // ---------- cena 7
+      tl.fromTo("#s7-t1", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 52.3);
+      tl.fromTo("#s7-fox", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.8, ease: E.leaf }, 52.4);
+      tl.fromTo("#s7-tab", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: E.leaf }, 52.6);
+      tl.to("#s7-tab", { scale: 0.9, duration: 0.15, ease: E.press, transformOrigin: "50% 50%" }, 53.3);
+      tl.to("#s7-tab", { opacity: 0, y: -50, scale: 0.4, duration: 0.35, ease: E.cut }, 53.45);
+      tl.to("#s7-t1", { opacity: 0, duration: 0.25 }, 53.5);
+      tl.fromTo("#s7-t2", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 53.7);
+      pop("#s7-live", 53.9, { d: 0.5, y: 20 }); pop("#s7-mod", 54.1, { d: 0.5, y: 20 });
+      tl.to("#s7-dot", { scale: 1.5, opacity: 0.45, duration: 0.7, ease: E.stem, yoyo: true, repeat: 3, transformOrigin: "50% 50%" }, 54.4);
+      tl.to("#s7-fox", { y: -10, duration: 1.4, ease: E.stem, yoyo: true, repeat: 1 }, 54.0);
+
+      // ---------- cena 8
+      tl.fromTo("#s8-fox", { opacity: 0, y: 70 }, { opacity: 1, y: 0, duration: 0.8, ease: E.leaf }, 57.2);
+      rise("#s8-name", 57.45, { y: 40, d: 0.7 });
+      tl.fromTo("#s8-orn", { opacity: 0, scaleX: 0.4, transformOrigin: "50% 50%" }, { opacity: 1, scaleX: 1, duration: 0.7, ease: E.leaf }, 57.9);
+      tl.fromTo("#s8-sub", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6, ease: E.leaf }, 58.6);
+      pop("#s8-url", 59.55, { d: 0.65, y: 30 });
+      tl.to("#s8-url", { scale: 1.04, duration: 0.8, ease: E.stem, yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, 60.6);
+      tl.to("#s8-fox", { y: -8, duration: 1.8, ease: E.stem, yoyo: true, repeat: 1 }, 59.0);
+
+      // ---------- transições (herbário)
+      [4.0, 9.0, 20.0, 29.2, 38.2, 52.0, 57.0].forEach((t) => tl.fromTo("#wipe", { yPercent: 100 }, { yPercent: -100, duration: 0.7, ease: E.press, immediateRender: false }, t - 0.35));
+      tl.set("#wipe", { yPercent: 100 }, 0);
+      tl.fromTo("#grain", { opacity: 0.22 }, { opacity: 0.22, duration: 63.5 }, 0);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
