@@ -7,11 +7,11 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Atila's Client — Painel de Controle e Moderação Automática para SuperLive">
-  <meta name="theme-color" content="#121212">
+  <meta name="theme-color" content="#F4ECDC">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Atila's Client">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -23,53 +23,45 @@
   <style>
     html, body { height: 100%; }
     body {
-      background-color: #121212;
+      background-color: #F4ECDC;
       margin: 0;
-      color: #F4F4F0;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1F3A2E;
+      font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
     }
+    /* Same layout as AppSplash (lib/widgets/common/app_splash.dart): the fox
+       from behind, a ring and one line, centred - so the hand-off from this
+       page to Flutter is invisible. */
     .loading-container {
       box-sizing: border-box;
       height: 100%;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      padding: 24px 16px 32px;
-      transition: opacity 0.16s ease;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.24s ease;
     }
-    .logo { width: 96px; height: 96px; object-fit: contain; }
-    .loading-title {
-      font-size: 40px;
-      font-weight: 800;
-      line-height: 1.05;
-      letter-spacing: -0.04em;
-      margin: 0 0 8px;
+    .fox { height: 132px; width: auto; display: block; }
+    .ring {
+      width: 28px;
+      height: 28px;
+      margin-top: 24px;
+      box-sizing: border-box;
+      border: 2.5px solid #E3E8D6;
+      border-top-color: #A8461F;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
     }
-    .loading-sub { font-size: 16px; color: #A8A8A4; margin: 0 0 24px; }
-    .spinner-bar { width: 100%; max-width: 320px; height: 4px; background: #262626; overflow: hidden; position: relative; }
-    .spinner-bar::after {
-      content: '';
-      position: absolute;
-      left: -40%;
-      height: 100%;
-      width: 40%;
-      background: #E07B39;
-      animation: indeterminate 1.4s ease-in-out infinite;
-    }
-    @keyframes indeterminate { 0% { left: -40%; } 100% { left: 100%; } }
-    @media (min-width: 900px) { .loading-container { padding: 32px; } }
-    @media (prefers-reduced-motion: reduce) { .spinner-bar::after { animation: none; left: 0; width: 100%; } }
+    .loading-sub { font-size: 14px; line-height: 1.45; color: #4A5B4F; margin: 16px 0 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .ring { animation: none; border-top-color: #A8461F; } }
   </style>
 </head>
 <body>
-  <div class="loading-container" id="loading-indicator">
-    <img class="logo" src="favicon.png" alt="">
-    <div>
-      <h1 class="loading-title">Atila's Client</h1>
-      <p class="loading-sub">Iniciando o sistema</p>
-      <div class="spinner-bar" role="progressbar" aria-label="Carregando"></div>
-    </div>
+  <div class="loading-container" id="loading-indicator" role="status" aria-label="Carregando">
+    <img class="fox" src="assets/assets/fox/fox_back.webp" alt="">
+    <div class="ring"></div>
+    <p class="loading-sub">Abrindo o painel</p>
   </div>
 
   <script>
@@ -109,7 +101,7 @@
         loadingIndicator.style.opacity = '0';
         setTimeout(function() {
           loadingIndicator.remove();
-        }, 160);
+        }, 240);
       }
     });
   </script>

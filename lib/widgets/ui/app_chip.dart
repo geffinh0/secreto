@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_type.dart';
 
 enum AppTone { neutral, accent, success, warning, danger }
 
-/// Status or filter chip. Status tones keep a raised ground and put the colour
-/// on the icon, so meaning never depends on colour alone (icon + word).
-/// With [onTap] it works as a filter: selected fills with the accent.
+/// Status or filter chip. Status tones keep a pale-sage ground and put the
+/// colour on the icon, so meaning never depends on colour alone (icon + word).
+/// With [onTap] it works as a filter: selected fills with forest green.
 class AppChip extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -40,9 +41,9 @@ class AppChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = selected ? AppColors.accent : AppColors.raised;
-    final fg = selected ? AppColors.onAccent : AppColors.ink;
-    final iconColor = selected ? AppColors.onAccent : _toneColor;
+    final fill = selected ? AppColors.forest : AppColors.raised;
+    final fg = selected ? AppColors.onForest : AppColors.ink;
+    final iconColor = selected ? AppColors.onForest : _toneColor;
 
     final body = ConstrainedBox(
       constraints: BoxConstraints(minHeight: onTap == null ? 32 : 48),
@@ -67,12 +68,19 @@ class AppChip extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return ColoredBox(color: fill, child: body);
+    if (onTap == null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(color: fill, borderRadius: AppShape.quiet),
+        child: body,
+      );
+    }
     return Semantics(
       button: true,
       selected: selected,
       child: Material(
         color: fill,
+        shape: AppShape.quietBorder,
+        clipBehavior: Clip.antiAlias,
         child: InkWell(onTap: onTap, child: body),
       ),
     );

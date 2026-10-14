@@ -298,6 +298,7 @@ class _RuleList extends StatelessWidget {
     }
     if (total == 0) {
       return AppStateView(
+        pose: FoxPose.sleeping,
         title: 'Nenhuma palavra cadastrada',
         message: isMute
             ? 'Adicione uma palavra acima para o robô começar a silenciar.'

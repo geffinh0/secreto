@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../core/theme/app_colors.dart';
+import '../core/theme/app_motion.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/change_password_screen.dart';
 import '../screens/auth/login_screen.dart';
@@ -12,6 +12,7 @@ import '../screens/bot/bot_control_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/stats/stats_screen.dart';
 import '../screens/admin/admin_screen.dart';
+import '../widgets/common/app_splash.dart';
 import '../widgets/shell/main_shell.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
@@ -66,56 +67,84 @@ GoRouter createRouter(AuthProvider authProvider) {
     routes: [
       GoRoute(
         path: _splashPath,
-        builder: (context, state) => const Scaffold(
-          backgroundColor: AppColors.canvas,
-          body: Center(child: CircularProgressIndicator(color: AppColors.accent)),
-        ),
+        pageBuilder: (context, state) => _page(state, const AppSplash()),
       ),
       GoRoute(
         path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => _page(state, const LoginScreen()),
       ),
       GoRoute(
         path: '/register',
-        builder: (context, state) => const RegisterScreen(),
+        pageBuilder: (context, state) => _page(state, const RegisterScreen()),
       ),
       GoRoute(
         path: '/admin',
-        builder: (context, state) => const AdminScreen(),
+        pageBuilder: (context, state) => _page(state, const AdminScreen()),
       ),
       GoRoute(
         path: _changePasswordPath,
-        builder: (context, state) => const ChangePasswordScreen(),
+        pageBuilder: (context, state) => _page(state, const ChangePasswordScreen()),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
           GoRoute(
             path: '/dashboard',
-            builder: (context, state) => const DashboardScreen(),
+            pageBuilder: (context, state) => _page(state, const DashboardScreen()),
           ),
           GoRoute(
             path: '/moderation',
-            builder: (context, state) => const ModerationScreen(),
+            pageBuilder: (context, state) => _page(state, const ModerationScreen()),
           ),
           GoRoute(
             path: '/messages',
-            builder: (context, state) => const AutoMessagesScreen(),
+            pageBuilder: (context, state) => _page(state, const AutoMessagesScreen()),
           ),
           GoRoute(
             path: '/bot',
-            builder: (context, state) => const BotControlScreen(),
+            pageBuilder: (context, state) => _page(state, const BotControlScreen()),
           ),
           GoRoute(
             path: '/settings',
-            builder: (context, state) => const SettingsScreen(),
+            pageBuilder: (context, state) => _page(state, const SettingsScreen()),
           ),
           GoRoute(
             path: '/stats',
-            builder: (context, state) => const StatsScreen(),
+            pageBuilder: (context, state) => _page(state, const StatsScreen()),
           ),
         ],
       ),
     ],
+  );
+}
+
+/// Every route enters with a short fade and a 12px rise, and the page it
+/// replaces fades out underneath, so moving between screens reads as one
+/// continuous motion. With reduced motion the page simply appears.
+CustomTransitionPage<void> _page(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AppMotion.slow + const Duration(milliseconds: 40),
+    reverseTransitionDuration: AppMotion.base,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (AppMotion.reduced(context)) return child;
+      final enter = CurvedAnimation(parent: animation, curve: AppMotion.curve);
+      final leave =
+          CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeIn);
+      return FadeTransition(
+        opacity: ReverseAnimation(leave),
+        child: FadeTransition(
+          opacity: enter,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.015),
+              end: Offset.zero,
+            ).animate(enter),
+            child: child,
+          ),
+        ),
+      );
+    },
   );
 }

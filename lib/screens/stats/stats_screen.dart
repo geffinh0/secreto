@@ -61,6 +61,7 @@ class _StatsScreenState extends State<StatsScreen> {
         else if (provider.error != null && stats == null)
           AppStateView(
             kind: AppStateKind.error,
+            pose: FoxPose.lookback,
             title: 'Não foi possível carregar as estatísticas',
             message: provider.error,
             actionLabel: 'Tentar de novo',
@@ -256,7 +257,7 @@ class _ByDay extends StatelessWidget {
           ? const AppStateView(
               title: 'Nenhuma ação registrada',
               message: 'Nenhuma ação foi feita nesse período.')
-          : AppRowList(gap: 4, children: [
+          : AppRowList(children: [
               for (final d in days.reversed)
                 _BarRow(
                   label: DateFormat('dd/MM').format(d.day),

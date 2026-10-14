@@ -3,8 +3,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_type.dart';
 
-/// Square switch: a 56x32 track with a square thumb. On = accent track and
-/// dark thumb; off = raised track and muted thumb. The hit area is 48px tall.
+/// A 56x32 track with a round thumb. On = terracotta track and paper thumb;
+/// off = pale-sage track with a muted outline. The hit area is 48px tall.
 class AppSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -41,15 +41,27 @@ class AppSwitch extends StatelessWidget {
               curve: AppMotion.curve,
               width: 56,
               height: 32,
-              padding: const EdgeInsets.all(4),
-              color: !enabled
-                  ? AppColors.surface
-                  : (value ? AppColors.accent : AppColors.raised),
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                color: !enabled
+                    ? AppColors.surface
+                    : (value ? AppColors.accent : AppColors.raised),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: !enabled
+                      ? AppColors.rule
+                      : (value ? AppColors.accent : AppColors.muted),
+                  width: 1.5,
+                ),
+              ),
               alignment: value ? Alignment.centerRight : Alignment.centerLeft,
               child: Container(
                 width: 24,
                 height: 24,
-                color: value ? AppColors.onAccent : AppColors.muted,
+                decoration: BoxDecoration(
+                  color: value ? AppColors.onAccent : AppColors.muted,
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
           ),

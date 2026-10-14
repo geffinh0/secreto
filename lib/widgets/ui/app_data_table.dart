@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_type.dart';
 
 class AppTableColumn {
@@ -11,8 +12,8 @@ class AppTableColumn {
       {this.flex = 1, this.alignment = Alignment.centerLeft});
 }
 
-/// Table from 900px up (header on raised, rows zebra-striped by tone, no
-/// lines); below that every row becomes a stacked block of "label / value"
+/// Table from 900px up (header on pale sage, rows separated by hairlines, no
+/// zebra); below that every row becomes a stacked block of "label / value"
 /// pairs, so nothing scrolls sideways on a phone.
 class AppDataTable extends StatelessWidget {
   final List<AppTableColumn> columns;
@@ -43,53 +44,62 @@ class AppDataTable extends StatelessWidget {
   }
 
   Widget _table() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          color: AppColors.raised,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              for (final c in columns)
-                Expanded(
-                  flex: c.flex,
-                  child: Align(
-                    alignment: c.alignment,
-                    child: Text(c.label, style: AppType.label),
-                  ),
-                ),
-            ],
-          ),
+    return Material(
+        color: AppColors.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppShape.quiet,
+          side: AppShape.hairline,
         ),
-        for (int i = 0; i < rows.length; i++)
-          Material(
-            color: i.isEven ? AppColors.surface : AppColors.canvas,
-            child: InkWell(
-              onTap: onRowTap == null ? null : () => onRowTap!(i),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 56),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      for (int c = 0; c < columns.length; c++)
-                        Expanded(
-                          flex: columns[c].flex,
-                          child: Align(
-                            alignment: columns[c].alignment,
-                            child: rows[i][c],
-                          ),
-                        ),
-                    ],
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              color: AppColors.raised,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  for (final c in columns)
+                    Expanded(
+                      flex: c.flex,
+                      child: Align(
+                        alignment: c.alignment,
+                        child: Text(c.label, style: AppType.label),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            for (int i = 0; i < rows.length; i++) ...[
+              if (i > 0) const Divider(),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onRowTap == null ? null : () => onRowTap!(i),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 56),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          for (int c = 0; c < columns.length; c++)
+                            Expanded(
+                              flex: columns[c].flex,
+                              child: Align(
+                                alignment: columns[c].alignment,
+                                child: rows[i][c],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-      ],
-    );
+            ],
+          ],
+        ));
   }
 
   Widget _stacked() {
@@ -100,6 +110,11 @@ class AppDataTable extends StatelessWidget {
           if (i > 0) const SizedBox(height: 8),
           Material(
             color: AppColors.surface,
+            shape: const RoundedRectangleBorder(
+              borderRadius: AppShape.quiet,
+              side: AppShape.hairline,
+            ),
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onRowTap == null ? null : () => onRowTap!(i),
               child: Padding(

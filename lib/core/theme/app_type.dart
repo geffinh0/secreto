@@ -1,17 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// One family (Inter), four sizes, three weights. Left aligned, tight
-/// display tracking, 14px floor.
+/// Two local families. Fraunces (soft serif) only for display type from 20px
+/// up: page titles, section headings, hero numbers. Source Sans 3 for body,
+/// forms, tables, buttons and every small size (14px floor).
 class AppType {
   AppType._();
 
-  static TextStyle _inter(double size, FontWeight weight,
-      {double height = 1.4, double tracking = 0, Color color = AppColors.ink}) {
-    return GoogleFonts.inter(
+  static TextStyle _serif(double size, FontWeight weight,
+      {double height = 1.15, double tracking = 0, Color color = AppColors.ink}) {
+    return TextStyle(
+      fontFamily: 'Fraunces',
       fontSize: size,
       fontWeight: weight,
+      height: height,
+      letterSpacing: tracking,
+      color: color,
+    );
+  }
+
+  // The variable file carries the weight on the wght axis.
+  static TextStyle _sans(double size, FontWeight weight,
+      {double height = 1.45, double tracking = 0, Color color = AppColors.ink}) {
+    return TextStyle(
+      fontFamily: 'SourceSans3',
+      fontSize: size,
+      fontWeight: weight,
+      fontVariations: [FontVariation('wght', weight.value.toDouble())],
       height: height,
       letterSpacing: tracking,
       color: color,
@@ -19,27 +34,31 @@ class AppType {
     );
   }
 
-  /// 40 / 800 - login, hero numbers. Never more than two lines.
+  /// Fraunces 44 / 700 - login title, the big status line. Max two lines.
   static TextStyle get display =>
-      _inter(40, FontWeight.w800, height: 1.05, tracking: -1.6);
+      _serif(44, FontWeight.w700, height: 1.05, tracking: -0.8);
 
-  /// 24 / 800 - page title.
+  /// Fraunces 28 / 600 - page title, dialog title.
   static TextStyle get title =>
-      _inter(24, FontWeight.w800, height: 1.15, tracking: -0.6);
+      _serif(28, FontWeight.w600, height: 1.15, tracking: -0.3);
 
-  /// 16 / 800 - section heading.
-  static TextStyle get heading => _inter(16, FontWeight.w800, height: 1.3);
+  /// Fraunces 20 / 600 - section heading.
+  static TextStyle get heading => _serif(20, FontWeight.w600, height: 1.25);
 
-  /// 16 / 400 - body.
-  static TextStyle get body => _inter(16, FontWeight.w400, height: 1.5);
+  /// Fraunces 36 / 600 - hero numbers (stats, counters).
+  static TextStyle get numeral =>
+      _serif(36, FontWeight.w600, height: 1.05, tracking: -0.4);
 
-  /// 16 / 600 - emphasised body, buttons.
-  static TextStyle get bodyStrong => _inter(16, FontWeight.w600, height: 1.4);
+  /// Source Sans 16 / 400 - body.
+  static TextStyle get body => _sans(16, FontWeight.w400, height: 1.5);
 
-  /// 14 / 600 - labels, nav, chips.
-  static TextStyle get label => _inter(14, FontWeight.w600, height: 1.3);
+  /// Source Sans 16 / 600 - emphasised body, buttons.
+  static TextStyle get bodyStrong => _sans(16, FontWeight.w600, height: 1.4);
 
-  /// 14 / 400 muted - secondary notes only.
+  /// Source Sans 14 / 600 - labels, nav, chips, table headers.
+  static TextStyle get label => _sans(14, FontWeight.w600, height: 1.3);
+
+  /// Source Sans 14 / 400 muted - secondary notes, captions.
   static TextStyle get meta =>
-      _inter(14, FontWeight.w400, height: 1.45, color: AppColors.muted);
+      _sans(14, FontWeight.w400, height: 1.45, color: AppColors.muted);
 }

@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:atilas_client/core/constants/app_constants.dart';
@@ -135,10 +134,6 @@ Finder fieldByLabel(String label) => find.descendant(
     );
 
 void main() {
-  setUpAll(() {
-    GoogleFonts.config.allowRuntimeFetching = false;
-  });
-
   group('models', () {
     test('PortalUser accepts is_admin as int (what /auth/me used to send)', () {
       final user = PortalUser.fromJson({
@@ -562,7 +557,7 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: [ChangeNotifierProvider(create: (_) => AuthProvider(api: FakeApi()))],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const LoginScreen()),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const LoginScreen()),
         ),
       );
       await tester.pump(const Duration(seconds: 1)); // finish the entrance animation
@@ -618,7 +613,7 @@ void main() {
             ChangeNotifierProvider<BotProvider>.value(value: bot),
             ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const Scaffold(body: BotControlScreen())),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const Scaffold(body: BotControlScreen())),
         ),
       );
       await tester.pump();
@@ -657,7 +652,7 @@ void main() {
             ChangeNotifierProvider<BotProvider>.value(value: bot),
             ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const Scaffold(body: BotControlScreen())),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const Scaffold(body: BotControlScreen())),
         ),
       );
       await tester.pump();
@@ -693,7 +688,7 @@ void main() {
             ChangeNotifierProvider<BotProvider>.value(value: bot),
             ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const Scaffold(body: BotControlScreen())),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const Scaffold(body: BotControlScreen())),
         ),
       );
       await tester.pump();
@@ -747,7 +742,7 @@ void main() {
             ChangeNotifierProvider<BotProvider>.value(value: bot),
             ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const Scaffold(body: BotControlScreen())),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const Scaffold(body: BotControlScreen())),
         ),
       );
       await tester.pump();
@@ -789,7 +784,7 @@ void main() {
             ChangeNotifierProvider<BotProvider>.value(value: bot),
             ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const Scaffold(body: BotControlScreen())),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const Scaffold(body: BotControlScreen())),
         ),
       );
       await tester.pump();
@@ -850,7 +845,7 @@ void main() {
           providers: [
             ChangeNotifierProvider<AdminProvider>(create: (_) => AdminProvider(api: api)),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const AdminScreen()),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const AdminScreen()),
         ),
       );
       await tester.pump();
@@ -924,7 +919,7 @@ void main() {
             ChangeNotifierProvider<AdminProvider>(
                 create: (_) => AdminProvider(api: api)..restoreSession()),
           ],
-          child: MaterialApp(theme: AppTheme.darkTheme, home: const AdminScreen()),
+          child: MaterialApp(theme: AppTheme.lightTheme, home: const AdminScreen()),
         ),
       );
       await tester.pump();
@@ -961,7 +956,7 @@ void main() {
             ChangeNotifierProvider<AutoMessageProvider>(create: (_) => AutoMessageProvider(api: api)),
           ],
           child: MaterialApp(
-            theme: AppTheme.darkTheme,
+            theme: AppTheme.lightTheme,
             home: Scaffold(body: SingleChildScrollView(child: ImportConfigCard(api: api))),
           ),
         );

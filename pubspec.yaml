@@ -21,7 +21,6 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # UI
-  google_fonts: ^6.2.1
   flutter_svg: ^2.0.10+1
   cached_network_image: ^3.3.1
   shimmer: ^3.0.0
@@ -56,6 +55,25 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
-    - assets/icons/
     - assets/animations/
+    - assets/fox/
+
+  # Local fonts (SIL OFL 1.1, licences in assets/fonts/). Fraunces only for
+  # display type >= 20px; Source Sans 3 (variable) for everything else. The
+  # variable file is declared once per weight so the engine never fakes bold;
+  # the real weight comes from the wght variation set in AppType.
+  fonts:
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces72ptSoft-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Fraunces72ptSoft-Bold.ttf
+          weight: 700
+    - family: SourceSans3
+      fonts:
+        - asset: assets/fonts/SourceSans3VF-Upright.ttf
+          weight: 400
+        - asset: assets/fonts/SourceSans3VF-Upright.ttf
+          weight: 600
+        - asset: assets/fonts/SourceSans3VF-Upright.ttf
+          weight: 700

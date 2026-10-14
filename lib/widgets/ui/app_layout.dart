@@ -37,7 +37,7 @@ class AppPage extends StatelessWidget {
     if (onRefresh == null) return list;
     return RefreshIndicator(
       color: AppColors.accent,
-      backgroundColor: AppColors.raised,
+      backgroundColor: AppColors.surface,
       onRefresh: onRefresh!,
       child: list,
     );
@@ -86,7 +86,7 @@ class AppSplit extends StatelessWidget {
   }
 }
 
-/// Page title block: 24/800 title, optional meta line, actions on the right
+/// Page title block: Fraunces 28 title, optional meta line, actions on the right
 /// (wrapping under the title on phones).
 class PageHeader extends StatelessWidget {
   final String title;
@@ -161,7 +161,7 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// Section heading (16/800) with an optional trailing widget and a gap
+/// Section heading (Fraunces 20) with an optional trailing widget and a gap
 /// before the content.
 class AppSection extends StatelessWidget {
   final String? title;

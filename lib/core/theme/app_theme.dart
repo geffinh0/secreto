@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
+import 'app_shape.dart';
 import 'app_type.dart';
 
-/// Material theme for the Swiss redesign: square corners, flat fills, no
-/// borders, no resting shadows. Widgets inherit everything from here so the
-/// screens only need the shared components in lib/widgets/ui/.
+/// Material theme for the Herbarium redesign (light only): paper grounds,
+/// forest ink, terracotta action, quiet corners with the leaf shape reserved
+/// for signature surfaces, hairline rules, no resting shadows. Widgets inherit
+/// everything from here so the screens only need lib/widgets/ui/.
 class AppTheme {
   AppTheme._();
 
-  static const RoundedRectangleBorder _square = RoundedRectangleBorder();
+  static const RoundedRectangleBorder _square = AppShape.quietBorder;
 
   static OutlineInputBorder _fieldBorder(Color color, double width) =>
       OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppShape.fieldRadius,
         borderSide: BorderSide(color: color, width: width),
       );
 
-  static ThemeData get darkTheme {
+  static ThemeData get lightTheme {
     final text = TextTheme(
       displayLarge: AppType.display,
       displayMedium: AppType.title,
@@ -37,14 +39,14 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.canvas,
       canvasColor: AppColors.canvas,
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       hoverColor: AppColors.raised,
-      focusColor: AppColors.ink.withValues(alpha: 0.4),
-      colorScheme: const ColorScheme.dark(
+      focusColor: AppColors.ink.withValues(alpha: 0.2),
+      colorScheme: const ColorScheme.light(
         primary: AppColors.accent,
         onPrimary: AppColors.onAccent,
         secondary: AppColors.accent,
@@ -72,13 +74,13 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.raised,
+        fillColor: AppColors.surface,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         isDense: false,
-        border: _fieldBorder(Colors.transparent, 0),
-        enabledBorder: _fieldBorder(Colors.transparent, 0),
-        disabledBorder: _fieldBorder(Colors.transparent, 0),
+        border: _fieldBorder(AppColors.muted, 1.5),
+        enabledBorder: _fieldBorder(AppColors.muted, 1.5),
+        disabledBorder: _fieldBorder(AppColors.rule, 1.5),
         focusedBorder: _fieldBorder(AppColors.accent, 2),
         errorBorder: _fieldBorder(AppColors.danger, 2),
         focusedErrorBorder: _fieldBorder(AppColors.danger, 2),
@@ -118,9 +120,10 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: const WidgetStatePropertyAll(AppColors.raised),
+          backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
           foregroundColor: const WidgetStatePropertyAll(AppColors.ink),
-          side: const WidgetStatePropertyAll(BorderSide.none),
+          side: const WidgetStatePropertyAll(
+              BorderSide(color: AppColors.ink, width: 1.5)),
           minimumSize: minSize,
           shape: buttonShape,
           textStyle: WidgetStatePropertyAll(AppType.bodyStrong),
@@ -150,7 +153,7 @@ class AppTheme {
             s.contains(WidgetState.selected)
                 ? AppColors.accent
                 : AppColors.raised),
-        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+        trackOutlineColor: const WidgetStatePropertyAll(AppColors.muted),
       ),
       checkboxTheme: CheckboxThemeData(
         shape: _square,
@@ -169,9 +172,9 @@ class AppTheme {
         labelStyle: AppType.label,
       ),
       dividerTheme: const DividerThemeData(
-        color: Colors.transparent,
-        thickness: 0,
-        space: 0,
+        color: AppColors.rule,
+        thickness: 1,
+        space: 1,
       ),
       listTileTheme: ListTileThemeData(
         shape: _square,
@@ -188,26 +191,28 @@ class AppTheme {
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
-        elevation: 8,
-        shape: _square,
+        elevation: 4,
+        shape: AppShape.leafBorder,
         titleTextStyle: AppType.title,
         contentTextStyle: AppType.body,
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: AppColors.surface,
-        elevation: 8,
-        shape: _square,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: AppColors.raised,
-        elevation: 8,
+        color: AppColors.surface,
+        elevation: 4,
         shape: _square,
         textStyle: AppType.body,
       ),
       dropdownMenuTheme: DropdownMenuThemeData(
         textStyle: AppType.body,
         menuStyle: const MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(AppColors.raised),
+          backgroundColor: WidgetStatePropertyAll(AppColors.surface),
           shape: WidgetStatePropertyAll(_square),
         ),
       ),
@@ -220,18 +225,24 @@ class AppTheme {
         dividerColor: Colors.transparent,
       ),
       tooltipTheme: TooltipThemeData(
-        decoration: const BoxDecoration(color: AppColors.raised),
-        textStyle: AppType.label,
+        decoration: const BoxDecoration(
+          color: AppColors.forest,
+          borderRadius: AppShape.quiet,
+        ),
+        textStyle: AppType.label.copyWith(color: AppColors.onForest),
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.raised,
+        backgroundColor: AppColors.surface,
         contentTextStyle: AppType.body,
-        shape: _square,
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppShape.quiet,
+          side: BorderSide(color: AppColors.ink, width: 1.5),
+        ),
         behavior: SnackBarBehavior.floating,
       ),
       scrollbarTheme: const ScrollbarThemeData(
         thumbColor: WidgetStatePropertyAll(AppColors.raisedHover),
-        radius: Radius.zero,
+        radius: Radius.circular(4),
       ),
     );
   }

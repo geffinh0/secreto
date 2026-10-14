@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_type.dart';
 
-enum AppButtonKind { primary, secondary, text, danger }
+enum AppButtonKind { primary, secondary, text, danger, inverse }
 
-/// Flat, square, 48px minimum. One primary (accent fill) per screen; the
-/// danger kind is a neutral fill with a danger-coloured label and icon so a
-/// destructive action never reads as the main call to action.
+/// 48px minimum. One primary (terracotta fill, leaf shape) per screen. The
+/// secondary kind is an ink outline; the danger kind is a danger outline with
+/// a danger label and icon, so a destructive action never reads as the main
+/// call to action. Text buttons are terracotta words with no box.
 class AppButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -49,6 +51,18 @@ class AppButton extends StatefulWidget {
     this.autofocus = false,
   }) : kind = AppButtonKind.text;
 
+  /// Paper fill with forest ink: the call to action on a forest-green block,
+  /// where terracotta would sink into the ground.
+  const AppButton.inverse({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.loading = false,
+    this.expand = false,
+    this.autofocus = false,
+  }) : kind = AppButtonKind.inverse;
+
   const AppButton.danger({
     super.key,
     required this.label,
@@ -76,11 +90,11 @@ class _AppButtonState extends State<AppButton> {
         if (!_enabled) return AppColors.raised;
         if (_pressed) return AppColors.accentPressed;
         return _hovered ? AppColors.accentHover : AppColors.accent;
+      case AppButtonKind.inverse:
+        if (!_enabled) return AppColors.forestSoft;
+        return _pressed || _hovered ? AppColors.raised : AppColors.onForest;
       case AppButtonKind.secondary:
       case AppButtonKind.danger:
-        if (!_enabled) return AppColors.surface;
-        if (_pressed || _hovered) return AppColors.raisedHover;
-        return AppColors.raised;
       case AppButtonKind.text:
         return (_pressed || _hovered) && _enabled
             ? AppColors.raised
@@ -89,22 +103,40 @@ class _AppButtonState extends State<AppButton> {
   }
 
   Color get _foreground {
-    if (!_enabled) return AppColors.muted;
+    if (!_enabled) {
+      return widget.kind == AppButtonKind.inverse
+          ? AppColors.onForestMuted
+          : AppColors.muted;
+    }
     switch (widget.kind) {
+      case AppButtonKind.inverse:
+        return AppColors.forest;
       case AppButtonKind.primary:
         return AppColors.onAccent;
       case AppButtonKind.danger:
+        return AppColors.danger;
       case AppButtonKind.secondary:
-      case AppButtonKind.text:
         return AppColors.ink;
+      case AppButtonKind.text:
+        return AppColors.accent;
     }
   }
 
-  /// Danger keeps its signal on the icon: danger red on the raised fill is only
-  /// ~3.9:1, too low for 16px text.
-  Color get _iconColor => _enabled && widget.kind == AppButtonKind.danger
-      ? AppColors.danger
-      : _foreground;
+  Border? get _border {
+    if (_focused) return Border.all(color: AppColors.ink, width: 2);
+    switch (widget.kind) {
+      case AppButtonKind.secondary:
+        return Border.all(
+            color: _enabled ? AppColors.ink : AppColors.rule, width: 1.5);
+      case AppButtonKind.danger:
+        return Border.all(
+            color: _enabled ? AppColors.danger : AppColors.rule, width: 1.5);
+      case AppButtonKind.primary:
+      case AppButtonKind.inverse:
+      case AppButtonKind.text:
+        return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +156,7 @@ class _AppButtonState extends State<AppButton> {
             child: CircularProgressIndicator(strokeWidth: 2, color: fg),
           )
         else if (icon != null)
-          Icon(icon, size: 20, color: _iconColor),
+          Icon(icon, size: 20, color: fg),
         if (widget.loading || icon != null) const SizedBox(width: 8),
         Flexible(
           child: Text(
@@ -175,9 +207,11 @@ class _AppButtonState extends State<AppButton> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
                 color: _fill,
-                border: _focused
-                    ? Border.all(color: AppColors.ink, width: 2)
-                    : null,
+                border: _border,
+                borderRadius: widget.kind == AppButtonKind.primary ||
+                        widget.kind == AppButtonKind.inverse
+                    ? AppShape.leaf
+                    : AppShape.quiet,
               ),
               child: content,
             ),

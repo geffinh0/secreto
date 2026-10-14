@@ -16,7 +16,8 @@ void main() async {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
     ),
   );
   runApp(const SuperModeratorApp());
@@ -85,7 +86,7 @@ class _AppWithRouterState extends State<_AppWithRouter> {
     return MaterialApp.router(
       title: "Atila's Client",
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       routerConfig: _router,
     );
   }

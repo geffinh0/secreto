@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_type.dart';
 
-/// A 56px-minimum row on a surface tone. Rows in a list are separated by an
-/// 8px gap (use [AppRowList]) - no dividers.
+/// A 56px-minimum row. It draws no box of its own: rows live inside an
+/// [AppRowList], which groups them in one panel with hairlines between.
 class AppListRow extends StatelessWidget {
   final Widget? leading;
   final String title;
@@ -28,7 +29,7 @@ class AppListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = selected
         ? AppColors.raisedHover
-        : (raised ? AppColors.raised : AppColors.surface);
+        : (raised ? AppColors.raised : Colors.transparent);
     final row = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 56),
       child: Padding(
@@ -71,23 +72,31 @@ class AppListRow extends StatelessWidget {
   }
 }
 
-/// Vertical list with the 8px gap between rows.
+/// Vertical list: all rows in one lighter-paper panel with a hairline and
+/// hairline dividers, instead of a stack of separate boxes.
 class AppRowList extends StatelessWidget {
   final List<Widget> children;
-  final double gap;
 
-  const AppRowList({super.key, required this.children, this.gap = 8});
+  const AppRowList({super.key, required this.children});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (int i = 0; i < children.length; i++) ...[
-          if (i > 0) SizedBox(height: gap),
-          children[i],
+    return Material(
+      color: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: AppShape.quiet,
+        side: AppShape.hairline,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(),
+            children[i],
+          ],
         ],
-      ],
+      ),
     );
   }
 }

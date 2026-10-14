@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_type.dart';
 import 'app_button.dart';
 
@@ -18,7 +19,7 @@ Future<bool> showAppConfirm(
     context: context,
     builder: (ctx) => Dialog(
       backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(),
+      shape: AppShape.leafBorder,
       insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
@@ -70,9 +71,12 @@ void showAppSnack(BuildContext context, String message, {bool error = false}) {
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
-        backgroundColor: AppColors.raised,
+        backgroundColor: AppColors.surface,
         behavior: SnackBarBehavior.floating,
-        shape: const RoundedRectangleBorder(),
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppShape.quiet,
+          side: BorderSide(color: AppColors.ink, width: 1.5),
+        ),
         content: Row(
           children: [
             Icon(

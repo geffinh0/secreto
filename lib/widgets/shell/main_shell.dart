@@ -139,16 +139,23 @@ class _UpdateNoticeState extends State<_UpdateNotice> {
 }
 
 class _Brand extends StatelessWidget {
-  const _Brand();
+  final bool onForest;
+  const _Brand({this.onForest = false});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const FoxIcon(size: 32),
+        FoxIcon(size: onForest ? 44 : 36),
         const SizedBox(width: 12),
-        Text('Super Moderator', style: AppType.heading),
+        Flexible(
+          child: Text(
+            'Super Moderator',
+            style: AppType.heading
+                .copyWith(color: onForest ? AppColors.onForest : AppColors.ink),
+          ),
+        ),
       ],
     );
   }
@@ -180,7 +187,7 @@ class _TopBar extends StatelessWidget {
           EdgeInsets.symmetric(horizontal: AppSpacing.pageHorizontal(context)),
       child: Row(
         children: [
-          if (compact) const FoxIcon(size: 32) else const _Brand(),
+          if (compact) const FoxIcon(size: 36) else const _Brand(),
           const Spacer(),
           const _BotStatus(),
         ],
@@ -202,6 +209,7 @@ class _BottomBar extends StatelessWidget {
         data: MediaQuery.of(context).copyWith(textScaler: scaler),
         child: Material(
           color: AppColors.surface,
+          shape: const Border(top: BorderSide(color: AppColors.rule)),
           child: SafeArea(
             top: false,
             child: SizedBox(
@@ -286,7 +294,7 @@ class _BarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = active ? AppColors.onAccent : AppColors.muted;
+    final fg = active ? AppColors.ink : AppColors.muted;
     return Semantics(
       button: true,
       selected: active,
@@ -294,20 +302,31 @@ class _BarItem extends StatelessWidget {
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: AppMotion.base,
-          curve: AppMotion.curve,
-          color: active ? AppColors.accent : Colors.transparent,
+        child: Align(
           alignment: Alignment.center,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 22, color: fg),
-              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: AppMotion.base,
+                curve: AppMotion.curve,
+                width: 56,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? AppColors.raised : Colors.transparent,
+                  borderRadius: AppShape.leaf,
+                ),
+                child: Icon(icon, size: 22, color: fg),
+              ),
+              const SizedBox(height: 2),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(label,
-                    style: AppType.label.copyWith(color: fg), maxLines: 1),
+                    style: AppType.label.copyWith(color: fg, fontVariations: [
+                      FontVariation('wght', active ? 700 : 600)
+                    ]),
+                    maxLines: 1),
               ),
             ],
           ),
@@ -324,16 +343,19 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 240,
-      color: AppColors.surface,
-      padding: const EdgeInsets.all(16),
+      width: 248,
+      color: AppColors.forest,
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _Brand(),
+          const _Brand(onForest: true),
           const SizedBox(height: 16),
           const Align(alignment: Alignment.centerLeft, child: _BotStatus()),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+          const SizedBox(
+              height: 1, child: ColoredBox(color: AppColors.goldLight)),
+          const SizedBox(height: 16),
           Expanded(
             child: ListView(
               children: [
@@ -360,31 +382,40 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = active ? AppColors.onAccent : AppColors.ink;
+    final fg = active ? AppColors.onForest : AppColors.onForestMuted;
     return Semantics(
       button: true,
       selected: active,
       child: Material(
-        color: active ? AppColors.accent : Colors.transparent,
+        color: active ? AppColors.forestSoft : Colors.transparent,
+        shape: AppShape.quietBorder,
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => context.go(dest.path),
-          hoverColor: AppColors.raised,
+          hoverColor: AppColors.forestSoft,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 48),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(dest.icon, size: 20, color: fg),
-                  const SizedBox(width: 12),
-                  Expanded(
+            child: Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: 48,
+                  color: active ? AppColors.goldLight : Colors.transparent,
+                ),
+                const SizedBox(width: 12),
+                Icon(dest.icon, size: 20, color: fg),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(dest.label,
                         style: AppType.label.copyWith(color: fg),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+              ],
             ),
           ),
         ),

@@ -68,6 +68,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
+        const Reveal(
+          index: 2,
+          child: AppSection(child: OrnamentDivider()),
+        ),
         Reveal(
           index: 2,
           child: AppSection(
@@ -128,28 +132,60 @@ class _RobotStatus extends StatelessWidget {
 
     final last = bot.recentActions.isEmpty ? null : bot.recentActions.last;
 
-    return AppSurface(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(headline, style: AppType.display),
-          const SizedBox(height: AppSpacing.sm),
-          Text(detail, style: AppType.body),
-          const SizedBox(height: AppSpacing.md),
-          chip,
-          if (last != null) ...[
-            const SizedBox(height: AppSpacing.lg),
-            _LastAction(action: last),
-          ],
+    final pose = live
+        ? FoxPose.headLaugh
+        : (connected ? FoxPose.headCalm : FoxPose.sleeping);
+
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(headline,
+            style: AppType.display.copyWith(color: AppColors.onForest)),
+        const SizedBox(height: AppSpacing.sm),
+        Text(detail,
+            style: AppType.body.copyWith(color: AppColors.onForestMuted)),
+        const SizedBox(height: AppSpacing.md),
+        chip,
+        if (last != null) ...[
           const SizedBox(height: AppSpacing.lg),
-          AppButton(
-            label: connected ? 'Abrir o robô' : 'Conectar robô',
-            icon: connected ? Icons.smart_toy_outlined : Icons.link,
-            onPressed: () => context.go('/bot'),
-          ),
+          _LastAction(action: last),
         ],
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton.inverse(
+          label: connected ? 'Abrir o robô' : 'Conectar robô',
+          icon: connected ? Icons.smart_toy_outlined : Icons.link,
+          onPressed: () => context.go('/bot'),
+        ),
+      ],
+    );
+
+    return AppSurface(
+      feature: true,
+      color: AppColors.forest,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: LayoutBuilder(builder: (context, c) {
+        if (c.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              text,
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FoxArt(pose, height: 120),
+              ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: text),
+            const SizedBox(width: AppSpacing.lg),
+            FoxArt(pose, height: 190),
+          ],
+        );
+      }),
     );
   }
 }
@@ -205,23 +241,40 @@ class _Numbers extends StatelessWidget {
   const _Numbers(
       {required this.actions, required this.rules, required this.queued});
 
+  Widget _entry(int value, String label) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$value', style: AppType.numeral),
+          Text(label, style: AppType.meta),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Column(
+    final entries = [
+      _entry(actions, 'ações realizadas'),
+      _entry(rules, 'regras ativas'),
+      _entry(queued, 'mensagens na fila'),
+    ];
+    if (AppSpacing.isCompact(context)) {
+      return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$actions', style: AppType.title),
-          Text('ações realizadas', style: AppType.meta),
-          const SizedBox(height: AppSpacing.lg),
-          Text('$rules', style: AppType.title),
-          Text('regras ativas', style: AppType.meta),
-          const SizedBox(height: AppSpacing.md),
-          Text('$queued', style: AppType.title),
-          Text('mensagens na fila', style: AppType.meta),
+        children: [for (final e in entries) Expanded(child: e)],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < entries.length; i++) ...[
+          if (i > 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Divider(),
+            ),
+          entries[i],
         ],
-      ),
+      ],
     );
   }
 }

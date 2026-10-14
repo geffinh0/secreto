@@ -221,6 +221,7 @@ class _Queue extends StatelessWidget {
       content = const AppStateView.loading(message: 'Carregando mensagens');
     } else if (provider.messages.isEmpty) {
       content = const AppStateView(
+        pose: FoxPose.sleeping,
         title: 'Nenhuma mensagem na fila',
         message: 'Escreva a primeira mensagem acima para o robô enviar.',
       );

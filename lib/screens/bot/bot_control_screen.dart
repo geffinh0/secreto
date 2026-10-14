@@ -1338,13 +1338,11 @@ class _ChatList extends StatelessWidget {
     final running = bot.isRunning;
 
     if (messages.isEmpty) {
-      return AppSurface(
-        child: AppStateView(
-          title: running ? 'Aguardando mensagens' : 'Nenhuma mensagem ainda',
-          message: running
-              ? 'As mensagens do chat aparecem aqui assim que chegarem.'
-              : 'O chat aparece aqui quando o robô estiver em uma live.',
-        ),
+      return AppStateView(
+        title: running ? 'Aguardando mensagens' : 'Nenhuma mensagem ainda',
+        message: running
+            ? 'As mensagens do chat aparecem aqui assim que chegarem.'
+            : 'O chat aparece aqui quando o robô estiver em uma live.',
       );
     }
 
@@ -1413,11 +1411,9 @@ class _ActionList extends StatelessWidget {
     final actions = bot.recentActions.reversed.toList(); // newest first
 
     if (actions.isEmpty) {
-      return const AppSurface(
-        child: AppStateView(
-          title: 'Nenhuma ação nesta sessão',
-          message: 'Silenciamentos e banimentos aparecem aqui.',
-        ),
+      return const AppStateView(
+        title: 'Nenhuma ação nesta sessão',
+        message: 'Silenciamentos e banimentos aparecem aqui.',
       );
     }
 
