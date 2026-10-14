@@ -425,7 +425,7 @@ void main() {
         ..on('POST /robot/start', ok(statusPayload(running: true)))
         ..on('POST /robot/stop', ok(statusPayload()));
       final bot = BotProvider(api: api, pollInterval: const Duration(hours: 1));
-      expect(await bot.connectRobotWithToken('tok'), isTrue);
+      expect(await bot.connectRobot('robo@x.com', 'senha'), isTrue);
       expect(bot.isRunning, isFalse);
       expect(await bot.startSession('live1'), isTrue);
       expect(bot.isRunning, isTrue);
@@ -632,7 +632,7 @@ void main() {
       bot.reset(); // cancels the polling timer so the test can finish cleanly
     });
 
-    testWidgets('robot screen offers e-mail/password and token login when disconnected',
+    testWidgets('robot screen offers e-mail/password and e-mail-code login when disconnected',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       tester.view.devicePixelRatio = 1.0;
@@ -657,10 +657,11 @@ void main() {
 
       expect(find.text('Conectar Robô'), findsOneWidget);
       expect(find.text('E-mail e senha'), findsOneWidget);
-      expect(find.text('Colar token'), findsOneWidget);
-      await tester.tap(find.text('Colar token'));
+      expect(find.text('Colar token'), findsNothing);
+      expect(find.text('Código por e-mail'), findsOneWidget);
+      await tester.tap(find.text('Código por e-mail'));
       await tester.pump();
-      expect(find.text('Token da sessão do robô'), findsOneWidget);
+      expect(find.text('E-mail da conta do robô'), findsOneWidget);
       expect(find.text('Iniciar moderação'), findsNothing); // only after connecting
     });
 

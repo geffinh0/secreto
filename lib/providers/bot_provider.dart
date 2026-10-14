@@ -68,9 +68,6 @@ class BotProvider extends ChangeNotifier {
   Future<bool> connectRobot(String email, String password) =>
       _connect({'email': email, 'password': password});
 
-  /// Connect the robot with an existing SuperLive session token.
-  Future<bool> connectRobotWithToken(String token) => _connect({'token': token});
-
   /// Step 1 of phone login: ask SuperLive to text a code to [phoneNumber] (E.164,
   /// e.g. `+5511999999999`). Returns how many seconds until a resend is allowed, or
   /// null on failure (see [error]).

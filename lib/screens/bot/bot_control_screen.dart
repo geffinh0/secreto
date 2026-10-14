@@ -91,12 +91,11 @@ class _RobotConnectionCard extends StatefulWidget {
   State<_RobotConnectionCard> createState() => _RobotConnectionCardState();
 }
 
-enum _LoginMode { password, phone, emailCode, token }
+enum _LoginMode { password, phone, emailCode }
 
 class _RobotConnectionCardState extends State<_RobotConnectionCard> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _tokenController = TextEditingController();
   final _phoneController = TextEditingController(text: '+55');
   final _codeController = TextEditingController();
 
@@ -119,7 +118,6 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _tokenController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
     _resendTimer?.cancel();
@@ -170,28 +168,17 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
     final bot = context.read<BotProvider>();
     setState(() => _localError = null);
 
-    final bool ok;
-    if (_mode == _LoginMode.token) {
-      final token = _tokenController.text.trim();
-      if (token.isEmpty) {
-        setState(() => _localError = 'Cole o token da sessão do robô.');
-        return;
-      }
-      ok = await bot.connectRobotWithToken(token);
-    } else {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text;
-      if (email.isEmpty || password.isEmpty) {
-        setState(() => _localError = 'Informe o e-mail e a senha do robô.');
-        return;
-      }
-      ok = await bot.connectRobot(email, password);
-      if (ok) await _rememberLogin(mode: 'password', email: email);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _localError = 'Informe o e-mail e a senha do robô.');
+      return;
     }
+    final ok = await bot.connectRobot(email, password);
     if (ok) {
+      await _rememberLogin(mode: 'password', email: email);
       // Don't keep secrets around once the backend has them.
       _passwordController.clear();
-      _tokenController.clear();
     }
   }
 
@@ -420,11 +407,6 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   selected: _mode == _LoginMode.emailCode,
                   onTap: () => _setMode(_LoginMode.emailCode),
                 ),
-                _ModeChip(
-                  label: 'Colar token',
-                  selected: _mode == _LoginMode.token,
-                  onTap: () => _setMode(_LoginMode.token),
-                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -466,8 +448,7 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                 _codeSent
                     ? 'Digite o código recebido por SMS em ${_phoneController.text.trim()}.'
                     : 'Número da conta do robô no SuperLive, com o código do país '
-                        '(ex: +5511999999999). Se o SuperLive recusar por verificação '
-                        'anti-robô, use a opção "Colar token".',
+                        '(ex: +5511999999999).',
                 style: const TextStyle(
                     color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
               ),
@@ -559,24 +540,6 @@ class _RobotConnectionCardState extends State<_RobotConnectionCard> {
                   ],
                 ),
               ],
-            ] else ...[
-              const Text(
-                'Se o login por senha for bloqueado pela verificação anti-robô do '
-                'SuperLive, entre com a conta do robô no app e cole aqui o token '
-                'da sessão. Ele fica guardado só no seu servidor.',
-                style: TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _tokenController,
-                obscureText: true,
-                onSubmitted: (_) => _connect(),
-                decoration: const InputDecoration(
-                  labelText: 'Token da sessão do robô',
-                  prefixIcon: Icon(Icons.vpn_key_rounded),
-                ),
-              ),
             ],
             if (error != null) ...[
               const SizedBox(height: 12),
