@@ -25,7 +25,7 @@ from db import row_to_dict
 from engine import (
     IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
 )
-from engine import client_for_user, watch_poll_interval
+from engine import client_for_user, lookup_stats, watch_poll_interval
 from superlive import SuperLiveClient, SuperLiveError, get_proxy_pool, pacing_stats, queue_depths
 
 _log_handlers = [logging.StreamHandler()]
@@ -1899,8 +1899,10 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
             "SELECT COUNT(*) AS n FROM users WHERE egress_slot IS NULL").fetchone()["n"],
         "active_sessions": active,
         "max_sessions": int(os.getenv("SM_MAX_SESSIONS", "0") or 0),
-        # about 25 live sessions per egress IP is what its request budget sustains
-        "suggested_max_sessions": 25 * len(pool),
+        # conservative until the pacing trace says more (SM_SUGGESTED_SESSIONS_PER_EGRESS): with the
+        # sessions' own polling, one egress IP stopped keeping up near 16 lives in the simulation
+        "suggested_max_sessions": int(os.getenv("SM_SUGGESTED_SESSIONS_PER_EGRESS", "15") or 15) * len(pool),
+        "lookup": lookup_stats(),
         # measured, not estimated: queue wait per priority and call time (L) per egress
         "pacing": pacing_stats(),
     }

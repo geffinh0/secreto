@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta, timezone
 import unicodedata
 import uuid
-from collections import deque
+from collections import Counter, deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -104,7 +104,18 @@ ACTION_LEVEL = {"mute": 1, "kick": 2}
 # must not drop moderation mid-show. Worst case an end is acted on ~one recheck late.
 LIVE_END_CONFIRMATIONS = 2
 LIVE_END_RECHECK_SECONDS = 4
-LIVE_POLL_INTERVAL_SECONDS = 20  # how often to check whether the streamer went live again
+# how often a session checks whether the streamer went live again. Each wait is the longest a
+# new live can go unnoticed by a session with no watch, so raise it only with that in mind.
+LIVE_POLL_INTERVAL_SECONDS = max(10, int(os.getenv("SUPERLIVE_SESSION_POLL_S", "20") or 20))
+
+# What the "is she live yet?" lookups do, for deciding later whether the second one is needed.
+_lookup_stats = {"skipped_same_id": 0, "ran_no_result": 0, "ran_no_user_id": 0,
+                 "ran_same_id": 0, "ran_other_account": 0, "skipped_transient": 0,
+                 "fallback_found_live": 0}
+
+
+def lookup_stats() -> dict:
+    return dict(_lookup_stats)
 
 
 def now_iso() -> str:
@@ -320,6 +331,14 @@ class BotSession:
         self._live_messages_sent: int = 0
         self._live_mutes_count: int = 0
         self._live_kicks_count: int = 0
+        # passive telemetry, never used to decide anything: which frame types arrive over the
+        # WebSocket, how often the socket dropped, how many HTTP status checks the session made
+        self._frame_counts: Counter = Counter()
+        self._ws_drops: int = 0
+        self._status_checks: int = 0
+        # live on which SuperLive refused the robot's chat messages for good (premium live /
+        # live gone): auto messages wait for the next live instead of failing every interval
+        self._messages_blocked_live: Optional[str] = None
 
         self._ws = None
         self._ws_url = None
@@ -595,6 +614,7 @@ class BotSession:
             finally:
                 self._ws = None
                 self.ws_state = "disconnected"
+                self._ws_drops += 1
 
             if not self.is_active:
                 return
@@ -643,6 +663,7 @@ class BotSession:
             False: if the live has ended
             None: if the status could not be verified
         """
+        self._status_checks += 1
         target_shared = None
         try:
             conn = db.connect()
@@ -785,21 +806,43 @@ class BotSession:
         target_shared = target_shared or self.watch_shared_id or self.streamer_shared_id
 
         result = None
+        transient = False
         if target_shared:
             try:
-                result = await self.client.find_live_by_shared_id(target_shared)
+                result = await self.client.find_live_by_shared_id(target_shared, include_user_id=True)
             except SuperLiveError as exc:
                 if exc.is_auth_error:
                     raise
+                # network trouble, throttling or SuperLive down: asking again right away only
+                # adds load to the same problem
+                transient = exc.status in (0, 429) or exc.status >= 500
                 result = None
 
         if (not result or not result.get("live")) and self.streamer_id:
-            try:
-                result = await self.client.find_live_by_user_id(self.streamer_id)
-            except SuperLiveError as exc:
-                if exc.is_auth_error:
-                    raise
-                result = None
+            first_user_id = str((result or {}).get("user_id") or "")
+            same_account = bool(first_user_id) and first_user_id == str(self.streamer_id)
+            if transient:
+                _lookup_stats["skipped_transient"] += 1
+            elif same_account and os.getenv("SUPERLIVE_DEDUPE_LOOKUP", "1") != "0":
+                # the lookup above already read this very profile and she is offline: the same
+                # request again 0.2 s later cannot say anything new (the next cycle will)
+                _lookup_stats["skipped_same_id"] += 1
+            else:
+                _lookup_stats[
+                    "ran_no_result" if result is None else
+                    "ran_no_user_id" if not first_user_id else
+                    "ran_same_id" if same_account else "ran_other_account"] += 1
+                try:
+                    fallback = await self.client.find_live_by_user_id(self.streamer_id)
+                except SuperLiveError as exc:
+                    if exc.is_auth_error:
+                        raise
+                    fallback = None
+                if fallback and fallback.get("live") and fallback.get("livestream_id"):
+                    _lookup_stats["fallback_found_live"] += 1
+                    log.info("session %s: a consulta pelo ID interno achou uma live que a do ID "
+                             "público não achou", self.user_id)
+                result = fallback
 
         if result and result.get("live") and result.get("livestream_id"):
             found_id = str(result["livestream_id"])
@@ -905,11 +948,22 @@ class BotSession:
                 except Exception:
                     pass
 
+    def telemetry(self) -> dict:
+        """Passive counters for this session (see __init__); safe to expose."""
+        return {
+            "frame_types": dict(self._frame_counts.most_common(20)),
+            "ws_drops": self._ws_drops,
+            "status_checks": self._status_checks,
+        }
+
     async def on_live_ended(self) -> None:
         """Handles the current livestream ending, entering waiting_for_live state."""
         async with self._stop_lock:
             if self._finalized or not self.is_active or self.state in ("stopping", "stopped", "error", "waiting_for_live"):
                 return
+            log.info("session %s: telemetria até aqui - frames=%s, quedas do WebSocket=%d, "
+                     "verificações HTTP de status=%d", self.user_id,
+                     dict(self._frame_counts.most_common(12)), self._ws_drops, self._status_checks)
 
             has_target = bool(self.streamer_id or self.streamer_shared_id or self.watch_shared_id)
             if not has_target:
@@ -973,6 +1027,11 @@ class BotSession:
                 return
             kind, data = frame.get("type"), frame.get("data")
             data = data if isinstance(data, dict) else {}
+            label = str(kind or "?")[:60]
+            if label in self._frame_counts or len(self._frame_counts) < 80:
+                self._frame_counts[label] += 1
+            else:
+                self._frame_counts["(outros)"] += 1
             frame_stream = data.get("livestream_id")
             if frame_stream and str(frame_stream) != self.livestream_id:
                 return
@@ -1169,6 +1228,8 @@ class BotSession:
                 cfg = self._config(force=True)
                 if self.livestream_id is None:
                     continue  # waiting for the streamer's next live; nowhere to send to
+                if self._messages_blocked_live == self.livestream_id:
+                    continue  # SuperLive refuses the robot's messages on this live: wait for the next
                 if not cfg["settings"].get("auto_messages_enabled") or not cfg["messages"]:
                     continue
                 text = cfg["messages"][index % len(cfg["messages"])]
@@ -1183,11 +1244,33 @@ class BotSession:
                 if exc.is_auth_error:
                     self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
                     return
-                self.last_error = f"Mensagem automática não enviada: {exc.message}"
+                refusal = self._permanent_message_refusal(exc)
+                if refusal:
+                    self._messages_blocked_live = self.livestream_id
+                    self.last_error = refusal
+                    log.info("session %s: mensagens automáticas pausadas na live %s (%s)",
+                             self.user_id, self.livestream_id, exc.message)
+                else:
+                    self.last_error = f"Mensagem automática não enviada: {exc.message}"
                 await self._handle_live_error_or_change(exc)
             except Exception:  # noqa: BLE001
                 log.exception("auto message loop error")
                 await asyncio.sleep(MIN_INTERVAL_SECONDS)
+
+    @staticmethod
+    def _permanent_message_refusal(exc: SuperLiveError) -> Optional[str]:
+        """Text to show when SuperLive refuses chat messages on this live for good, else None.
+        Only the two refusals seen in production, matched exactly: HTTP 400 code 10 on a
+        PREMIUM live, and HTTP 404 code 3 for a live that is no longer active."""
+        body = exc.body if isinstance(exc.body, dict) else {}
+        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        code = error.get("code")
+        if exc.status == 400 and code == 10 and "PREMIUM" in (exc.message or "").upper():
+            return ("Mensagens automáticas pausadas nesta live: ela exige presente para escrever "
+                    "no chat. Voltam na próxima live.")
+        if exc.status == 404 and code == 3:
+            return "A live não está mais ativa. As mensagens automáticas voltam na próxima live."
+        return None
 
     @staticmethod
     def _interval(cfg: dict) -> int:
@@ -1218,6 +1301,7 @@ class BotSession:
                 "actions_failed": self.actions_failed,
             },
             "alerts": list(self.alerts),
+            "telemetry": self.telemetry(),
             "last_live_summary": self.last_live_summary,
             "recent_chat": [asdict(c) for c in self.recent_chat],
             "recent_actions": [asdict(a) for a in self.recent_actions],

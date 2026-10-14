@@ -15,6 +15,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import time
 import uuid
 
@@ -151,6 +152,9 @@ class _EgressStats:
         self.sent = 0
         self.network_errors = 0
         self.throttled = 0
+        self.by_path: "collections.Counter[str]" = collections.Counter()
+        self.shed = 0      # background calls refused because the queue was long
+        self.paused = 0    # background calls skipped during a network pause
         self.last_log = time.monotonic()
         self.sent_at_last_log = 0
 
@@ -231,6 +235,9 @@ def pacing_stats() -> dict:
             "sent": st.sent,
             "network_errors": st.network_errors,
             "throttled_429": st.throttled,
+            "shed": st.shed,
+            "skipped_network_pause": st.paused,
+            "by_path": dict(st.by_path.most_common(10)),
         }
         for proxy, st in _stats.items()
     }
@@ -244,12 +251,14 @@ def _maybe_log_stats(proxy: str, st: _EgressStats) -> None:
     st.sent_at_last_log = st.sent
     log.info(
         "pacing %s: espera urgente p50/p95=%.2f/%.2fs, espera normal p50/p95=%.2f/%.2fs, "
-        "chamada (L) p50/p95=%.2f/%.2fs, enviadas=%d, erros de rede=%d, 429=%d",
+        "chamada (L) p50/p95=%.2f/%.2fs, enviadas=%d, erros de rede=%d, 429=%d, "
+        "descartadas por fila cheia=%d, puladas por pausa de rede=%d, caminhos=%s",
         _redact_proxy(proxy),
         _percentile(st.urgent_wait, 0.5), _percentile(st.urgent_wait, 0.95),
         _percentile(st.normal_wait, 0.5), _percentile(st.normal_wait, 0.95),
         _percentile(st.call, 0.5), _percentile(st.call, 0.95),
-        st.sent, st.network_errors, st.throttled,
+        st.sent, st.network_errors, st.throttled, st.shed, st.paused,
+        dict(st.by_path.most_common(4)),
     )
 
 
@@ -266,6 +275,29 @@ def _low_queue_max() -> int:
 
 def _message_spacing_seconds() -> float:
     return float(os.getenv("SUPERLIVE_MESSAGE_SPACING_SECONDS", "3"))
+
+
+def _message_from_start() -> bool:
+    """SUPERLIVE_MESSAGE_FROM_START=1 counts the gap between chat messages from when the
+    previous MESSAGE started instead of when it finished (3.0 s instead of 3 s + L per
+    message: about +11% message throughput). Off by default."""
+    return os.getenv("SUPERLIVE_MESSAGE_FROM_START", "0") == "1"
+
+
+def _network_cooldown() -> bool:
+    """After 3 network failures in a row on an egress, background lookups (profile polls and
+    LOW-priority calls) are skipped for a growing pause (2 s doubling to 30 s) instead of each
+    hammering a proxy that is down. Urgent calls and chat messages are never skipped. On by
+    default; SUPERLIVE_NETWORK_COOLDOWN=0 turns it off."""
+    return os.getenv("SUPERLIVE_NETWORK_COOLDOWN", "1") != "0"
+
+
+def _network_pause_min() -> float:
+    return float(os.getenv("SUPERLIVE_NETWORK_PAUSE_MIN_SECONDS", "2"))
+
+
+# profile lookups made by the "is she live?" pollers (normal priority when a lookup is urgent)
+_POLL_PATHS = ("users/profile",)
 
 
 def _spacing_from_start() -> bool:
@@ -310,6 +342,9 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
     # message or kick is worse than a failed one the caller can see.
     cooldown_until = 0.0
     backoff_429 = 0.0
+    net_fail = 0
+    net_backoff = 0.0
+    net_pause_until = 0.0
     while True:
         item = await queue.get()
         priority, _seq, fut, client, path, body, auth, enqueued, depth_in = item
@@ -318,6 +353,16 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
         urgent = priority <= PRIORITY_URGENT
         if urgent:
             queue.urgent_wakeup.clear()
+        if (_network_cooldown() and not urgent and path != _MESSAGE_PATH
+                and (priority >= PRIORITY_LOW or path in _POLL_PATHS)
+                and time.monotonic() < net_pause_until):
+            st.paused += 1
+            if not fut.cancelled():
+                paused_err = SuperLiveError(
+                    "Saída de rede em pausa após falhas seguidas; tentando de novo em breve.", 0)
+                paused_err.kind = "pausa"
+                fut.set_exception(paused_err)
+            continue
         stepped_aside = False
         now = time.monotonic()
         wait = _request_spacing_seconds() - (now - last_any)
@@ -344,6 +389,7 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
             continue  # the caller gave up while this waited its turn
         started = time.monotonic()
         outcome = "ok"
+        err_kind = ""
         try:
             result = await asyncio.to_thread(client._post_sync, path, body or {}, auth)
         except Exception as exc:  # noqa: BLE001 - relayed to the caller via the future
@@ -360,20 +406,30 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
                         "path": path, "pause": round(pause, 2)})
             elif isinstance(exc, SuperLiveError) and exc.status == 0:
                 st.network_errors += 1
+                err_kind = exc.kind
+                net_fail += 1
+                if net_fail >= 3 and _network_cooldown():
+                    net_backoff = min(max(net_backoff * 2, _network_pause_min()), 30.0)
+                    net_pause_until = time.monotonic() + net_backoff
+                    log.warning("SuperLive: %d falhas de rede seguidas; consultas de fundo pausadas por %.0fs",
+                                net_fail, net_backoff)
             if not fut.cancelled():
                 fut.set_exception(exc)
         else:
             # decays instead of resetting: a burst of 429s separated by single
             # successes keeps escalating the pause rather than starting over at 2s
             backoff_429 = backoff_429 / 2 if backoff_429 >= 4.0 else 0.0
+            net_fail, net_backoff, net_pause_until = 0, 0.0, 0.0
             if not fut.cancelled():
                 fut.set_result(result)
         finally:
             finished = time.monotonic()
             last_any = started if _spacing_from_start() else finished
             if path == _MESSAGE_PATH:
-                last_message = finished
+                last_message = started if _message_from_start() else finished
             st.sent += 1
+            if path in st.by_path or len(st.by_path) < 60:
+                st.by_path[path] += 1
             st.call.append(finished - started)
             (st.urgent_wait if urgent else st.normal_wait).append(started - enqueued)
             if urgent or path == _MESSAGE_PATH:
@@ -386,7 +442,8 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
                     "te": round(time.time() - (finished - enqueued), 3),
                     "egress": _redact_proxy(proxy), "prio": priority, "path": path,
                     "wait": round(started - enqueued, 3), "L": round(finished - started, 3),
-                    "out": outcome, "qd_in": depth_in, "qd_out": queue.qsize()})
+                    "out": outcome, "qd_in": depth_in, "qd_out": queue.qsize(),
+                    **({"kind": err_kind} if err_kind else {})})
             _maybe_log_stats(proxy, st)
 
 
@@ -425,6 +482,10 @@ class SuperLiveError(Exception):
         self.status = status
         self.body = body
         self.retry_after = retry_after  # seconds, from a 429's Retry-After header
+        # network failures only: "connect" (never reached SuperLive), "read" (sent, no answer
+        # in time: the action may have run - never resend it), "other", or "pausa" (skipped
+        # without calling, see the network pause in _dispatcher)
+        self.kind = ""
 
     @property
     def is_auth_error(self) -> bool:
@@ -433,6 +494,17 @@ class SuperLiveError(Exception):
     @property
     def is_forbidden(self) -> bool:
         return self.status == 403
+
+
+_VERIFICATION_RE = re.compile(
+    r"turnstile|captcha|challenge|are you (a )?(robot|human)|verify (your )?(identity|id)\b|\bid[ _-]?verification",
+    re.IGNORECASE)
+
+
+def _asks_for_verification(status: int, text: str) -> bool:
+    """True when an error response looks like the server asking for a human / identity
+    verification (log-only signal for compatibility monitoring; nothing acts on it)."""
+    return status in (400, 401, 403, 412, 422, 428) and bool(_VERIFICATION_RE.search(text or ""))
 
 
 def _server_message(body):
@@ -510,7 +582,14 @@ class SuperLiveClient:
                 proxies=proxies,
             )
         except requests.exceptions.RequestException as exc:
-            raise SuperLiveError(f"Falha de rede: {exc}") from None
+            err = SuperLiveError(f"Falha de rede: {exc}")
+            if isinstance(exc, requests.exceptions.ReadTimeout):
+                err.kind = "read"
+            elif isinstance(exc, (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError)):
+                err.kind = "connect"
+            else:
+                err.kind = "other"
+            raise err from None
 
         raw = resp.content
         if resp.status_code >= 400:
@@ -518,6 +597,10 @@ class SuperLiveClient:
             # visible in the backend window; the request body (passwords) is never logged
             log.warning("SuperLive %s -> HTTP %s: %s", path, resp.status_code,
                         raw.decode("utf-8", errors="replace")[:300])
+            if _asks_for_verification(resp.status_code, raw.decode("utf-8", errors="replace")):
+                log.warning("SuperLive pediu uma verificação adicional em %s (HTTP %s). Isso pode "
+                            "bloquear o robô: não tentar contornar; tratar com a SuperLive.",
+                            path, resp.status_code)
             raise SuperLiveError(
                 _server_message(parsed) or f"HTTP {resp.status_code}", resp.status_code, parsed,
                 retry_after=_retry_after_seconds(resp.headers.get("Retry-After")),
@@ -537,6 +620,7 @@ class SuperLiveClient:
         if priority >= PRIORITY_LOW and queue.qsize() >= _low_queue_max():
             # Shed background polling instead of letting it pile up behind (and
             # delay) real work; the watcher just tries again next cycle.
+            _stats_for(self._proxy()).shed += 1
             raise SuperLiveError("Fila de saída do SuperLive ocupada; tentando de novo em breve.", 0)
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
@@ -699,20 +783,26 @@ class SuperLiveClient:
         items = data.get("items")
         return items if isinstance(items, list) else []
 
-    def _profile_result(self, profile: dict) -> dict:
+    def _profile_result(self, profile: dict, include_user_id: bool = False) -> dict:
         images = profile.get("profile_images")
         avatar = images[0].get("url") if isinstance(images, list) and images else None
         if avatar is None and isinstance(profile.get("profile_image"), dict):
             avatar = profile["profile_image"].get("url")
         livestream_id = profile.get("livestream_id")
-        return {
+        result = {
             "nickname": profile.get("name") or "Streamer",
             "avatar": avatar,
             "live": bool(livestream_id),
             "livestream_id": str(livestream_id) if livestream_id else None,
         }
+        if include_user_id:
+            # internal use only (the API responses keep their shape): lets a caller tell
+            # whether two lookups read the same account
+            result["user_id"] = str(profile.get("user_id") or profile.get("id") or "") or None
+        return result
 
-    async def find_live_by_user_id(self, user_id: str, priority: int = PRIORITY_NORMAL) -> dict:
+    async def find_live_by_user_id(self, user_id: str, priority: int = PRIORITY_NORMAL,
+                                   include_user_id: bool = False) -> dict:
         """Resolve a streamer's *internal* account id to her current livestream_id, if
         she is live right now — the same lookup the app's profile screen uses to enable
         its "watch live" button (``OtherProfileViewModel``: the button only works when
@@ -721,9 +811,10 @@ class SuperLiveClient:
         profile = await self.other_profile(user_id, priority)
         if not profile or not (profile.get("user_id") or profile.get("id")):
             raise SuperLiveError("Não encontramos nenhuma conta com esse ID.", 200, profile)
-        return self._profile_result(profile)
+        return self._profile_result(profile, include_user_id)
 
-    async def find_live_by_shared_id(self, shared_id: str, priority: int = PRIORITY_NORMAL) -> dict:
+    async def find_live_by_shared_id(self, shared_id: str, priority: int = PRIORITY_NORMAL,
+                                     include_user_id: bool = False) -> dict:
         """Resolve the **public** "ID: ..." shown on a SuperLive profile (``shared_id``)
         to her current livestream_id. ``shared_id`` is a different field from the
         internal ``user_id`` that :meth:`other_profile` actually keys on — confirmed by
@@ -736,7 +827,7 @@ class SuperLiveClient:
         cached = _shared_id_cache.get(str(shared_id))
         if cached:
             try:
-                return await self.find_live_by_user_id(cached, priority)
+                return await self.find_live_by_user_id(cached, priority, include_user_id)
             except SuperLiveError as exc:
                 if exc.status == 0 or exc.status >= 500:
                     raise  # transient (network, SuperLive down): the id is still good
@@ -752,9 +843,9 @@ class SuperLiveClient:
         if not user_id:
             # the search result itself still carries name/livestream_id; fall back to it
             # rather than failing outright if, for some reason, it has no user_id.
-            return self._profile_result(match)
+            return self._profile_result(match, include_user_id)
         _shared_id_cache[str(shared_id)] = str(user_id)
-        return await self.find_live_by_user_id(str(user_id), priority)
+        return await self.find_live_by_user_id(str(user_id), priority, include_user_id)
 
     async def get_settings(self) -> dict:
         return unwrap(await self.post("user/settings", {}))

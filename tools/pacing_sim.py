@@ -43,6 +43,9 @@ MODES = {
     "legacy": {"yield_to_urgent": False, "from_start": False},
     "urgent_first": {"yield_to_urgent": True, "from_start": False},
     "urgent_first_from_start": {"yield_to_urgent": True, "from_start": True},
+    # a chat message waiting out its 3 s gap lets ANY other ready call go first (own lane)
+    "lanes": {"yield_to_urgent": True, "from_start": False, "lanes": True},
+    "lanes_from_start": {"yield_to_urgent": True, "from_start": True, "lanes": True},
 }
 
 
@@ -163,6 +166,63 @@ def simulate(arrivals, mode, spacing, msg_spacing):
     return waits, demand, now, max_queue
 
 
+def simulate_lanes(arrivals, from_start, spacing, msg_spacing):
+    """Same rules as simulate(), but chat messages wait in their own lane: while one is
+    waiting out its gap, the line serves other ready calls (polls etc.) instead of idling."""
+    import collections
+    n = len(arrivals)
+    i = 0
+    urgent, other, msgs = [], [], collections.deque()
+    seq = 0
+    now = 0.0
+    last_any = -1e9
+    last_msg = -1e9
+    waits = {"urgent": [], "message": [], "other": []}
+    demand = 0.0
+    max_queue = 0
+    INF = float("inf")
+    while i < n or urgent or other or msgs:
+        while i < n and arrivals[i][0] <= now:
+            t, prio, is_msg, L = arrivals[i]
+            if prio <= URGENT:
+                heapq.heappush(urgent, (seq, t, L))
+            elif is_msg:
+                msgs.append((t, L))
+            else:
+                heapq.heappush(other, (prio, seq, t, L))
+            seq += 1
+            i += 1
+        max_queue = max(max_queue, len(urgent) + len(other) + len(msgs))
+        if not (urgent or other or msgs):
+            now = max(now, arrivals[i][0])
+            continue
+        base = max(now, last_any + spacing)
+        if urgent:
+            kind, start = "urgent", base
+        else:
+            t_msg = max(base, last_msg + msg_spacing) if msgs else INF
+            t_oth = base if other else INF
+            kind, start = ("message", t_msg) if t_msg <= t_oth else ("other", t_oth)
+        # something may arrive before this call can start and change the choice
+        if i < n and arrivals[i][0] < start:
+            now = arrivals[i][0]
+            continue
+        if kind == "urgent":
+            _s, t_arr, L = heapq.heappop(urgent)
+        elif kind == "message":
+            t_arr, L = msgs.popleft()
+        else:
+            _p, _s, t_arr, L = heapq.heappop(other)
+        waits[kind].append(start - t_arr)
+        finish = start + L
+        demand += max(L, spacing) if from_start else L + spacing
+        last_any = start if from_start else finish
+        if kind == "message":
+            last_msg = finish
+        now = finish
+    return waits, demand, now, max_queue
+
+
 def run_all(calls, lives, runs, seed, spacing, msg_spacing, modes, sync):
     results = {m: {"urgent": [], "message": [], "other": [], "util": [], "maxq": []} for m in modes}
     offered = []
@@ -171,7 +231,10 @@ def run_all(calls, lives, runs, seed, spacing, msg_spacing, modes, sync):
         arrivals, span = build_arrivals(calls, lives, rng, sync)
         offered.append(len(arrivals) / span)
         for m in modes:
-            waits, demand, _end, maxq = simulate(arrivals, m, spacing, msg_spacing)
+            if MODES[m].get("lanes"):
+                waits, demand, _end, maxq = simulate_lanes(arrivals, MODES[m]["from_start"], spacing, msg_spacing)
+            else:
+                waits, demand, _end, maxq = simulate(arrivals, m, spacing, msg_spacing)
             for name in ("urgent", "message", "other"):
                 results[m][name].append(waits[name])
             results[m]["util"].append(demand / span)

@@ -60,6 +60,20 @@ services:
       # 1 = count the request spacing from when the previous call STARTED (cycle =
       # max(L, spacing)). Raises the request rate; leave 0 until the trace shows L.
       SUPERLIVE_PACING_FROM_START: "${SUPERLIVE_PACING_FROM_START:-0}"
+      # 1 = count the 3 s gap between chat messages from when the previous message STARTED
+      # (about +11% message throughput). Leave 0 until the trace shows it is needed.
+      SUPERLIVE_MESSAGE_FROM_START: "${SUPERLIVE_MESSAGE_FROM_START:-0}"
+      # After 3 network failures in a row, background lookups pause (2 s doubling to 30 s).
+      # Urgent calls and chat messages are never skipped. 0 = off.
+      SUPERLIVE_NETWORK_COOLDOWN: "${SUPERLIVE_NETWORK_COOLDOWN:-1}"
+      # Seconds between a session's "did she go live?" checks (minimum 10). It is also the
+      # longest a new live can go unnoticed by a session with no watch.
+      SUPERLIVE_SESSION_POLL_S: "${SUPERLIVE_SESSION_POLL_S:-20}"
+      # 0 = always repeat the profile lookup by internal id when the public-id lookup says she is
+      # offline (old behaviour). 1 = skip it when both read the same account.
+      SUPERLIVE_DEDUPE_LOOKUP: "${SUPERLIVE_DEDUPE_LOOKUP:-1}"
+      # Live sessions per egress IP shown as the suggested maximum in the admin panel.
+      SM_SUGGESTED_SESSIONS_PER_EGRESS: "${SM_SUGGESTED_SESSIONS_PER_EGRESS:-15}"
       # Bootstraps the FIRST admin_accounts row at startup, only while none
       # exists yet (see main._bootstrap_admin_account) - the admin panel's
       # own login, fully separate from the portal's users table. No public

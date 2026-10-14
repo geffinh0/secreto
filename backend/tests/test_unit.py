@@ -856,6 +856,343 @@ class DispatcherPacingTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(entry["call"]["p50"], 0.02)
 
 
+class NetworkPauseAndFlagsTests(unittest.IsolatedAsyncioTestCase):
+    """Network pause for background lookups, message gap from start, shed counter."""
+
+    async def test_background_lookups_pause_after_three_network_failures_but_not_actions(self):
+        import superlive
+        calls = []
+
+        def fake_post(self, path, body, auth):
+            calls.append(path)
+            if path == "users/profile":
+                raise SuperLiveError("Falha de rede: boom", 0)
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_NETWORK_PAUSE_MIN_SECONDS": "0.4",
+               "SUPERLIVE_NETWORK_COOLDOWN": "1"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-net-pause:1080")
+            for _ in range(3):
+                with self.assertRaises(SuperLiveError):
+                    await c.post("users/profile", {})
+            self.assertEqual(calls.count("users/profile"), 3)
+            with self.assertRaises(SuperLiveError) as cm:           # 4th: skipped, never sent
+                await c.post("users/profile", {})
+            self.assertEqual(cm.exception.kind, "pausa")
+            self.assertEqual(calls.count("users/profile"), 3)
+            with self.assertRaises(SuperLiveError):                 # low priority is skipped too
+                await c.post("anything", {}, priority=PRIORITY_LOW)
+            await c.post("mute", {}, priority=PRIORITY_URGENT)       # actions go through
+            await c.post(superlive._MESSAGE_PATH, {})
+            self.assertIn("mute", calls)
+            self.assertIn(superlive._MESSAGE_PATH, calls)
+            await asyncio.sleep(0.5)                                # the pause ends
+            with self.assertRaises(SuperLiveError) as again:
+                await c.post("users/profile", {})                   # reaches the network again
+            self.assertNotEqual(again.exception.kind, "pausa")
+            self.assertEqual(calls.count("users/profile"), 4)
+        entry = next(v for k, v in superlive.pacing_stats().items() if "egress-net-pause" in k)
+        self.assertGreaterEqual(entry["skipped_network_pause"], 2)
+
+    async def test_a_success_clears_the_network_pause(self):
+        results = iter([SuperLiveError("x", 0), SuperLiveError("x", 0), None, SuperLiveError("x", 0)])
+
+        def fake_post(self, path, body, auth):
+            r = next(results)
+            if r is not None:
+                raise r
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_NETWORK_COOLDOWN": "1"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-net-reset:1080")
+            for _ in range(2):
+                with self.assertRaises(SuperLiveError):
+                    await c.post("users/profile", {})
+            await c.post("users/profile", {})                       # success resets the count
+            with self.assertRaises(SuperLiveError) as cm:           # 1st failure again: still sent
+                await c.post("users/profile", {})
+            self.assertNotEqual(cm.exception.kind, "pausa")
+
+    async def test_network_pause_can_be_turned_off(self):
+        calls = []
+
+        def fake_post(self, path, body, auth):
+            calls.append(path)
+            raise SuperLiveError("x", 0)
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_NETWORK_COOLDOWN": "0"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", fake_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-net-off:1080")
+            for _ in range(6):
+                with self.assertRaises(SuperLiveError):
+                    await c.post("users/profile", {})
+        self.assertEqual(len(calls), 6)
+
+    async def test_message_gap_can_count_from_the_start_of_the_previous_message(self):
+        import superlive
+
+        def slow_post(self, path, body, auth):
+            time.sleep(0.2)
+            return {}
+
+        async def gap(flag, proxy):
+            env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_MESSAGE_SPACING_SECONDS": "0.5",
+                   "SUPERLIVE_MESSAGE_FROM_START": flag}
+            starts = []
+
+            def timed(self, path, body, auth):
+                starts.append(time.monotonic())
+                time.sleep(0.2)
+                return {}
+
+            with mock.patch.object(SuperLiveClient, "_post_sync", timed), mock.patch.dict("os.environ", env):
+                c = SuperLiveClient("t", "d", proxy_url=proxy)
+                await asyncio.gather(c.post(superlive._MESSAGE_PATH, {}), c.post(superlive._MESSAGE_PATH, {}))
+            return starts[1] - starts[0]
+
+        legacy = await gap("0", "socks5h://egress-msg-legacy:1080")        # 0.2 call + 0.5 gap
+        from_start = await gap("1", "socks5h://egress-msg-start:1080")     # 0.5 gap from the start
+        self.assertGreaterEqual(legacy, 0.68)
+        self.assertGreaterEqual(from_start, 0.48)
+        self.assertLess(from_start, legacy - 0.1)
+
+    async def test_shed_background_calls_are_counted(self):
+        import superlive
+        release = threading.Event()
+
+        def blocking_post(self, path, body, auth):
+            release.wait(5)
+            return {}
+
+        env = {"SUPERLIVE_REQUEST_SPACING": "0", "SUPERLIVE_LOW_QUEUE_MAX": "1"}
+        with mock.patch.object(SuperLiveClient, "_post_sync", blocking_post), mock.patch.dict("os.environ", env):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-shed-count:1080")
+            busy = [asyncio.create_task(c.post("a", {})) for _ in range(3)]
+            await asyncio.sleep(0.1)
+            with self.assertRaises(SuperLiveError):
+                await c.post("poll", {}, priority=PRIORITY_LOW)
+            release.set()
+            await asyncio.gather(*busy)
+        entry = next(v for k, v in superlive.pacing_stats().items() if "egress-shed-count" in k)
+        self.assertEqual(entry["shed"], 1)
+
+    def test_profile_result_exposes_the_account_id(self):
+        c = SuperLiveClient("t", "d", proxy_url="")
+        self.assertEqual(c._profile_result({"user_id": "u9", "name": "S"}, True)["user_id"], "u9")
+        self.assertEqual(c._profile_result({"id": 7, "name": "S"}, True)["user_id"], "7")
+        self.assertIsNone(c._profile_result({"name": "S"}, True)["user_id"])
+        self.assertNotIn("user_id", c._profile_result({"user_id": "u9", "name": "S"}))   # API shape unchanged
+
+
+class _LookupClient:
+    device_id = "dev"
+    token = "tok"
+
+    def __init__(self, shared=None, shared_exc=None, by_user=None):
+        self.shared = shared
+        self.shared_exc = shared_exc
+        self.by_user = by_user
+        self.calls = []
+
+    async def find_live_by_shared_id(self, shared_id, priority=5, include_user_id=False):
+        self.calls.append("shared")
+        if self.shared_exc:
+            raise self.shared_exc
+        return self.shared
+
+    async def find_live_by_user_id(self, user_id, priority=5, include_user_id=False):
+        self.calls.append("user")
+        return self.by_user
+
+
+class LiveLookupDedupeTests(unittest.IsolatedAsyncioTestCase):
+    """The "is she live yet?" check used to read the same profile twice (public id, then
+    internal id) every cycle. The second read is skipped only when it would be the same
+    request; detection of a live that starts later is untouched."""
+
+    OFFLINE = {"live": False, "livestream_id": None, "user_id": "U1"}
+
+    def make(self, client):
+        from engine import BotSession
+        session = BotSession(user_id=1, client=client, robot_sl_id="bot", livestream_id=None)
+        session.watch_shared_id = "S1"
+        session.streamer_id = "U1"
+        return session
+
+    async def test_same_account_offline_is_one_call(self):
+        c = _LookupClient(shared=dict(self.OFFLINE))
+        self.assertIsNone(await self.make(c)._find_next_live())
+        self.assertEqual(c.calls, ["shared"])
+
+    async def test_different_account_still_checks_the_internal_id(self):
+        c = _LookupClient(shared={"live": False, "livestream_id": None, "user_id": "OTHER"},
+                          by_user={"live": True, "livestream_id": "L9", "user_id": "U1"})
+        self.assertEqual(await self.make(c)._find_next_live(), "L9")
+        self.assertEqual(c.calls, ["shared", "user"])
+
+    async def test_profile_without_user_id_keeps_the_old_behaviour(self):
+        c = _LookupClient(shared={"live": False, "livestream_id": None})
+        await self.make(c)._find_next_live()
+        self.assertEqual(c.calls, ["shared", "user"])
+
+    async def test_failed_public_lookup_that_is_not_transient_still_falls_back(self):
+        c = _LookupClient(shared_exc=SuperLiveError("Não encontramos nenhuma conta", 200),
+                          by_user={"live": True, "livestream_id": "L3", "user_id": "U1"})
+        self.assertEqual(await self.make(c)._find_next_live(), "L3")
+        self.assertEqual(c.calls, ["shared", "user"])
+
+    async def test_no_second_request_after_network_error_throttling_or_5xx(self):
+        for exc in (SuperLiveError("rede", 0), SuperLiveError("limite", 429), SuperLiveError("fora", 503)):
+            c = _LookupClient(shared_exc=exc, by_user={"live": True, "livestream_id": "L1", "user_id": "U1"})
+            self.assertIsNone(await self.make(c)._find_next_live())
+            self.assertEqual(c.calls, ["shared"])
+
+    async def test_live_found_by_the_first_lookup_needs_no_second(self):
+        c = _LookupClient(shared={"live": True, "livestream_id": "L5", "user_id": "U1"})
+        self.assertEqual(await self.make(c)._find_next_live(), "L5")
+        self.assertEqual(c.calls, ["shared"])
+
+    async def test_a_live_that_starts_later_is_still_detected(self):
+        c = _LookupClient(shared=dict(self.OFFLINE))
+        session = self.make(c)
+        self.assertIsNone(await session._find_next_live())            # cycle 1: offline, one call
+        self.assertEqual(c.calls, ["shared"])
+        c.shared = {"live": True, "livestream_id": "L7", "user_id": "U1"}
+        self.assertEqual(await session._find_next_live(), "L7")        # cycle 2: found
+        self.assertEqual(c.calls, ["shared", "shared"])
+
+    async def test_switch_off_restores_the_second_request(self):
+        c = _LookupClient(shared=dict(self.OFFLINE))
+        with mock.patch.dict("os.environ", {"SUPERLIVE_DEDUPE_LOOKUP": "0"}):
+            await self.make(c)._find_next_live()
+        self.assertEqual(c.calls, ["shared", "user"])
+
+    async def test_counters_say_what_the_second_lookup_did(self):
+        import engine
+        before = engine.lookup_stats()
+        c = _LookupClient(shared=dict(self.OFFLINE))
+        await self.make(c)._find_next_live()
+        after = engine.lookup_stats()
+        self.assertEqual(after["skipped_same_id"], before["skipped_same_id"] + 1)
+
+
+class PassiveTelemetryTests(unittest.IsolatedAsyncioTestCase):
+    """Counters only: they must never change what a session does."""
+
+    def make(self, client=None):
+        from engine import BotSession
+        session = BotSession(user_id=1, client=client or _FakeClient(), robot_sl_id="bot", livestream_id="L1")
+        session.state = "running"
+        return session
+
+    async def test_frame_types_are_counted_without_touching_any_handler_or_the_queue(self):
+        session = self.make()
+        for kind in ("livestream_viewers_update", "livestream_viewers_update", "something_new"):
+            await session._on_frame(json.dumps({"type": kind, "data": {"livestream_id": "L1"}}))
+        await session._on_frame("not json at all")
+        counts = session.telemetry()["frame_types"]
+        self.assertEqual(counts["livestream_viewers_update"], 2)
+        self.assertEqual(counts["something_new"], 1)
+        self.assertEqual(session._queue.qsize(), 0)          # no action was decided from them
+        self.assertEqual(session.chat_seen, 0)
+
+    async def test_frame_type_labels_are_bounded(self):
+        session = self.make()
+        for i in range(200):
+            await session._on_frame(json.dumps({"type": f"t{i}", "data": {}}))
+        self.assertLessEqual(len(session._frame_counts), 81)
+        self.assertIn("(outros)", session._frame_counts)
+
+    async def test_status_checks_are_counted_and_the_result_is_unchanged(self):
+        client = _LookupClient(shared={"live": False, "livestream_id": None, "user_id": "U1"})
+        session = self.make(client)
+        session.watch_shared_id = "S1"
+        self.assertIs(await session._check_live_status(), False)
+        self.assertEqual(session.telemetry()["status_checks"], 1)
+
+    def test_snapshot_exposes_the_telemetry(self):
+        snap = self.make().snapshot()
+        self.assertEqual(snap["telemetry"], {"frame_types": {}, "ws_drops": 0, "status_checks": 0})
+
+    async def test_pacing_stats_count_calls_by_path(self):
+        import superlive
+
+        with mock.patch.object(SuperLiveClient, "_post_sync", lambda self, p, b, a: {}), \
+                mock.patch.dict("os.environ", {"SUPERLIVE_REQUEST_SPACING": "0"}):
+            c = SuperLiveClient("t", "d", proxy_url="socks5h://egress-by-path:1080")
+            for path in ("users/profile", "users/profile", "livestream/kick"):
+                await c.post(path, {})
+        entry = next(v for k, v in superlive.pacing_stats().items() if "egress-by-path" in k)
+        self.assertEqual(entry["by_path"], {"users/profile": 2, "livestream/kick": 1})
+
+    def test_verification_requests_are_recognised_but_ordinary_errors_are_not(self):
+        import superlive
+        ask = superlive._asks_for_verification
+        self.assertTrue(ask(403, "Please complete the Turnstile challenge"))
+        self.assertTrue(ask(400, "You need to verify your identity to go live"))
+        self.assertTrue(ask(428, "captcha required"))
+        self.assertFalse(ask(400, "Invalid verification code"))     # normal sign-in error
+        self.assertFalse(ask(500, "captcha"))
+        self.assertFalse(ask(403, "Forbidden"))
+        self.assertFalse(ask(200, "turnstile"))
+
+
+class PermanentMessageRefusalTests(unittest.TestCase):
+    PREMIUM = SuperLiveError("\U0001F512This is a PREMIUM stream. To enter, send a gift worth 99 or more.", 400,
+                             {"error": {"code": 10, "message": "This is a PREMIUM stream"}})
+    GONE = SuperLiveError("There is not any active livestream with given livestream_id", 404,
+                          {"error": {"code": 3, "message": "There is not any active livestream"}})
+
+    def test_only_the_two_known_refusals_are_permanent(self):
+        from engine import BotSession
+        self.assertIn("exige presente", BotSession._permanent_message_refusal(self.PREMIUM))
+        self.assertIn("não está mais ativa", BotSession._permanent_message_refusal(self.GONE))
+        for exc in (SuperLiveError("HTTP 400", 400, {"error": {"code": 10, "message": "other"}}),
+                    SuperLiveError("rate", 429), SuperLiveError("net", 0), SuperLiveError("x", 500),
+                    SuperLiveError("HTTP 400", 400, None),
+                    SuperLiveError("PREMIUM", 400, {"error": {"code": 99}})):
+            self.assertIsNone(BotSession._permanent_message_refusal(exc), exc.message)
+
+
+class AutoMessageStopsOnRefusedLiveTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_premium_refusal_stops_the_messages_for_that_live_only(self):
+        from engine import BotSession
+        sent = []
+
+        class Client:
+            device_id = "d"
+            token = "t"
+
+            async def send_text(self, live_id, text):
+                sent.append(live_id)
+                if live_id == "L1":
+                    raise PermanentMessageRefusalTests.PREMIUM
+
+        session = BotSession(user_id=1, client=Client(), robot_sl_id="bot", livestream_id="L1")
+        session.state = "running"
+        cfg = {"settings": {"auto_messages_enabled": True, "message_interval_seconds": 10},
+               "messages": ["oi"]}
+        session._config = lambda force=False: cfg
+        with mock.patch("engine.MIN_INTERVAL_SECONDS", 0), \
+                mock.patch.object(BotSession, "_interval", staticmethod(lambda c: 0.01)), \
+                mock.patch.object(BotSession, "_handle_live_error_or_change", mock.AsyncMock()):
+            task = asyncio.create_task(session._auto_message_loop())
+            await asyncio.sleep(0.15)
+            self.assertEqual(sent, ["L1"])                                  # tried once, then stopped
+            self.assertIn("exige presente", session.last_error)
+            session.livestream_id = "L2"                                    # next live: tries again
+            await asyncio.sleep(0.1)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        self.assertIn("L2", sent)
+        self.assertEqual(sent.count("L1"), 1)
+
+
 class EgressPoolTests(unittest.IsolatedAsyncioTestCase):
     """Scale: one serial queue PER egress IP (the SuperLive collision rule is per IP),
     background polling shed first, and a fixed least-loaded egress per user."""
