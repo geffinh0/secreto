@@ -5,6 +5,8 @@
 #   git pull && deploy/deploy.sh
 #   FORCE=1 deploy/deploy.sh     # faz o deploy mesmo com lives sendo moderadas
 #                                # (derruba essas sessoes; a fila em memoria se perde)
+#   ONLY=backend deploy/deploy.sh   # so o backend: nao rebuilda nem recria o web (use quando
+#                                   # o repositorio tem mudancas de tela que ainda nao devem ir ao ar)
 #
 # O que faz, em ordem (para na primeira falha):
 #   1. garante a chave que cifra o token do robo (secrets/sm_token_key)
@@ -32,6 +34,7 @@ BACKEND=atilas_client_backend
 WEB=atilas_client_web
 CATA_NGINX=${CATA_NGINX:-cata_pobre_nginx}
 FORCE=${FORCE:-0}
+ONLY=${ONLY:-}   # vazio = backend e web; backend = so o backend
 
 say() { printf '\n==> %s\n' "$*"; }
 running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || echo false)" = true ]; }
@@ -93,7 +96,7 @@ else
 fi
 
 say "4/7 build das imagens novas (nada e derrubado ainda) - build $BUILD_ID"
-docker compose build
+docker compose build ${ONLY:+$ONLY}
 
 # o container roda como `appuser`; a chave (modo 400) precisa pertencer a esse uid
 # (docker run direto na imagem: `compose run` tentaria pegar o IP fixo do backend, que ja esta em uso)
@@ -138,13 +141,20 @@ if [ "$healthy" != 1 ]; then
   echo "O web antigo continua no ar. Para voltar: deploy/rollback.sh $STAMP"
   exit 1
 fi
-docker compose up -d --no-deps web
-# o web ganha outro IP em proxy_shared a cada recriacao; o nginx do cata-pobre
-# guarda o antigo ate recarregar. Recarregar so releia a config (sem derrubar nada).
-if docker exec "$CATA_NGINX" nginx -t >/dev/null 2>&1 && docker exec "$CATA_NGINX" nginx -s reload 2>/dev/null; then
-  echo "nginx do cata-pobre recarregado."
+if [ "$ONLY" = backend ]; then
+  # o backend tem IP fixo na rede interna (docker-compose.yml): o nginx do web continua achando-o.
+  # Recarregar o nginx do web so garante que ele reabra a conexao; nao derruba nada.
+  docker exec "$WEB" nginx -s reload >/dev/null 2>&1 || true
+  echo "ONLY=backend: o web nao foi reconstruido nem recriado."
 else
-  echo "AVISO: nao consegui recarregar $CATA_NGINX; rode 'docker exec $CATA_NGINX nginx -s reload' como root se o site der 502."
+  docker compose up -d --no-deps web
+  # o web ganha outro IP em proxy_shared a cada recriacao; o nginx do cata-pobre
+  # guarda o antigo ate recarregar. Recarregar so releia a config (sem derrubar nada).
+  if docker exec "$CATA_NGINX" nginx -t >/dev/null 2>&1 && docker exec "$CATA_NGINX" nginx -s reload 2>/dev/null; then
+    echo "nginx do cata-pobre recarregado."
+  else
+    echo "AVISO: nao consegui recarregar $CATA_NGINX; rode 'docker exec $CATA_NGINX nginx -s reload' como root se o site der 502."
+  fi
 fi
 
 say "7/7 teste de fumaca"
