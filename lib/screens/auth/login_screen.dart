@@ -173,7 +173,7 @@ class AuthShell extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Reveal(child: FoxIcon(size: 64)),
+                    const Reveal(child: FoxIcon(size: 128)),
                     Reveal(
                       index: 1,
                       child: ConstrainedBox(
@@ -219,7 +219,7 @@ class AuthShell extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Reveal(child: FoxIcon(size: 48)),
+                  const Reveal(child: FoxIcon(size: 88)),
                   const SizedBox(height: AppSpacing.xl),
                   Reveal(index: 1, child: _titleBlock()),
                   const SizedBox(height: AppSpacing.xl),
