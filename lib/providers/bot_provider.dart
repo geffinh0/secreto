@@ -59,7 +59,7 @@ class BotProvider extends ChangeNotifier {
     } else if (!_loaded) {
       _loaded = true;
       _connectionState = BotConnectionState.disconnected;
-      _error = PortalApiService.errorMessage(result, 'Erro ao carregar o status do robô');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível carregar o estado do robô. Tente de novo.');
     }
     notifyListeners();
   }
@@ -88,7 +88,7 @@ class BotProvider extends ChangeNotifier {
       notifyListeners();
       return retry is num ? retry.toInt() : 60;
     }
-    _error = PortalApiService.errorMessage(result, 'Não foi possível enviar o código por SMS.');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível enviar o código por SMS. Tente de novo.');
     _connectionState = BotConnectionState.error;
     notifyListeners();
     return null;
@@ -138,7 +138,7 @@ class BotProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Não foi possível enviar o código por e-mail.');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível enviar o código por e-mail. Tente de novo.');
     _connectionState = BotConnectionState.error;
     notifyListeners();
     return false;
@@ -198,7 +198,7 @@ class BotProvider extends ChangeNotifier {
     if (result['success'] == true && result['data'] is Map) {
       _apply(result['data'] as Map);
     } else {
-      _error = PortalApiService.errorMessage(result, 'Erro ao desconectar o robô');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível desconectar o robô. Tente de novo.');
     }
     notifyListeners();
   }
@@ -219,7 +219,7 @@ class BotProvider extends ChangeNotifier {
     if (ok) {
       _apply(result['data'] as Map);
     } else {
-      _error = PortalApiService.errorMessage(result, 'Não foi possível iniciar o robô');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível iniciar o robô. Tente de novo.');
     }
     notifyListeners();
     return ok;
@@ -237,7 +237,7 @@ class BotProvider extends ChangeNotifier {
     if (ok) {
       _apply(result['data'] as Map);
     } else {
-      _error = PortalApiService.errorMessage(result, 'Não foi possível parar o robô');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível parar o robô. Tente de novo.');
     }
     notifyListeners();
     return ok;
@@ -259,7 +259,7 @@ class BotProvider extends ChangeNotifier {
     if (result['success'] == true && result['data'] is Map) {
       return StreamerLookup.fromJson((result['data'] as Map).cast<String, dynamic>());
     }
-    _error = PortalApiService.errorMessage(result, 'Não foi possível buscar essa conta.');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível buscar essa conta. Tente de novo.');
     notifyListeners();
     return null;
   }
@@ -278,7 +278,7 @@ class BotProvider extends ChangeNotifier {
     if (ok) {
       await refresh(); // pulls in both the new watch state and any session it just started
     } else {
-      _error = PortalApiService.errorMessage(result, 'Não foi possível salvar a streamer favorita');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível salvar o streamer favorito. Tente de novo.');
       notifyListeners();
     }
     return ok;
@@ -297,7 +297,7 @@ class BotProvider extends ChangeNotifier {
       });
       return null;
     }
-    return PortalApiService.errorMessage(result, 'Não foi possível chamar o robô agora.');
+    return PortalApiService.errorMessage(result, 'Não foi possível chamar o robô agora. Tente de novo.');
   }
 
   void clearError() {

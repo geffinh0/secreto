@@ -34,7 +34,8 @@ class StatsProvider extends ChangeNotifier {
       _stats = ModerationStats.fromJson(result['data']);
       _error = null;
     } else {
-      _error = PortalApiService.errorMessage(result, 'Erro ao carregar estatísticas');
+      _stats = null;
+      _error = PortalApiService.errorMessage(result, 'Não foi possível carregar as estatísticas. Tente de novo.');
     }
 
     _isLoading = false;

@@ -112,6 +112,40 @@ Se um dia o `nginx/atila.conf` precisar mudar, é só repetir o passo 3a (copiar
 de novo) + 3d (rebuild só do nginx) — não precisa mexer no certbot de novo a
 menos que o domínio mude.
 
+## 6b. Atualização para todos (cache dos navegadores)
+
+Antes, o nginx deixava **todos** os arquivos do app em cache por 7 dias (só
+`index.html`, service worker e manifest eram revalidados), então quem já tinha
+o site aberto ou instalado podia ficar até uma semana na versão velha. Agora
+cada deploy tem um **`BUILD_ID`** (`<git sha>-<data-hora>`, definido por
+`deploy/deploy.sh`) e a atualização chega por quatro caminhos:
+
+1. **nginx** (`deploy/nginx.conf`): tudo é `no-cache`, isto é, o navegador
+   guarda mas pergunta ao servidor a cada uso (ETag, resposta 304 barata).
+   `build.json` é `no-store`.
+2. **URLs com versão:** `index.html` carrega `flutter_bootstrap.js?v=<BUILD_ID>`
+   e esse arquivo carrega `main.dart.js?v=<BUILD_ID>`. URL nova = o navegador
+   busca o arquivo novo, mesmo com cópia velha no cache.
+3. **Limpeza única por versão:** o `index.html` guarda o build em
+   `localStorage` (`app_build`). Se for diferente, desregistra o service worker
+   e apaga o Cache Storage antigo e recarrega uma vez (trava anti-loop em
+   `sessionStorage`). O login (`localStorage` do Flutter) **não** é tocado. O
+   nginx também manda `Clear-Site-Data: "cache"` até o navegador ter o cookie
+   `app_build` igual ao build atual (limpa o cache HTTP velho uma vez; Safari
+   ignora o cabeçalho e depende das URLs com versão).
+4. **Aviso com o app aberto:** a página consulta `/build.json` a cada 5 min e
+   quando a aba volta ao foco. Se o build do servidor for outro, o app mostra
+   "Há uma nova versão do app" com o botão **Atualizar agora** (limpa o
+   service worker/caches e recarrega).
+
+Quem estiver no app antigo (sem esse esquema) recebe o `index.html` novo na
+próxima abertura (ele já era `no-cache`) e entra no caminho 3.
+
+Para testar localmente sem Docker: `flutter build web`, troque `@@BUILD_ID@@`
+em `build/web/index.html` por um valor qualquer e crie `build/web/build.json`
+com `{"build":"mesmo-valor"}`; mudar o `build.json` simula um deploy novo.
+Em `flutter run` o token não é trocado e o esquema fica desligado.
+
 ## 7. Backup do banco
 
 O banco roda em modo WAL (`journal_mode=WAL`, ver `backend/db.py`), então um

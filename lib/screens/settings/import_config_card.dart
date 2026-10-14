@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/portal_api_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/auto_message_provider.dart';
 import '../../providers/moderation_provider.dart';
+import '../../widgets/ui/ui.dart';
 
 /// "Importar configurações": paste the contents of a backup file (.json, format
 /// "atilas-config") and add its moderation words and auto messages to THIS account.
@@ -47,7 +47,8 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
       final decoded = jsonDecode(text);
       if (decoded is Map<String, dynamic>) return decoded;
     } catch (_) {}
-    _error = 'Isso não parece um arquivo de backup. Cole o conteúdo completo do .json, '
+    _error =
+        'Isso não parece um arquivo de backup. Cole o conteúdo completo do .json, '
         'do primeiro "{" ao último "}".';
     return null;
   }
@@ -66,7 +67,8 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
       return;
     }
     setState(() => _busy = true);
-    final result = await _api.post('/config/import${dryRun ? '?dry_run=true' : ''}', body,
+    final result = await _api.post(
+        '/config/import${dryRun ? '?dry_run=true' : ''}', body,
         timeout: const Duration(seconds: 60));
     if (!mounted) return;
     if (result['success'] == true && result['data'] is Map) {
@@ -85,7 +87,8 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
     } else {
       setState(() {
         _busy = false;
-        _error = PortalApiService.errorMessage(result, 'Não foi possível ler o arquivo.');
+        _error = PortalApiService.errorMessage(
+            result, 'Não foi possível ler o arquivo.');
       });
     }
   }
@@ -98,7 +101,8 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
     await context.read<AutoMessageProvider>().load(user.id);
   }
 
-  int _n(Map<String, dynamic>? section, String key) => (section?[key] as num?)?.toInt() ?? 0;
+  int _n(Map<String, dynamic>? section, String key) =>
+      (section?[key] as num?)?.toInt() ?? 0;
 
   Widget _summary(Map<String, dynamic> data, {required bool preview}) {
     final rules = (data['rules'] as Map?)?.cast<String, dynamic>();
@@ -113,31 +117,58 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
     }
 
     final invalid = [
-      ...((rules?['invalid_items'] as List?) ?? const []).whereType<Map>().map((e) => 'Palavra #${(e['index'] as num) + 1}: ${e['reason']}'),
-      ...((messages?['invalid_items'] as List?) ?? const []).whereType<Map>().map((e) => 'Mensagem #${(e['index'] as num) + 1}: ${e['reason']}'),
+      ...((rules?['invalid_items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => 'Palavra #${(e['index'] as num) + 1}: ${e['reason']}'),
+      ...((messages?['invalid_items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => 'Mensagem #${(e['index'] as num) + 1}: ${e['reason']}'),
     ];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: (preview ? AppTheme.primary : AppTheme.success).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: (preview ? AppTheme.primary : AppTheme.success).withValues(alpha: 0.3)),
-      ),
+    return AppSurface(
+      raised: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(preview ? 'O que vai acontecer' : 'Importação concluída',
-              style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                  preview
+                      ? Icons.fact_check_outlined
+                      : Icons.check_circle_outline,
+                  size: 20,
+                  color: preview ? AppColors.accent : AppColors.success),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                    preview ? 'O que vai acontecer' : 'Importação concluída',
+                    style: AppType.bodyStrong),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Text(line('Palavras de moderação', rules),
-              key: const ValueKey('import_rules_line'),
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              key: const ValueKey('import_rules_line'), style: AppType.body),
           Text(line('Mensagens automáticas', messages),
-              key: const ValueKey('import_messages_line'),
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              key: const ValueKey('import_messages_line'), style: AppType.body),
           for (final text in invalid.take(8))
-            Text(text, style: const TextStyle(color: AppTheme.warning, fontSize: 12)),
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.warning_amber_rounded,
+                        size: 16, color: AppColors.warning),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                      child: Text(text,
+                          style:
+                              AppType.meta.copyWith(color: AppColors.warning))),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -148,102 +179,88 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
     final preview = _preview;
     final canImport = preview != null &&
         (_n((preview['rules'] as Map?)?.cast<String, dynamic>(), 'created') +
-                _n((preview['messages'] as Map?)?.cast<String, dynamic>(), 'created')) >
+                _n((preview['messages'] as Map?)?.cast<String, dynamic>(),
+                    'created')) >
             0;
-    // accent strip on the left: a border with different sides cannot have rounded corners
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
+
+    return AppSection(
+      title: 'Importar configurações',
+      subtitle:
+          'Traga as palavras de moderação e as mensagens automáticas de um arquivo de backup para esta conta. '
+          'Nada é apagado: o que já existe é mantido e repetidas são ignoradas. '
+          'A conexão com o robô e as demais configurações não mudam.',
+      child: AppSurface(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 3, color: AppTheme.accent),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(17, 20, 20, 20),
-                child: _body(preview, canImport),
+            AppTextField(
+              key: const ValueKey('import_config_field'),
+              controller: _controller,
+              label: 'Conteúdo do backup',
+              hint: 'Cole aqui o conteúdo do arquivo .json de backup',
+              minLines: 4,
+              maxLines: 8,
+              enabled: !_busy,
+              onChanged: (_) {
+                if (_preview != null || _done != null || _error != null) {
+                  setState(() {
+                    _preview = null;
+                    _done = null;
+                    _error = null;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(Icons.error_outline,
+                          size: 20, color: AppColors.danger),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(_error!, style: AppType.body),
+                    ),
+                  ],
+                ),
               ),
+            if (preview != null) ...[
+              _summary(preview, preview: true),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            if (_done != null) ...[
+              _summary(_done!, preview: false),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton.secondary(
+                  key: const ValueKey('import_check_button'),
+                  label: 'Conferir arquivo',
+                  icon: Icons.fact_check_outlined,
+                  onPressed: _busy ? null : () => _run(dryRun: true),
+                ),
+                AppButton(
+                  key: const ValueKey('import_confirm_button'),
+                  label: 'Importar',
+                  icon: Icons.upload_outlined,
+                  loading: _busy,
+                  onPressed:
+                      (_busy || !canImport) ? null : () => _run(dryRun: false),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _body(Map<String, dynamic>? preview, bool canImport) {
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Importar configurações',
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          const Text(
-              'Traga as palavras de moderação e as mensagens automáticas de um arquivo de backup para esta conta. '
-              'Nada é apagado: o que já existe é mantido e repetidas são ignoradas. '
-              'Sua conexão com o robô e as demais configurações não são alteradas.',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          const SizedBox(height: 14),
-          TextField(
-            key: const ValueKey('import_config_field'),
-            controller: _controller,
-            minLines: 4,
-            maxLines: 8,
-            enabled: !_busy,
-            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-            decoration: const InputDecoration(
-              hintText: 'Cole aqui o conteúdo do arquivo .json de backup',
-              alignLabelWithHint: true,
-            ),
-            onChanged: (_) {
-              if (_preview != null || _done != null || _error != null) {
-                setState(() {
-                  _preview = null;
-                  _done = null;
-                  _error = null;
-                });
-              }
-            },
-          ),
-          const SizedBox(height: 12),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(_error!, style: const TextStyle(color: AppTheme.error, fontSize: 13)),
-            ),
-          if (preview != null) ...[
-            _summary(preview, preview: true),
-            const SizedBox(height: 12),
-          ],
-          if (_done != null) ...[
-            _summary(_done!, preview: false),
-            const SizedBox(height: 12),
-          ],
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('import_check_button'),
-                onPressed: _busy ? null : () => _run(dryRun: true),
-                icon: const Icon(Icons.fact_check_rounded, size: 18),
-                label: const Text('Conferir arquivo'),
-              ),
-              FilledButton.icon(
-                key: const ValueKey('import_confirm_button'),
-                onPressed: (_busy || !canImport) ? null : () => _run(dryRun: false),
-                icon: _busy
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.upload_rounded, size: 18),
-                label: const Text('Importar'),
-              ),
-            ],
-          ),
-        ],
-      );
   }
 }

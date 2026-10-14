@@ -24,6 +24,9 @@ cd "$(dirname "$0")/.."
 umask 077
 
 STAMP=$(date +%Y%m%d-%H%M%S)
+# Identifies this deploy to the browsers (web image: cache busting + "new version" notice).
+BUILD_ID="$(git rev-parse --short HEAD 2>/dev/null || echo nogit)-$STAMP"
+export BUILD_ID
 BACKUP_DIR=${BACKUP_DIR:-$HOME/atila-backups}
 BACKEND=atilas_client_backend
 WEB=atilas_client_web
@@ -74,7 +77,7 @@ else
   rm -f "$BACKUP_DIR/last-deploy"
 fi
 
-say "4/7 build das imagens novas (nada e derrubado ainda)"
+say "4/7 build das imagens novas (nada e derrubado ainda) - build $BUILD_ID"
 docker compose build
 
 # o container roda como `appuser`; a chave (modo 400) precisa pertencer a esse uid

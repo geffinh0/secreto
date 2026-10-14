@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/common/gradient_button.dart';
+import '../../widgets/ui/ui.dart';
 import 'change_password_screen.dart' show passwordRuleError;
+import 'login_screen.dart' show AuthShell, AuthErrorBanner;
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -14,8 +14,7 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen>
-    with SingleTickerProviderStateMixin {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
@@ -25,23 +24,8 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscurePass = true;
   bool _obscureConfirm = true;
 
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _animCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-    _animCtrl.forward();
-  }
-
   @override
   void dispose() {
-    _animCtrl.dispose();
     _usernameController.dispose();
     _displayNameController.dispose();
     _agencyCodeController.dispose();
@@ -64,189 +48,108 @@ class _RegisterScreenState extends State<RegisterScreen>
     }
   }
 
+  Widget _visibilityToggle(bool obscured, VoidCallback onToggle) => IconButton(
+        tooltip: obscured ? 'Mostrar senha' : 'Ocultar senha',
+        icon: Icon(
+          obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          color: AppColors.muted,
+        ),
+        onPressed: onToggle,
+      );
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    return Scaffold(
-      backgroundColor: AppTheme.bgDark,
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.pageHorizontal(context),
-              vertical: 32,
+    return AuthShell(
+      title: 'Criar conta',
+      subtitle:
+          'Use o código da sua agência para configurar o portal de moderação.',
+      footerNote: 'Já tem conta?',
+      footer: AppButton.text(
+        label: 'Entrar',
+        onPressed: () => context.go('/login'),
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (auth.error != null) AuthErrorBanner(message: auth.error!),
+            AppTextField(
+              controller: _agencyCodeController,
+              label: 'Código da agência',
+              hint: 'Peça o código à sua agência',
+              inputFormatters: [
+                TextInputFormatter.withFunction(
+                    (old, v) => v.copyWith(text: v.text.toUpperCase())),
+              ],
+              textInputAction: TextInputAction.next,
+              validator: (v) => (v?.trim().isEmpty ?? true)
+                  ? 'Informe o código da sua agência'
+                  : null,
             ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Logo
-                  Center(
-                    child: Image.asset('assets/images/fox_hero.webp', width: 110),
-                  ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Criar conta',
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Configure seu portal de moderação de lives',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  if (auth.error != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 20),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.error.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_rounded,
-                              color: AppTheme.error, size: 18),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(auth.error!,
-                                style: const TextStyle(
-                                    color: AppTheme.error, fontSize: 13)),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: _agencyCodeController,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: const InputDecoration(
-                            labelText: 'Código da agência',
-                            prefixIcon: Icon(Icons.vpn_key_rounded),
-                            hintText: 'Ex: AB3K-9XQ2 (peça à sua agência)',
-                          ),
-                          validator: (v) =>
-                              (v?.trim().isEmpty ?? true) ? 'Informe o código da sua agência' : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _displayNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Nome de exibição',
-                            prefixIcon: Icon(Icons.badge_rounded),
-                            hintText: 'Ex: Geff Studio',
-                          ),
-                          validator: (v) =>
-                              (v?.isEmpty ?? true) ? 'Campo obrigatório' : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _usernameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Usuário',
-                            prefixIcon: Icon(Icons.person_rounded),
-                            hintText: 'Sem espaços ou caracteres especiais',
-                          ),
-                          validator: (v) {
-                            if (v?.isEmpty ?? true) return 'Campo obrigatório';
-                            if (v!.contains(' ')) return 'Sem espaços';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePass,
-                          decoration: InputDecoration(
-                            labelText: 'Senha',
-                            prefixIcon: const Icon(Icons.lock_rounded),
-                            hintText: 'Mínimo 8 caracteres, 1 maiúscula e 1 especial',
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscurePass
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_rounded),
-                              onPressed: () =>
-                                  setState(() => _obscurePass = !_obscurePass),
-                            ),
-                          ),
-                          validator: (v) {
-                            if (v?.isEmpty ?? true) return 'Campo obrigatório';
-                            return passwordRuleError(v!);
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _confirmPasswordController,
-                          obscureText: _obscureConfirm,
-                          decoration: InputDecoration(
-                            labelText: 'Confirmar senha',
-                            prefixIcon: const Icon(Icons.lock_outline_rounded),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscureConfirm
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_rounded),
-                              onPressed: () => setState(
-                                  () => _obscureConfirm = !_obscureConfirm),
-                            ),
-                          ),
-                          validator: (v) {
-                            if (v != _passwordController.text) {
-                              return 'As senhas não coincidem';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 28),
-                        GradientButton(
-                          id: 'register_submit_button',
-                          onPressed: auth.isLoading ? null : _register,
-                          isLoading: auth.isLoading,
-                          label: 'Criar conta',
-                          icon: Icons.person_add_rounded,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Já tem conta? ',
-                          style: TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 14)),
-                      GestureDetector(
-                        onTap: () => context.go('/login'),
-                        child: const Text(
-                          'Entrar',
-                          style: TextStyle(
-                              color: AppTheme.primary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _displayNameController,
+              label: 'Nome de exibição',
+              hint: 'Como você quer aparecer',
+              textInputAction: TextInputAction.next,
+              validator: (v) =>
+                  (v?.isEmpty ?? true) ? 'Preencha este campo' : null,
             ),
-          ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _usernameController,
+              label: 'Usuário',
+              hint: 'Sem espaços ou caracteres especiais',
+              autofillHints: const [AutofillHints.newUsername],
+              textInputAction: TextInputAction.next,
+              validator: (v) {
+                if (v?.isEmpty ?? true) return 'Preencha este campo';
+                if (v!.contains(' ')) return 'Sem espaços';
+                return null;
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _passwordController,
+              label: 'Senha',
+              helper:
+                  'Mínimo de 8 caracteres, com uma letra maiúscula e um caractere especial',
+              obscureText: _obscurePass,
+              autofillHints: const [AutofillHints.newPassword],
+              textInputAction: TextInputAction.next,
+              suffix: _visibilityToggle(_obscurePass,
+                  () => setState(() => _obscurePass = !_obscurePass)),
+              validator: (v) {
+                if (v?.isEmpty ?? true) return 'Preencha este campo';
+                return passwordRuleError(v!);
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _confirmPasswordController,
+              label: 'Confirmar senha',
+              obscureText: _obscureConfirm,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _register(),
+              suffix: _visibilityToggle(_obscureConfirm,
+                  () => setState(() => _obscureConfirm = !_obscureConfirm)),
+              validator: (v) => v != _passwordController.text
+                  ? 'As senhas não coincidem'
+                  : null,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(
+              key: const ValueKey('register_submit_button'),
+              label: 'Criar conta',
+              icon: Icons.person_add_alt,
+              expand: true,
+              loading: auth.isLoading,
+              onPressed: auth.isLoading ? null : _register,
+            ),
+          ],
         ),
       ),
     );

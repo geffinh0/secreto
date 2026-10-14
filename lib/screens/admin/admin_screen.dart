@@ -3,16 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/models.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_theme.dart';
 import '../../providers/admin_provider.dart';
+import '../../widgets/common/fox_icon.dart';
+import '../../widgets/ui/ui.dart';
 
-/// Read-only oversight panel - usuárias cadastradas, status do robô de cada
-/// uma e sessões de moderação ativas agora. Rota própria (/admin), fora do
-/// shell normal de navegação e com login PRÓPRIO (admin_accounts no
-/// backend) - entrar com uma conta normal da criadora não dá acesso a isto;
-/// é um usuário/senha completamente separado (ver AdminProvider). Nada aqui
-/// modifica dado nenhum.
+/// Oversight panel: users, agencies and active robot sessions. Own route
+/// (/admin) outside the main shell, with its OWN login (admin_accounts on the
+/// backend) - a regular creator account never opens it. The screen draws its
+/// own frame (top bar + page) instead of using the shell.
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
 
@@ -24,7 +22,8 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AdminProvider>().restoreSession());
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => context.read<AdminProvider>().restoreSession());
   }
 
   @override
@@ -33,115 +32,25 @@ class _AdminScreenState extends State<AdminScreen> {
 
     if (admin.isRestoringSession) {
       return const Scaffold(
-        backgroundColor: AppTheme.bgDark,
-        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+        backgroundColor: AppColors.canvas,
+        body: Center(child: AppStateView.loading()),
       );
     }
-    if (!admin.isAuthenticated) {
-      return const _AdminLoginScreen();
-    }
-    return const _AdminPanelScaffold();
+    if (!admin.isAuthenticated) return const _AdminLogin();
+    return const _AdminPanel();
   }
 }
 
-class _AdminPanelScaffold extends StatefulWidget {
-  const _AdminPanelScaffold();
+// ---------------------------------------------------------------- login
+
+class _AdminLogin extends StatefulWidget {
+  const _AdminLogin();
 
   @override
-  State<_AdminPanelScaffold> createState() => _AdminPanelScaffoldState();
+  State<_AdminLogin> createState() => _AdminLoginState();
 }
 
-class _AdminPanelScaffoldState extends State<_AdminPanelScaffold>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final admin = context.watch<AdminProvider>();
-
-    return Scaffold(
-      backgroundColor: AppTheme.bgDark,
-      appBar: AppBar(
-        backgroundColor: AppTheme.bgCard,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Row(
-          children: [
-            const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary, size: 20),
-            const SizedBox(width: 10),
-            const Text('Painel Administrativo',
-                style: TextStyle(color: AppTheme.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-            if (admin.adminUsername != null) ...[
-              const SizedBox(width: 10),
-              Text('· ${admin.adminUsername}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-            ],
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
-            tooltip: 'Atualizar',
-            onPressed: admin.isLoading ? null : () => context.read<AdminProvider>().load(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppTheme.textSecondary),
-            tooltip: 'Sair do painel',
-            onPressed: () => context.read<AdminProvider>().logout(),
-          ),
-          const SizedBox(width: 8),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textMuted,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-          tabs: [
-            Tab(text: 'Usuárias (${admin.users.length})'),
-            Tab(text: 'Agências (${admin.agencies.length})'),
-            Tab(text: 'Sessões ativas (${admin.sessions.length})'),
-          ],
-        ),
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: AppSpacing.maxContentWidth),
-          child: TabBarView(
-            controller: _tabController,
-            children: const [_UsersTab(), _AgenciesTab(), _SessionsTab()],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Login form for the admin panel's OWN credentials (admin_accounts on the
-/// backend) - never the portal's regular e-mail/senha. There is no "criar
-/// conta" link here on purpose: the first (and so far only) admin account is
-/// created from env vars on the server, not through this screen.
-class _AdminLoginScreen extends StatefulWidget {
-  const _AdminLoginScreen();
-
-  @override
-  State<_AdminLoginScreen> createState() => _AdminLoginScreenState();
-}
-
-class _AdminLoginScreenState extends State<_AdminLoginScreen> {
+class _AdminLoginState extends State<_AdminLogin> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -165,112 +74,120 @@ class _AdminLoginScreenState extends State<_AdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     final admin = context.watch<AdminProvider>();
+    final gutter = AppSpacing.pageHorizontal(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.bgDark,
-      body: Center(
+      backgroundColor: AppColors.canvas,
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textMuted),
-                      onPressed: () =>
-                          context.canPop() ? context.pop() : context.go('/dashboard'),
-                      tooltip: 'Voltar',
+          padding: EdgeInsets.fromLTRB(
+              gutter, AppSpacing.md, gutter, AppSpacing.xxl),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const FoxIcon(size: 28),
+                      const Spacer(),
+                      AppButton.text(
+                        label: 'Voltar',
+                        icon: Icons.arrow_back,
+                        onPressed: () => context.canPop()
+                            ? context.pop()
+                            : context.go('/dashboard'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.section(context)),
+                  Reveal(
+                    child: Semantics(
+                      header: true,
+                      child: Text('Administração',
+                          style: AppType.display,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Reveal(
+                    index: 1,
+                    child: Text(
+                      'Entre com a conta de administrador. Ela é separada da conta de streamer.',
+                      style: AppType.meta,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  if (admin.error != null) ...[
+                    AppSurface(
+                      raised: true,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: AppColors.danger, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: Text(admin.error!, style: AppType.body)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                   ],
-                ),
-                const Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary, size: 36),
-                const SizedBox(height: 16),
-                const Text('Painel Administrativo',
-                    style: TextStyle(
-                        color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                const Text(
-                  'Login próprio, separado da conta de criadora.',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-                ),
-                const SizedBox(height: 28),
-                if (admin.error != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.error.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(Icons.error_rounded, color: AppTheme.error, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(admin.error!,
-                              style: const TextStyle(color: AppTheme.error, fontSize: 13)),
+                        AppTextField(
+                          controller: _usernameController,
+                          label: 'Usuário administrativo',
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.username],
+                          validator: (v) => (v?.trim().isEmpty ?? true)
+                              ? 'Informe o usuário.'
+                              : null,
+                          onSubmitted: (_) => _submit(),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        AppTextField(
+                          controller: _passwordController,
+                          label: 'Senha',
+                          obscureText: _obscurePassword,
+                          textInputAction: TextInputAction.done,
+                          autofillHints: const [AutofillHints.password],
+                          suffix: IconButton(
+                            tooltip: _obscurePassword
+                                ? 'Mostrar senha'
+                                : 'Ocultar senha',
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: AppColors.muted,
+                            ),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
+                          ),
+                          validator: (v) =>
+                              (v?.isEmpty ?? true) ? 'Informe a senha.' : null,
+                          onSubmitted: (_) => _submit(),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        AppButton(
+                          label: 'Entrar',
+                          expand: true,
+                          loading: admin.isLoggingIn,
+                          onPressed: _submit,
                         ),
                       ],
                     ),
                   ),
                 ],
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _usernameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Usuário administrativo',
-                          prefixIcon: Icon(Icons.person_rounded),
-                        ),
-                        validator: (v) => (v?.isEmpty ?? true) ? 'Campo obrigatório' : null,
-                        onFieldSubmitted: (_) => _submit(),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: 'Senha',
-                          prefixIcon: const Icon(Icons.lock_rounded),
-                          suffixIcon: IconButton(
-                            icon: Icon(_obscurePassword
-                                ? Icons.visibility_rounded
-                                : Icons.visibility_off_rounded),
-                            onPressed: () =>
-                                setState(() => _obscurePassword = !_obscurePassword),
-                          ),
-                        ),
-                        validator: (v) => (v?.isEmpty ?? true) ? 'Campo obrigatório' : null,
-                        onFieldSubmitted: (_) => _submit(),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: admin.isLoggingIn ? null : _submit,
-                          child: admin.isLoggingIn
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: AppTheme.onAccent),
-                                )
-                              : const Text('Entrar'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -279,14 +196,151 @@ class _AdminLoginScreenState extends State<_AdminLoginScreen> {
   }
 }
 
-class _UsersTab extends StatefulWidget {
-  const _UsersTab();
+// ---------------------------------------------------------------- panel
+
+enum _Section { users, agencies, sessions }
+
+class _AdminPanel extends StatefulWidget {
+  const _AdminPanel();
 
   @override
-  State<_UsersTab> createState() => _UsersTabState();
+  State<_AdminPanel> createState() => _AdminPanelState();
 }
 
-class _UsersTabState extends State<_UsersTab> {
+class _AdminPanelState extends State<_AdminPanel> {
+  _Section _section = _Section.users;
+
+  @override
+  Widget build(BuildContext context) {
+    final admin = context.watch<AdminProvider>();
+
+    Widget chip(_Section s, String label) => AppChip(
+          label: label,
+          selected: _section == s,
+          onTap: () => setState(() => _section = s),
+        );
+
+    final body = switch (_section) {
+      _Section.users => const _UsersSection(),
+      _Section.agencies => const _AgenciesSection(),
+      _Section.sessions => const _SessionsSection(),
+    };
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      body: Column(
+        children: [
+          _TopBar(admin: admin),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: AppPage(
+                onRefresh: () => context.read<AdminProvider>().load(),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    child: Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        chip(
+                            _Section.users, 'Usuários (${admin.users.length})'),
+                        chip(_Section.agencies,
+                            'Agências (${admin.agencies.length})'),
+                        chip(_Section.sessions,
+                            'Sessões ativas (${admin.sessions.length})'),
+                      ],
+                    ),
+                  ),
+                  body,
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  final AdminProvider admin;
+  const _TopBar({required this.admin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageHorizontal(context),
+            vertical: AppSpacing.sm,
+          ),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: AppSpacing.maxContentWidth),
+              child: Row(
+                children: [
+                  const FoxIcon(size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text('Administração',
+                              style: AppType.heading,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (admin.adminUsername != null)
+                          Text(admin.adminUsername!,
+                              style: AppType.meta,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    color: AppColors.ink,
+                    disabledColor: AppColors.muted,
+                    icon: const Icon(Icons.refresh),
+                    onPressed: admin.isLoading
+                        ? null
+                        : () => context.read<AdminProvider>().load(),
+                  ),
+                  AppButton.text(
+                    label: 'Sair',
+                    icon: Icons.logout,
+                    onPressed: () => context.read<AdminProvider>().logout(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------- users
+
+class _UsersSection extends StatefulWidget {
+  const _UsersSection();
+
+  @override
+  State<_UsersSection> createState() => _UsersSectionState();
+}
+
+class _UsersSectionState extends State<_UsersSection> {
   String _query = '';
 
   /// -1 = todas, 0 = sem agência, >0 = id da agência
@@ -302,343 +356,227 @@ class _UsersTabState extends State<_UsersTab> {
         (u.robot?.nickname ?? '').toLowerCase().contains(q);
   }
 
+  (AppTone, IconData) _statusVisual(String status) => switch (status) {
+        'ativo' => (AppTone.success, Icons.shield_outlined),
+        'aguardando' => (AppTone.warning, Icons.hourglass_top),
+        'erro' => (AppTone.danger, Icons.error_outline),
+        'conectado (parado)' => (AppTone.neutral, Icons.pause_circle_outline),
+        _ => (AppTone.neutral, Icons.smart_toy_outlined),
+      };
+
+  Future<void> _releaseReset(AdminUserSummary user) async {
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Liberar troca de senha de @${user.username}?',
+      message:
+          'A senha atual deixa de funcionar e as sessões abertas são encerradas agora. '
+          'Será gerada uma senha provisória, de uso único, para você entregar ao usuário. '
+          'Ao entrar com ela, ele cria a própria senha.',
+      confirmLabel: 'Gerar senha provisória',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    final provider = context.read<AdminProvider>();
+    final released = await provider.releasePasswordReset(user.id);
+    if (!mounted) return;
+    if (released == null) {
+      showAppSnack(
+          context,
+          provider.error ??
+              'Não foi possível liberar a troca de senha. Tente de novo.',
+          error: true);
+      return;
+    }
+    await _showSecret(
+      context,
+      title: 'Senha provisória de @${user.username}',
+      intro: 'Entregue esta senha ao usuário agora. Ela aparece só desta vez, '
+          'vale para um único acesso e expira em ${released.hours} horas.',
+      secret: released.password,
+      copiedMessage: 'Senha copiada',
+      closeLabel: 'Já anotei',
+      dismissible: false,
+    );
+  }
+
+  Widget _userCell(AdminUserSummary u) {
+    final badges = <Widget>[
+      if (u.isAdmin)
+        const AppChip(
+            label: 'Administrador', icon: Icons.admin_panel_settings_outlined),
+      if (u.mustChangePassword)
+        const AppChip(
+            label: 'Troca de senha pendente',
+            icon: Icons.lock_reset,
+            tone: AppTone.warning),
+    ];
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: AppColors.raised,
+          child:
+              Text(_initial(u.displayName, u.username), style: AppType.label),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(u.displayName ?? u.username,
+                  style: AppType.bodyStrong,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+              Text('@${u.username}',
+                  style: AppType.meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              if (badges.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Wrap(spacing: 8, runSpacing: 4, children: badges),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusCell(AdminUserSummary u) {
+    final (tone, icon) = _statusVisual(u.robotStatus);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppChip(label: _sentence(u.robotStatus), icon: icon, tone: tone),
+        if (u.sessionLivestreamId != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('ID da live: ${u.sessionLivestreamId}',
+                style: AppType.meta),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final admin = context.watch<AdminProvider>();
-
-    if (admin.isLoading && admin.users.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-    }
-    if (admin.error != null && admin.users.isEmpty) {
-      return _ErrorState(message: admin.error!, onRetry: () => context.read<AdminProvider>().load());
-    }
-    if (admin.users.isEmpty) {
-      return const _EmptyState(
-        icon: Icons.people_outline_rounded,
-        text: 'Nenhuma usuária cadastrada ainda.',
+    final blocking = _dataState(
+      context,
+      admin,
+      isEmpty: admin.users.isEmpty,
+      emptyTitle: 'Nenhum usuário cadastrado',
+      emptyMessage: 'Os usuários aparecem aqui assim que se cadastrarem.',
+    );
+    if (blocking != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [const PageHeader(title: 'Usuários'), blocking],
       );
     }
 
     final shown = admin.users.where(_matches).toList();
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
+        Reveal(
+          child: PageHeader(
+            title: 'Usuários',
+            subtitle: '${shown.length} de ${admin.users.length} usuários',
+          ),
+        ),
+        Reveal(
+          index: 1,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppTextField(
+                  label: 'Buscar usuário',
+                  hint: 'Nome, usuário ou robô',
+                  prefix: const Icon(Icons.search, color: AppColors.muted),
                   onChanged: (v) => setState(() => _query = v),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    prefixIcon: Icon(Icons.search_rounded, size: 20),
-                    hintText: 'Buscar por nome, usuário, e-mail ou robô',
-                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              DropdownButton<int>(
-                value: _agencyFilter,
-                dropdownColor: AppTheme.bgCard,
-                underline: const SizedBox.shrink(),
-                items: [
-                  const DropdownMenuItem(value: -1, child: Text('Todas as agências')),
-                  const DropdownMenuItem(value: 0, child: Text('Sem agência')),
-                  for (final a in admin.agencies) DropdownMenuItem(value: a.id, child: Text(a.name)),
-                ],
-                onChanged: (v) => setState(() => _agencyFilter = v ?? -1),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text('${shown.length} de ${admin.users.length} usuárias',
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-          ),
-        ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => context.read<AdminProvider>().load(),
-            color: AppTheme.primary,
-            backgroundColor: AppTheme.bgCard,
-            child: ListView.builder(
-              padding: AppSpacing.page(context),
-              itemCount: shown.length,
-              itemBuilder: (context, i) => _UserCard(user: shown[i]),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-String _avatarInitial(String? displayName, String username) {
-  final trimmedDisplayName = displayName?.trim() ?? '';
-  final label = trimmedDisplayName.isNotEmpty ? trimmedDisplayName : username.trim();
-  return label.isNotEmpty ? label.substring(0, 1).toUpperCase() : '?';
-}
-
-class _UserCard extends StatelessWidget {
-  final AdminUserSummary user;
-  const _UserCard({required this.user});
-
-  (Color, IconData) _statusVisual(String status) => switch (status) {
-        'ativo' => (AppTheme.success, Icons.shield_rounded),
-        'aguardando' => (AppTheme.warning, Icons.hourglass_top_rounded),
-        'erro' => (AppTheme.error, Icons.error_outline_rounded),
-        'conectado (parado)' => (AppTheme.info, Icons.pause_circle_outline_rounded),
-        _ => (AppTheme.textMuted, Icons.smart_toy_outlined),
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final (statusColor, statusIcon) = _statusVisual(user.robotStatus);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppTheme.primary.withValues(alpha: 0.18),
-                child: Text(
-                  _avatarInitial(user.displayName, user.username),
-                  style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            user.displayName ?? user.username,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        if (user.isAdmin) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text('admin',
-                                style: TextStyle(
-                                    color: AppTheme.accent, fontSize: 10, fontWeight: FontWeight.w700)),
-                          ),
-                        ],
-                      ],
+                    AppChip(
+                      label: 'Todas as agências',
+                      selected: _agencyFilter == -1,
+                      onTap: () => setState(() => _agencyFilter = -1),
                     ),
-                    Text('@${user.username}${user.mustChangePassword ? ' · troca de senha pendente' : ''}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                    AppChip(
+                      label: 'Sem agência',
+                      selected: _agencyFilter == 0,
+                      onTap: () => setState(() => _agencyFilter = 0),
+                    ),
+                    for (final a in admin.agencies)
+                      AppChip(
+                        label: a.name,
+                        selected: _agencyFilter == a.id,
+                        onTap: () => setState(() => _agencyFilter = a.id),
+                      ),
                   ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(statusIcon, size: 13, color: statusColor),
-                    const SizedBox(width: 5),
-                    Text(user.robotStatus,
-                        style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: AppTheme.border, height: 1),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 20,
-            runSpacing: 10,
-            children: [
-              _MiniFact(label: 'Agência', value: user.agencyName ?? 'sem agência'),
-              _MiniFact(label: 'Robô', value: user.robot?.nickname ?? '—'),
-              _MiniFact(
-                label: 'Favoritada',
-                value: user.watchActive ? (user.watchNickname ?? 'ativa') : 'nenhuma',
-              ),
-              _MiniFact(label: 'Regras', value: '${user.rulesCount}'),
-              _MiniFact(label: 'Mensagens', value: '${user.messagesCount}'),
-              if (user.sessionLivestreamId != null)
-                _MiniFact(label: 'Live atual', value: user.sessionLivestreamId!),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => _releaseReset(context),
-              icon: const Icon(Icons.lock_reset_rounded, size: 18),
-              label: const Text('Liberar troca de senha'),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _releaseReset(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.bgCard,
-        title: Text('Liberar troca de senha de @${user.username}?',
-            style: const TextStyle(color: AppTheme.textPrimary)),
-        content: const Text(
-            'A senha atual deixa de funcionar e as sessões abertas dela são encerradas agora. '
-            'Será gerada uma senha provisória, de uso único, que você entrega a ela. '
-            'Ao entrar com ela, a usuária é obrigada a criar a própria senha.',
-            style: TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Gerar senha provisória')),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    final provider = context.read<AdminProvider>();
-    final released = await provider.releasePasswordReset(user.id);
-    if (!context.mounted) return;
-    if (released == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(provider.error ?? 'Não foi possível liberar a troca.')));
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.bgCard,
-        title: Text('Senha provisória de @${user.username}',
-            style: const TextStyle(color: AppTheme.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                'Entregue a ela agora: esta senha aparece só desta vez, vale para um único login '
-                'e expira em ${released.hours} horas.',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            const SizedBox(height: 16),
-            Center(
-              child: SelectableText(released.password,
-                  style: const TextStyle(
-                      color: AppTheme.primary, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2)),
-            ),
-          ],
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: released.password));
-              if (ctx.mounted) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Senha copiada')));
-              }
-            },
-            icon: const Icon(Icons.copy_rounded, size: 18),
-            label: const Text('Copiar'),
+        if (shown.isEmpty)
+          const AppStateView(
+            title: 'Nenhum usuário encontrado',
+            message: 'Mude a busca ou o filtro de agência.',
+          )
+        else
+          AppDataTable(
+            breakpoint: 1000,
+            columns: const [
+              AppTableColumn('Usuário', flex: 4),
+              AppTableColumn('Status do robô', flex: 3),
+              AppTableColumn('Agência', flex: 2),
+              AppTableColumn('Nome do robô', flex: 2),
+              AppTableColumn('Streamer favorito', flex: 2),
+              AppTableColumn('Configuração', flex: 2),
+              AppTableColumn('Senha', flex: 3),
+            ],
+            rows: [
+              for (final u in shown)
+                [
+                  _userCell(u),
+                  _statusCell(u),
+                  Text(u.agencyName ?? 'Sem agência', style: AppType.body),
+                  Text(u.robot?.nickname ?? '—', style: AppType.body),
+                  Text(u.watchActive ? (u.watchNickname ?? 'Ativo') : 'Nenhum',
+                      style: AppType.body),
+                  Text('${u.rulesCount} regras · ${u.messagesCount} mensagens',
+                      style: AppType.body),
+                  AppButton.text(
+                    label: 'Liberar troca de senha',
+                    icon: Icons.lock_reset,
+                    onPressed: () => _releaseReset(u),
+                  ),
+                ],
+            ],
           ),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Já anotei')),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniFact extends StatelessWidget {
-  final String label;
-  final String value;
-  const _MiniFact({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 10.5)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
       ],
     );
   }
 }
 
-/// Agencies: create one (its signup code is generated by the server), see how
-/// many creators each has and how many are actually running a robot, switch
-/// an agency's code off for new signups, rotate a leaked code.
-class _AgenciesTab extends StatelessWidget {
-  const _AgenciesTab();
+// ---------------------------------------------------------------- agencies
+
+class _AgenciesSection extends StatelessWidget {
+  const _AgenciesSection();
 
   Future<void> _copy(BuildContext context, String code) async {
     await Clipboard.setData(ClipboardData(text: code));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Código copiado')));
-    }
-  }
-
-  Future<void> _showCode(BuildContext context, String title, String code) {
-    return showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.bgCard,
-        title: Text(title, style: const TextStyle(color: AppTheme.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Envie este código para a agência. Cada criadora o digita ao se cadastrar.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            const SizedBox(height: 16),
-            Center(
-              child: SelectableText(code,
-                  style: const TextStyle(
-                      color: AppTheme.primary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 3)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => _copy(ctx, code),
-            icon: const Icon(Icons.copy_rounded, size: 18),
-            label: const Text('Copiar'),
-          ),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Fechar')),
-        ],
-      ),
-    );
+    if (context.mounted) showAppSnack(context, 'Código copiado');
   }
 
   Future<void> _create(BuildContext context) async {
@@ -651,33 +589,74 @@ class _AgenciesTab extends StatelessWidget {
     final code = await provider.createAgency(name);
     if (!context.mounted) return;
     if (code != null) {
-      await _showCode(context, 'Agência criada', code);
+      await _showSecret(
+        context,
+        title: 'Agência criada',
+        intro:
+            'Envie este código à agência. Cada streamer o digita ao se cadastrar.',
+        secret: code,
+        copiedMessage: 'Código copiado',
+        closeLabel: 'Fechar',
+      );
     } else if (provider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(provider.error!)));
+      showAppSnack(context, provider.error!, error: true);
     }
   }
 
   Future<void> _rotate(BuildContext context, AdminAgency agency) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.bgCard,
-        title: const Text('Gerar novo código?', style: TextStyle(color: AppTheme.textPrimary)),
-        content: Text(
-            'O código atual de ${agency.name} deixa de funcionar para novos cadastros. '
-            'As criadoras já cadastradas não são afetadas.',
-            style: const TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Gerar novo')),
-        ],
-      ),
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Gerar novo código para ${agency.name}?',
+      message: 'O código atual deixa de funcionar para novos cadastros. '
+          'Os usuários já cadastrados não são afetados.',
+      confirmLabel: 'Gerar novo código',
+      destructive: true,
     );
-    if (confirmed != true || !context.mounted) return;
-    final code = await context.read<AdminProvider>().rotateAgencyCode(agency.id);
+    if (!confirmed || !context.mounted) return;
+    final code =
+        await context.read<AdminProvider>().rotateAgencyCode(agency.id);
     if (code != null && context.mounted) {
-      await _showCode(context, 'Novo código de ${agency.name}', code);
+      await _showSecret(
+        context,
+        title: 'Novo código de ${agency.name}',
+        intro:
+            'Envie este código à agência. Cada streamer o digita ao se cadastrar.',
+        secret: code,
+        copiedMessage: 'Código copiado',
+        closeLabel: 'Fechar',
+      );
     }
+  }
+
+  Future<void> _setActive(
+      BuildContext context, AdminAgency agency, bool value) async {
+    final provider = context.read<AdminProvider>();
+    final ok = await provider.setAgencyActive(agency.id, value);
+    if (!ok && context.mounted) {
+      showAppSnack(
+          context,
+          provider.error ??
+              'Não foi possível alterar a agência. Tente de novo.',
+          error: true);
+    }
+  }
+
+  Widget _agencyCell(AdminAgency a, {required bool readOnly}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(a.name,
+            style: AppType.bodyStrong,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis),
+        if (!readOnly && !a.active)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: AppChip(label: 'Pausada', icon: Icons.pause_circle_outline),
+          ),
+      ],
+    );
   }
 
   @override
@@ -685,50 +664,172 @@ class _AgenciesTab extends StatelessWidget {
     final admin = context.watch<AdminProvider>();
     final cap = admin.capacity;
     final legacy = admin.noAgency;
-    final total = admin.agencies.fold<int>(0, (s, a) => s + a.usersTotal) + (legacy?.usersTotal ?? 0);
+    final legacyShown = legacy != null && legacy.usersTotal > 0;
+    final total = admin.agencies.fold<int>(0, (s, a) => s + a.usersTotal) +
+        (legacy?.usersTotal ?? 0);
+    final empty = admin.agencies.isEmpty && !legacyShown;
+    final rows = <({AdminAgency agency, bool readOnly})>[
+      for (final a in admin.agencies) (agency: a, readOnly: false),
+      if (legacyShown) (agency: legacy, readOnly: true),
+    ];
 
-    return RefreshIndicator(
-      onRefresh: () => context.read<AdminProvider>().load(),
-      color: AppTheme.primary,
-      backgroundColor: AppTheme.bgCard,
-      child: ListView(
-        padding: AppSpacing.page(context),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('$total criadoras em ${admin.agencies.length} agências',
-                    style: const TextStyle(
-                        color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-              FilledButton.icon(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Reveal(
+          child: PageHeader(
+            title: 'Agências',
+            subtitle: '$total usuários em ${admin.agencies.length} agências',
+            actions: [
+              AppButton(
+                label: 'Criar agência',
+                icon: Icons.add,
                 onPressed: () => _create(context),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Nova agência'),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (cap != null) _CapacityCard(capacity: cap),
-          if (admin.agencies.isEmpty && (legacy?.usersTotal ?? 0) == 0)
-            const Padding(
-              padding: EdgeInsets.only(top: 40),
-              child: _EmptyState(
-                icon: Icons.apartment_rounded,
-                text: 'Nenhuma agência ainda. Crie uma e envie o código para ela: '
-                    'só quem tiver um código consegue se cadastrar.',
-              ),
-            ),
-          for (final a in admin.agencies) _AgencyCard(
-            agency: a,
-            onCopy: () => _copy(context, a.code),
-            onRotate: () => _rotate(context, a),
-            onActive: (v) => context.read<AdminProvider>().setAgencyActive(a.id, v),
+        ),
+        if (cap != null)
+          Reveal(
+            index: 1,
+            child: AppSection(
+                title: 'Capacidade', child: _CapacityBlock(capacity: cap)),
           ),
-          if (legacy != null && legacy.usersTotal > 0)
-            _AgencyCard(agency: legacy, readOnly: true),
+        if (empty)
+          _dataState(
+                context,
+                admin,
+                isEmpty: true,
+                emptyTitle: 'Nenhuma agência ainda',
+                emptyMessage: 'Crie uma agência e envie o código a ela. '
+                    'Só quem tem um código consegue se cadastrar.',
+              ) ??
+              const SizedBox.shrink()
+        else
+          AppDataTable(
+            breakpoint: 1000,
+            columns: const [
+              AppTableColumn('Agência', flex: 3),
+              AppTableColumn('Aceita cadastros', flex: 2),
+              AppTableColumn('Código', flex: 2),
+              AppTableColumn('Cadastrados'),
+              AppTableColumn('Com robô'),
+              AppTableColumn('Favorito ligado'),
+              AppTableColumn('Moderando agora'),
+              AppTableColumn('Código de cadastro', flex: 3),
+            ],
+            rows: [
+              for (final r in rows)
+                [
+                  _agencyCell(r.agency, readOnly: r.readOnly),
+                  r.readOnly
+                      ? Text('—', style: AppType.body)
+                      : AppSwitch(
+                          value: r.agency.active,
+                          semanticLabel:
+                              'Aceitar cadastros de ${r.agency.name}',
+                          onChanged: (v) => _setActive(context, r.agency, v),
+                        ),
+                  r.readOnly
+                      ? Text('—', style: AppType.body)
+                      : SelectableText(r.agency.code,
+                          style: AppType.bodyStrong),
+                  Text('${r.agency.usersTotal}', style: AppType.body),
+                  Text('${r.agency.withRobot}', style: AppType.body),
+                  Text('${r.agency.watching}', style: AppType.body),
+                  Text('${r.agency.runningNow}', style: AppType.body),
+                  r.readOnly
+                      ? Text('—', style: AppType.body)
+                      : Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            AppButton.text(
+                              label: 'Copiar código',
+                              icon: Icons.copy,
+                              onPressed: () => _copy(context, r.agency.code),
+                            ),
+                            AppButton.text(
+                              label: 'Gerar novo código',
+                              icon: Icons.autorenew,
+                              onPressed: () => _rotate(context, r.agency),
+                            ),
+                          ],
+                        ),
+                ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _CapacityBlock extends StatelessWidget {
+  final AdminCapacity capacity;
+  const _CapacityBlock({required this.capacity});
+
+  @override
+  Widget build(BuildContext context) {
+    final overloaded = capacity.deepestQueue > 20 ||
+        (capacity.maxSessions > 0 &&
+            capacity.activeSessions >= capacity.maxSessions);
+    return AppSurface(
+      raised: true,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          overloaded
+              ? const AppChip(
+                  label: 'Capacidade no limite',
+                  icon: Icons.warning_amber,
+                  tone: AppTone.warning)
+              : const AppChip(
+                  label: 'Capacidade normal',
+                  icon: Icons.check_circle_outline,
+                  tone: AppTone.success),
+          const SizedBox(height: AppSpacing.lg),
+          Wrap(
+            spacing: AppSpacing.xl,
+            runSpacing: AppSpacing.lg,
+            children: [
+              _Fact(label: 'Saídas de rede', value: '${capacity.egressCount}'),
+              _Fact(
+                label: 'Lives agora',
+                value: capacity.maxSessions > 0
+                    ? '${capacity.activeSessions} / ${capacity.maxSessions}'
+                    : '${capacity.activeSessions}',
+              ),
+              _Fact(
+                  label: 'Máximo sugerido',
+                  value: '${capacity.suggestedMaxSessions}'),
+              _Fact(
+                  label: 'Fila mais longa', value: '${capacity.deepestQueue}'),
+              _Fact(
+                  label: 'Detecção de live',
+                  value: 'até ${capacity.slowestPollSeconds}s'),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Fact({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(value, style: AppType.title),
+        Text(label, style: AppType.meta),
+      ],
     );
   }
 }
@@ -753,304 +854,239 @@ class _NewAgencyDialogState extends State<_NewAgencyDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppTheme.bgCard,
-      title: const Text('Nova agência', style: TextStyle(color: AppTheme.textPrimary)),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        maxLength: 80,
-        decoration: const InputDecoration(labelText: 'Nome da agência'),
-        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-      ),
+    return _DialogFrame(
+      title: 'Nova agência',
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
-        FilledButton(
-            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-            child: const Text('Criar')),
+        AppButton.secondary(
+            label: 'Cancelar', onPressed: () => Navigator.of(context).pop()),
+        AppButton(
+          label: 'Criar agência',
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+        ),
+      ],
+      children: [
+        AppTextField(
+          controller: _controller,
+          label: 'Nome da agência',
+          autofocus: true,
+          maxLength: 80,
+          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
       ],
     );
   }
 }
 
-class _CapacityCard extends StatelessWidget {
-  final AdminCapacity capacity;
-  const _CapacityCard({required this.capacity});
+// ---------------------------------------------------------------- sessions
 
-  @override
-  Widget build(BuildContext context) {
-    final overloaded = capacity.deepestQueue > 20 ||
-        (capacity.maxSessions > 0 && capacity.activeSessions >= capacity.maxSessions);
-    final color = overloaded ? AppTheme.warning : AppTheme.success;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Wrap(
-        spacing: 20,
-        runSpacing: 10,
-        children: [
-          _MiniFact(label: 'Saídas (IPs)', value: '${capacity.egressCount}'),
-          _MiniFact(
-            label: 'Lives agora',
-            value: capacity.maxSessions > 0
-                ? '${capacity.activeSessions} / ${capacity.maxSessions}'
-                : '${capacity.activeSessions}',
+class _SessionsSection extends StatelessWidget {
+  const _SessionsSection();
+
+  (AppTone, IconData, String) _stateVisual(String state) => switch (state) {
+        'running' => (
+            AppTone.success,
+            Icons.check_circle_outline,
+            'Moderando ao vivo'
           ),
-          _MiniFact(label: 'Sugerido (máx.)', value: '${capacity.suggestedMaxSessions}'),
-          _MiniFact(label: 'Fila mais longa', value: '${capacity.deepestQueue}'),
-          _MiniFact(label: 'Detecção de live', value: 'até ${capacity.slowestPollSeconds}s'),
-        ],
-      ),
-    );
-  }
-}
-
-class _AgencyCard extends StatelessWidget {
-  final AdminAgency agency;
-  final bool readOnly;
-  final VoidCallback? onCopy;
-  final VoidCallback? onRotate;
-  final ValueChanged<bool>? onActive;
-  const _AgencyCard({
-    required this.agency,
-    this.readOnly = false,
-    this.onCopy,
-    this.onRotate,
-    this.onActive,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.apartment_rounded, color: AppTheme.primary, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(agency.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-              if (!readOnly) ...[
-                Text(agency.active ? 'aceita cadastros' : 'pausada',
-                    style: TextStyle(
-                        color: agency.active ? AppTheme.success : AppTheme.textMuted, fontSize: 12)),
-                Switch(value: agency.active, onChanged: onActive),
-              ],
-            ],
+        'starting' => (AppTone.warning, Icons.hourglass_top, 'Conectando'),
+        'waiting_for_live' => (
+            AppTone.warning,
+            Icons.schedule,
+            'Aguardando próxima live'
           ),
-          if (!readOnly) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                SelectableText(agency.code,
-                    style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2)),
-                IconButton(
-                    onPressed: onCopy,
-                    tooltip: 'Copiar código',
-                    icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.textSecondary)),
-                IconButton(
-                    onPressed: onRotate,
-                    tooltip: 'Gerar novo código',
-                    icon: const Icon(Icons.autorenew_rounded, size: 18, color: AppTheme.textSecondary)),
-              ],
-            ),
-          ],
-          const SizedBox(height: 8),
-          const Divider(color: AppTheme.border, height: 1),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 24,
-            runSpacing: 10,
-            children: [
-              _MiniFact(label: 'Cadastradas', value: '${agency.usersTotal}'),
-              _MiniFact(label: 'Com robô conectado', value: '${agency.withRobot}'),
-              _MiniFact(label: 'Favorita ligada', value: '${agency.watching}'),
-              _MiniFact(label: 'Moderando agora', value: '${agency.runningNow}'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SessionsTab extends StatelessWidget {
-  const _SessionsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    final admin = context.watch<AdminProvider>();
-
-    if (admin.isLoading && admin.sessions.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-    }
-    if (admin.error != null && admin.sessions.isEmpty) {
-      return _ErrorState(message: admin.error!, onRetry: () => context.read<AdminProvider>().load());
-    }
-    if (admin.sessions.isEmpty) {
-      return const _EmptyState(
-        icon: Icons.live_tv_outlined,
-        text: 'Nenhuma sessão do robô em memória agora.\nIsso inclui sessões recém-paradas, não só as ao vivo.',
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () => context.read<AdminProvider>().load(),
-      color: AppTheme.primary,
-      backgroundColor: AppTheme.bgCard,
-      child: ListView.builder(
-        padding: AppSpacing.page(context),
-        itemCount: admin.sessions.length,
-        itemBuilder: (context, i) => _SessionCard(session: admin.sessions[i]),
-      ),
-    );
-  }
-}
-
-class _SessionCard extends StatelessWidget {
-  final AdminSessionSummary session;
-  const _SessionCard({required this.session});
-
-  (Color, String) _stateVisual(String state) => switch (state) {
-        'running' => (AppTheme.success, 'Moderando ao vivo'),
-        'starting' => (AppTheme.warning, 'Conectando'),
-        'waiting_for_live' => (AppTheme.warning, 'Aguardando próxima live'),
-        'stopping' => (AppTheme.textMuted, 'Parando'),
-        'error' => (AppTheme.error, 'Erro'),
-        _ => (AppTheme.info, 'Parada'),
+        'stopping' => (AppTone.neutral, Icons.pause_circle_outline, 'Parando'),
+        'error' => (AppTone.danger, Icons.error_outline, 'Erro'),
+        _ => (AppTone.neutral, Icons.stop_circle_outlined, 'Parada'),
       };
 
   @override
   Widget build(BuildContext context) {
-    final (color, label) = _stateVisual(session.state);
+    final admin = context.watch<AdminProvider>();
+    final blocking = _dataState(
+      context,
+      admin,
+      isEmpty: admin.sessions.isEmpty,
+      emptyTitle: 'Nenhuma sessão de robô agora',
+      emptyMessage: 'A lista inclui sessões recém-paradas, não só as ao vivo.',
+    );
+    if (blocking != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [const PageHeader(title: 'Sessões ativas'), blocking],
+      );
+    }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('@${session.username}',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-              ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Reveal(
+          child: PageHeader(
+            title: 'Sessões ativas',
+            subtitle: 'Inclui sessões recém-paradas.',
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 20,
-            runSpacing: 10,
-            children: [
-              _MiniFact(label: 'Live', value: session.livestreamId ?? '—'),
-              _MiniFact(label: 'Chat', value: 'conexão ${session.wsState}'),
-              _MiniFact(label: 'Msgs vistas', value: '${session.chatSeen}'),
-              _MiniFact(label: 'Ações', value: '${session.actionsOk}'),
-              if (session.watchWaitingSeconds != null)
-                _MiniFact(
-                  label: 'Esperando ID novo',
-                  value: '${session.watchWaitingSeconds!.round()}s',
-                ),
-            ],
-          ),
-          if (session.lastError != null) ...[
-            const SizedBox(height: 10),
-            Text(session.lastError!,
-                style: const TextStyle(color: AppTheme.error, fontSize: 12, height: 1.3)),
+        ),
+        AppDataTable(
+          columns: const [
+            AppTableColumn('Usuário', flex: 2),
+            AppTableColumn('Estado', flex: 3),
+            AppTableColumn('ID da live', flex: 2),
+            AppTableColumn('Chat', flex: 2),
+            AppTableColumn('Mensagens vistas'),
+            AppTableColumn('Ações'),
+            AppTableColumn('Espera por ID novo'),
+            AppTableColumn('Último erro', flex: 3),
           ],
-        ],
-      ),
+          rows: [
+            for (final s in admin.sessions)
+              () {
+                final (tone, icon, label) = _stateVisual(s.state);
+                return <Widget>[
+                  Text('@${s.username}',
+                      style: AppType.bodyStrong,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                  AppChip(label: label, icon: icon, tone: tone),
+                  Text(s.livestreamId ?? '—', style: AppType.body),
+                  Text('Conexão ${s.wsState}', style: AppType.body),
+                  Text('${s.chatSeen}', style: AppType.body),
+                  Text('${s.actionsOk}', style: AppType.body),
+                  Text(
+                      s.watchWaitingSeconds == null
+                          ? '—'
+                          : '${s.watchWaitingSeconds!.round()}s',
+                      style: AppType.body),
+                  s.lastError == null
+                      ? Text('—', style: AppType.body)
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.error_outline,
+                                  color: AppColors.danger, size: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: Text(s.lastError!, style: AppType.body)),
+                          ],
+                        ),
+                ];
+              }(),
+          ],
+        ),
+      ],
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _EmptyState({required this.icon, required this.text});
+// ---------------------------------------------------------------- shared
+
+String _initial(String? displayName, String username) {
+  final trimmedDisplayName = displayName?.trim() ?? '';
+  final label =
+      trimmedDisplayName.isNotEmpty ? trimmedDisplayName : username.trim();
+  return label.isNotEmpty ? label.substring(0, 1).toUpperCase() : '?';
+}
+
+String _sentence(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+/// Loading / error / empty block for a list, or null when there is data.
+Widget? _dataState(
+  BuildContext context,
+  AdminProvider admin, {
+  required bool isEmpty,
+  required String emptyTitle,
+  required String emptyMessage,
+}) {
+  if (admin.isLoading && isEmpty) return const AppStateView.loading();
+  if (admin.error != null && isEmpty) {
+    return AppStateView(
+      kind: AppStateKind.error,
+      title: 'Não foi possível carregar',
+      message: admin.error,
+      actionLabel: 'Tentar de novo',
+      onAction: () => context.read<AdminProvider>().load(),
+    );
+  }
+  if (isEmpty) return AppStateView(title: emptyTitle, message: emptyMessage);
+  return null;
+}
+
+class _DialogFrame extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+  final List<Widget> actions;
+  const _DialogFrame(
+      {required this.title, required this.children, required this.actions});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: AppTheme.textDisabled, size: 40),
-            const SizedBox(height: 14),
-            Text(text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4)),
-          ],
+    return Dialog(
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(),
+      insetPadding: const EdgeInsets.all(AppSpacing.md),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppType.title),
+              const SizedBox(height: AppSpacing.md),
+              ...children,
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                alignment: WrapAlignment.end,
+                children: actions,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 36),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppTheme.textSecondary)),
-            const SizedBox(height: 16),
-            TextButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Tentar de novo'),
-            ),
-          ],
+/// Shows a value the admin must hand over (temporary password, agency code)
+/// with copy + close.
+Future<void> _showSecret(
+  BuildContext context, {
+  required String title,
+  required String intro,
+  required String secret,
+  required String copiedMessage,
+  required String closeLabel,
+  bool dismissible = true,
+}) {
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: dismissible,
+    builder: (ctx) => _DialogFrame(
+      title: title,
+      actions: [
+        AppButton.secondary(
+          label: 'Copiar',
+          icon: Icons.copy,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: secret));
+            if (ctx.mounted) showAppSnack(ctx, copiedMessage);
+          },
         ),
-      ),
-    );
-  }
+        AppButton(label: closeLabel, onPressed: () => Navigator.of(ctx).pop()),
+      ],
+      children: [
+        Text(intro, style: AppType.body),
+        const SizedBox(height: AppSpacing.md),
+        AppSurface(
+          raised: true,
+          child: SelectableText(secret, style: AppType.title),
+        ),
+      ],
+    ),
+  );
 }

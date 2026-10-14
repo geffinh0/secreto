@@ -104,6 +104,10 @@ services:
     build:
       context: .
       dockerfile: deploy/web.Dockerfile
+      args:
+        # Identifies this deploy to browsers (cache busting + "new version" notice).
+        # deploy/deploy.sh sets it; a manual `docker compose build` uses "dev".
+        BUILD_ID: "${BUILD_ID:-dev}"
     container_name: atilas_client_web
     restart: unless-stopped
     depends_on:

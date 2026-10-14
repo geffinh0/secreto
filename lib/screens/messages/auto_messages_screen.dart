@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_theme.dart';
 import '../../core/models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/auto_message_provider.dart';
-import '../../widgets/common/gradient_button.dart';
+import '../../widgets/ui/ui.dart';
 
 class AutoMessagesScreen extends StatefulWidget {
   const AutoMessagesScreen({super.key});
@@ -29,101 +27,56 @@ class _AutoMessagesScreenState extends State<AutoMessagesScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AutoMessageProvider>();
-    final user = context.watch<AuthProvider>().user;
+    final userId = context.watch<AuthProvider>().user?.id ?? 0;
 
-    return SingleChildScrollView(
-      padding: AppSpacing.page(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Settings card
-          _SettingsCard(
-            settings: provider.settings,
-            userId: user?.id ?? 0,
-          ),
-          const SizedBox(height: 24),
+    final settings = _SendSettings(settings: provider.settings, userId: userId);
+    final queue = _Queue(userId: userId, provider: provider);
 
-          // Messages list header
-          Row(
+    // Phone: settings first, then the queue. Desktop: queue left, settings right.
+    final body = AppSpacing.isWide(context)
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.chat_bubble_rounded,
-                  color: AppTheme.accent, size: 20),
-              const SizedBox(width: 10),
-              const Text(
-                'Fila de mensagens',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppTheme.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border:
-                      Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  provider.messages.length == 1
-                      ? '1 mensagem'
-                      : '${provider.messages.length} mensagens',
-                  style: const TextStyle(
-                    color: AppTheme.accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              Expanded(flex: 3, child: queue),
+              const SizedBox(width: AppSpacing.xl),
+              Expanded(flex: 2, child: settings),
             ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Arraste para reordenar. As mensagens são enviadas em ordem, em loop contínuo.',
-            style: TextStyle(
-              color: AppTheme.textMuted,
-              fontSize: 12,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 16),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              settings,
+              SizedBox(height: AppSpacing.section(context)),
+              queue,
+            ],
+          );
 
-          // Add message form
-          _AddMessageForm(userId: user?.id ?? 0),
-          const SizedBox(height: 20),
-
-          // Draggable list
-          if (provider.isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(color: AppTheme.primary),
-              ),
-            )
-          else if (provider.messages.isEmpty)
-            _EmptyState()
-          else
-            _DraggableMessageList(messages: provider.messages),
-        ],
-      ),
+    return AppPage(
+      children: [
+        const Reveal(
+          child: PageHeader(
+            title: 'Mensagens automáticas',
+            subtitle:
+                'O robô envia as mensagens da fila em ordem, em repetição, durante a live.',
+          ),
+        ),
+        Reveal(index: 1, child: body),
+      ],
     );
   }
 }
 
-class _SettingsCard extends StatefulWidget {
+class _SendSettings extends StatefulWidget {
   final BotSettings? settings;
   final int userId;
 
-  const _SettingsCard({required this.settings, required this.userId});
+  const _SendSettings({required this.settings, required this.userId});
 
   @override
-  State<_SettingsCard> createState() => _SettingsCardState();
+  State<_SendSettings> createState() => _SendSettingsState();
 }
 
-class _SettingsCardState extends State<_SettingsCard> {
+class _SendSettingsState extends State<_SendSettings> {
   late TextEditingController _intervalController;
   late bool _autoEnabled;
   bool _isSaving = false;
@@ -138,7 +91,7 @@ class _SettingsCardState extends State<_SettingsCard> {
   }
 
   @override
-  void didUpdateWidget(_SettingsCard old) {
+  void didUpdateWidget(_SendSettings old) {
     super.didUpdateWidget(old);
     if (widget.settings != old.settings && widget.settings != null) {
       _autoEnabled = widget.settings!.autoMessagesEnabled;
@@ -158,13 +111,11 @@ class _SettingsCardState extends State<_SettingsCard> {
     if (interval == null ||
         interval < BotSettings.minIntervalSeconds ||
         interval > BotSettings.maxIntervalSeconds) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'O intervalo deve ficar entre ${BotSettings.minIntervalSeconds} '
-              'e ${BotSettings.maxIntervalSeconds} segundos.'),
-          backgroundColor: AppTheme.warning,
-        ),
+      showAppSnack(
+        context,
+        'O intervalo deve ficar entre ${BotSettings.minIntervalSeconds} '
+        'e ${BotSettings.maxIntervalSeconds} segundos.',
+        error: true,
       );
       return;
     }
@@ -178,224 +129,118 @@ class _SettingsCardState extends State<_SettingsCard> {
     if (!mounted) return;
     setState(() => _isSaving = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok
-            ? 'Configurações salvas com sucesso!'
-            : provider.error ?? 'Erro ao salvar configurações'),
-        backgroundColor: ok ? AppTheme.success : AppTheme.error,
-      ),
+    showAppSnack(
+      context,
+      ok
+          ? 'Configurações salvas.'
+          : provider.error ??
+              'Não foi possível salvar as configurações. Tente de novo.',
+      error: !ok,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.tune_rounded, color: AppTheme.primary, size: 20),
-              SizedBox(width: 10),
-              Text(
-                'Configurações de envio automático',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+    return AppSection(
+      title: 'Envio automático',
+      last: true,
+      child: AppSurface(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppSwitchRow(
+              title: 'Enviar mensagens automáticas',
+              subtitle: 'O robô envia a fila em repetição durante a live.',
+              value: _autoEnabled,
+              onChanged: (v) => setState(() => _autoEnabled = v),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 200),
+                child: AppTextField(
+                  controller: _intervalController,
+                  label: 'Intervalo entre mensagens (mínimo 10 segundos)',
+                  enabled: _autoEnabled,
+                  keyboardType: TextInputType.number,
+                  suffix: Center(
+                    widthFactor: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Text('s', style: AppType.meta),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Toggle auto messages
-          _ToggleRow(
-            icon: Icons.send_rounded,
-            label: 'Envio automático de mensagens',
-            description: 'O robô enviará as mensagens em loop durante a live',
-            value: _autoEnabled,
-            onChanged: (v) => setState(() => _autoEnabled = v),
-          ),
-          const SizedBox(height: 16),
-
-          // Interval
-          AnimatedOpacity(
-            opacity: _autoEnabled ? 1 : 0.4,
-            duration: const Duration(milliseconds: 200),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: [
-                const Text(
-                  'Intervalo entre mensagens (mínimo 10 segundos)',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                for (final v in const [30, 60, 120, 300])
+                  AppChip(
+                    label: v >= 60 ? '${v ~/ 60} min' : '$v s',
+                    selected: _intervalController.text == v.toString(),
+                    onTap: _autoEnabled
+                        ? () => setState(
+                            () => _intervalController.text = v.toString())
+                        : null,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      child: TextField(
-                        controller: _intervalController,
-                        enabled: _autoEnabled,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          suffixText: 's',
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          filled: true,
-                          fillColor: AppTheme.bgSurface,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: AppTheme.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: AppTheme.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: AppTheme.primary),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Quick presets
-                    ...[30, 60, 120, 300].map(
-                      (v) => _PresetChip(
-                        label: v >= 60 ? '${v ~/ 60}min' : '${v}s',
-                        isSelected: _intervalController.text == v.toString(),
-                        onTap: () => setState(
-                            () => _intervalController.text = v.toString()),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
-          ),
-          const SizedBox(height: 20),
-
-          GradientButton(
-            id: 'save_settings_button',
-            onPressed: _isSaving ? null : _save,
-            isLoading: _isSaving,
-            label: 'Salvar configurações',
-            icon: Icons.save_rounded,
-          ),
-        ],
+            const SizedBox(height: AppSpacing.lg),
+            AppButton.secondary(
+              key: const ValueKey('save_settings_button'),
+              label: 'Salvar configurações',
+              icon: Icons.save_outlined,
+              loading: _isSaving,
+              onPressed: _isSaving ? null : _save,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ToggleRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String description;
-  final bool value;
-  final ValueChanged<bool> onChanged;
+class _Queue extends StatelessWidget {
+  final int userId;
+  final AutoMessageProvider provider;
 
-  const _ToggleRow({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.value,
-    required this.onChanged,
-  });
+  const _Queue({required this.userId, required this.provider});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: AppTheme.textSecondary, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Padding(
-                padding: const EdgeInsets.only(left: 24),
-                child: Text(
-                  description,
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ],
-    );
-  }
-}
+    final count = provider.messages.length;
+    final Widget content;
+    if (provider.isLoading) {
+      content = const AppStateView.loading(message: 'Carregando mensagens');
+    } else if (provider.messages.isEmpty) {
+      content = const AppStateView(
+        title: 'Nenhuma mensagem na fila',
+        message: 'Escreva a primeira mensagem acima para o robô enviar.',
+      );
+    } else {
+      content = _MessageList(messages: provider.messages);
+    }
 
-class _PresetChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PresetChip(
-      {required this.label, required this.isSelected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primary.withValues(alpha: 0.15)
-              : AppTheme.bgSurface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppTheme.primary : AppTheme.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? AppTheme.primary : AppTheme.textMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+    return AppSection(
+      title: 'Fila de mensagens',
+      subtitle:
+          'Arraste para reordenar. Toque numa mensagem para editar ou excluir.',
+      trailing: AppChip(label: count == 1 ? '1 mensagem' : '$count mensagens'),
+      last: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AddMessageForm(userId: userId),
+          const SizedBox(height: AppSpacing.lg),
+          content,
+        ],
       ),
     );
   }
@@ -423,52 +268,42 @@ class _AddMessageFormState extends State<_AddMessageForm> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     setState(() => _isAdding = true);
-    final success = await context.read<AutoMessageProvider>().addMessage(
-          userId: widget.userId,
-          content: text,
-        );
+    final provider = context.read<AutoMessageProvider>();
+    final success =
+        await provider.addMessage(userId: widget.userId, content: text);
     if (success) _controller.clear();
+    if (!mounted) return;
     setState(() => _isAdding = false);
+    if (!success) {
+      showAppSnack(
+          context,
+          provider.error ??
+              'Não foi possível adicionar a mensagem. Tente de novo.',
+          error: true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
-      ),
+    return AppSurface(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Adicionar mensagem à fila',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
+          AppTextField(
             controller: _controller,
-            maxLines: 2,
+            label: 'Nova mensagem',
+            hint: 'Exemplo: Obrigada por acompanharem a live.',
+            minLines: 2,
+            maxLines: 4,
             maxLength: 280,
-            decoration: const InputDecoration(
-              hintText: 'Ex: Divulguem meu Instagram! Obrigada por acompanharem!',
-              hintMaxLines: 2,
-              counterStyle: TextStyle(color: AppTheme.textMuted),
-            ),
           ),
-          const SizedBox(height: 12),
-          GradientButton(
-            id: 'add_message_button',
-            onPressed: _isAdding ? null : _add,
-            isLoading: _isAdding,
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            key: const ValueKey('add_message_button'),
             label: 'Adicionar à fila',
-            icon: Icons.add_rounded,
+            icon: Icons.add,
+            loading: _isAdding,
+            onPressed: _isAdding ? null : _add,
           ),
         ],
       ),
@@ -476,9 +311,9 @@ class _AddMessageFormState extends State<_AddMessageForm> {
   }
 }
 
-class _DraggableMessageList extends StatelessWidget {
+class _MessageList extends StatelessWidget {
   final List<AutoMessage> messages;
-  const _DraggableMessageList({required this.messages});
+  const _MessageList({required this.messages});
 
   @override
   Widget build(BuildContext context) {
@@ -486,218 +321,171 @@ class _DraggableMessageList extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
+      proxyDecorator: (child, _, __) => Material(
+        color: Colors.transparent,
+        child: child,
+      ),
       onReorder: (oldIndex, newIndex) {
         context.read<AutoMessageProvider>().reorderMessages(oldIndex, newIndex);
       },
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final msg = messages[index];
-        return _MessageItem(
+        return Padding(
           key: ValueKey(msg.id ?? index),
-          message: msg,
-          index: index,
-          onDelete: () =>
-              context.read<AutoMessageProvider>().deleteMessage(msg.id!),
-          onEdit: () => _showEditDialog(context, msg),
-          onToggle: () =>
-              context.read<AutoMessageProvider>().toggleMessage(msg),
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: AppListRow(
+            leading: ReorderableDragStartListener(
+              index: index,
+              child: const SizedBox(
+                width: AppSpacing.touch,
+                height: AppSpacing.touch,
+                child: Icon(Icons.drag_indicator,
+                    color: AppColors.muted, semanticLabel: 'Reordenar'),
+              ),
+            ),
+            title: msg.content,
+            subtitle: msg.isActive
+                ? 'Ativa'
+                : 'Desativada: o robô pula esta mensagem',
+            trailing: AppSwitch(
+              value: msg.isActive,
+              semanticLabel: 'Mensagem ativa',
+              onChanged: (_) async {
+                final provider = context.read<AutoMessageProvider>();
+                final ok = await provider.toggleMessage(msg);
+                if (!ok && context.mounted) {
+                  showAppSnack(
+                      context,
+                      provider.error ??
+                          'Não foi possível alterar a mensagem. Tente de novo.',
+                      error: true);
+                }
+              },
+            ),
+            onTap: () => _edit(context, msg),
+          ),
         );
       },
     );
   }
 
-  void _showEditDialog(BuildContext context, AutoMessage message) {
-    final controller = TextEditingController(text: message.content);
-    showDialog(
+  Future<void> _edit(BuildContext context, AutoMessage message) async {
+    final result = await showDialog<_EditResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Editar mensagem',
-            style: TextStyle(color: AppTheme.textPrimary, fontSize: 18)),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          maxLength: 280,
-          decoration: const InputDecoration(
-            hintText: 'Mensagem...',
-            counterStyle: TextStyle(color: AppTheme.textMuted),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar',
-                style: TextStyle(color: AppTheme.textMuted)),
-          ),
-          TextButton(
-            onPressed: () {
-              final newContent = controller.text.trim();
-              if (newContent.isNotEmpty) {
-                context
-                    .read<AutoMessageProvider>()
-                    .updateMessage(message.copyWith(content: newContent));
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Salvar',
-                style: TextStyle(
-                    color: AppTheme.primary, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+      builder: (_) => _EditMessageDialog(initial: message.content),
     );
+    if (result == null || !context.mounted) return;
+    final provider = context.read<AutoMessageProvider>();
+
+    if (result.delete) {
+      final confirmed = await showAppConfirm(
+        context,
+        title: 'Excluir mensagem',
+        message: 'A mensagem sai da fila e o robô deixa de enviá-la. '
+            'Essa ação não pode ser desfeita.',
+        confirmLabel: 'Excluir mensagem',
+        destructive: true,
+      );
+      if (confirmed && message.id != null) {
+        final ok = await provider.deleteMessage(message.id!);
+        if (!ok && context.mounted) {
+          showAppSnack(
+              context,
+              provider.error ??
+                  'Não foi possível excluir a mensagem. Tente de novo.',
+              error: true);
+        }
+      }
+      return;
+    }
+
+    final text = result.text.trim();
+    if (text.isNotEmpty) {
+      final ok = await provider.updateMessage(message.copyWith(content: text));
+      if (!ok && context.mounted) {
+        showAppSnack(
+            context,
+            provider.error ??
+                'Não foi possível salvar a mensagem. Tente de novo.',
+            error: true);
+      }
+    }
   }
 }
 
-class _MessageItem extends StatelessWidget {
-  final AutoMessage message;
-  final int index;
-  final VoidCallback onDelete;
-  final VoidCallback onEdit;
-  final VoidCallback onToggle;
+class _EditResult {
+  final String text;
+  final bool delete;
+  const _EditResult(this.text, {this.delete = false});
+}
 
-  const _MessageItem({
-    super.key,
-    required this.message,
-    required this.index,
-    required this.onDelete,
-    required this.onEdit,
-    required this.onToggle,
-  });
+class _EditMessageDialog extends StatefulWidget {
+  final String initial;
+  const _EditMessageDialog({required this.initial});
+
+  @override
+  State<_EditMessageDialog> createState() => _EditMessageDialogState();
+}
+
+class _EditMessageDialogState extends State<_EditMessageDialog> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // A full-height colored sidebar for just a number, plus 4 controls
-    // stacked in a narrow column, used to squeeze the message text into a
-    // sliver down the middle on a phone-width row. A header row (badge +
-    // controls) above full-width text reads the same at any width instead.
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 4, 12),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: message.isActive
-              ? AppTheme.accent.withValues(alpha: 0.25)
-              : AppTheme.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Dialog(
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(),
+      insetPadding: const EdgeInsets.all(AppSpacing.md),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.bgSurface,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '#${index + 1}',
-                  style: const TextStyle(
-                    color: AppTheme.accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
+              Text('Editar mensagem', style: AppType.title),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _controller,
+                label: 'Mensagem',
+                autofocus: true,
+                minLines: 3,
+                maxLines: 6,
+                maxLength: 280,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  AppButton.danger(
+                    label: 'Excluir mensagem',
+                    icon: Icons.delete_outline,
+                    onPressed: () => Navigator.pop(
+                        context, const _EditResult('', delete: true)),
                   ),
-                ),
-              ),
-              const Spacer(),
-              Tooltip(
-                message: message.isActive
-                    ? 'Ativa: entra no envio automático'
-                    : 'Desativada: o robô pula esta mensagem',
-                child: Switch(
-                  value: message.isActive,
-                  onChanged: (_) => onToggle(),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-              ReorderableDragStartListener(
-                index: index,
-                child: const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Icon(Icons.drag_handle_rounded,
-                      color: AppTheme.textMuted, size: 20),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.edit_rounded, size: 16),
-                color: AppTheme.textMuted,
-                onPressed: onEdit,
-                tooltip: 'Editar',
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                padding: EdgeInsets.zero,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_rounded, size: 16),
-                color: AppTheme.error.withValues(alpha: 0.7),
-                onPressed: onDelete,
-                tooltip: 'Remover',
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                padding: EdgeInsets.zero,
+                  AppButton.secondary(
+                    label: 'Cancelar',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  AppButton(
+                    label: 'Salvar mensagem',
+                    onPressed: () =>
+                        Navigator.pop(context, _EditResult(_controller.text)),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 4, right: 8),
-            child: Text(
-              message.content,
-              style: TextStyle(
-                color: message.isActive ? AppTheme.textPrimary : AppTheme.textMuted,
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppTheme.bgSurface,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: const Icon(Icons.chat_bubble_outline_rounded,
-                  color: AppTheme.textDisabled, size: 32),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Nenhuma mensagem na fila',
-              style: TextStyle(
-                color: AppTheme.textMuted,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Adicione mensagens acima para criar a\nfila de envio automático durante a live.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppTheme.textDisabled,
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-          ],
         ),
       ),
     );

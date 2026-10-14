@@ -1,43 +1,45 @@
 import 'package:flutter/material.dart';
 
-/// Responsive spacing helpers per GUIA_DESIGN_ATILAS_CLIENT.md section 3:
-/// mobile gets tighter side padding (16-20px), desktop gets more room
-/// (28-36px), and content never stretches edge-to-edge past [maxContentWidth]
-/// on very wide screens. Breakpoints match the guide's own table.
+/// 4/8 spacing scale and the two breakpoints the whole app shares.
+/// Phone < 600, tablet 600-899, desktop >= 900.
 class AppSpacing {
   AppSpacing._();
 
-  static const double compact = 599;
-  static const double intermediate = 899;
-  static const double desktop = 1199;
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 16;
+  static const double lg = 24;
+  static const double xl = 32;
+  static const double xxl = 48;
 
-  /// Content never grows wider than this, even on an ultrawide monitor -
-  /// keeps lines of text and forms from stretching into unreadable widths.
+  static const double tablet = 600;
+  static const double desktop = 900;
+
+  /// Content never grows wider than this, even on an ultrawide monitor.
   static const double maxContentWidth = 1200;
 
+  /// Minimum touch target.
+  static const double touch = 48;
+
   static bool isCompact(BuildContext context) =>
-      MediaQuery.of(context).size.width <= compact;
+      MediaQuery.sizeOf(context).width < tablet;
 
   static bool isWide(BuildContext context) =>
-      MediaQuery.of(context).size.width > intermediate;
+      MediaQuery.sizeOf(context).width >= desktop;
 
-  /// Horizontal page padding: 18px on phones, scaling up to 32px on wide
-  /// desktop layouts, per the guide's spacing table.
+  /// 16 on phones, 24 on tablets, 32 on desktop.
   static double pageHorizontal(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    if (w <= compact) return 18;
-    if (w <= intermediate) return 22;
-    if (w <= desktop) return 28;
-    return 32;
+    final w = MediaQuery.sizeOf(context).width;
+    if (w < tablet) return md;
+    if (w < desktop) return lg;
+    return xl;
   }
 
-  /// Full page padding (all sides) for a top-level scrollable screen body.
   static EdgeInsets page(BuildContext context) {
     final h = pageHorizontal(context);
-    return EdgeInsets.fromLTRB(h, 20, h, 20);
+    return EdgeInsets.fromLTRB(h, lg, h, xxl);
   }
 
-  /// Vertical gap between major sections of a page (24-32px per the guide).
-  static double section(BuildContext context) =>
-      MediaQuery.of(context).size.width <= compact ? 20 : 24;
+  /// Gap between major sections.
+  static double section(BuildContext context) => isCompact(context) ? xl : xxl;
 }

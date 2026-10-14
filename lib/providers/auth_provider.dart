@@ -69,7 +69,7 @@ class AuthProvider extends ChangeNotifier {
         'display_name': displayName,
         'agency_code': agencyCode,
       },
-      fallbackError: 'Erro ao criar conta',
+      fallbackError: 'Não foi possível criar a conta. Confira os dados e tente de novo.',
     );
   }
 
@@ -98,9 +98,9 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       }
-      _error = PortalApiService.errorMessage(result, 'Não foi possível trocar a senha');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível trocar a senha. Tente de novo.');
     } catch (_) {
-      _error = 'Erro ao processar a resposta do servidor';
+      _error = 'O servidor respondeu algo inesperado. Tente de novo.';
     }
     _isLoading = false;
     notifyListeners();
@@ -129,7 +129,7 @@ class AuthProvider extends ChangeNotifier {
       }
       _error = PortalApiService.errorMessage(result, fallbackError);
     } catch (_) {
-      _error = 'Erro ao processar a resposta do servidor';
+      _error = 'O servidor respondeu algo inesperado. Tente de novo.';
     }
     _isLoading = false;
     notifyListeners();

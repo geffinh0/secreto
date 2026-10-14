@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/common/gradient_button.dart';
+import '../../widgets/ui/ui.dart';
+import 'login_screen.dart' show AuthErrorBanner;
 
 /// Same rules the server enforces (backend/security.py password_problems); the server
 /// stays the authority, this only saves a round trip for the obvious mistakes.
@@ -17,10 +16,13 @@ String? passwordRuleError(String password) {
   if (!hasUpper) return 'Use pelo menos uma letra maiúscula';
   final hasSpecial = password.runes.any((r) {
     final ch = String.fromCharCode(r);
-    final isLetterOrDigit = ch.toLowerCase() != ch.toUpperCase() || (r >= 0x30 && r <= 0x39);
+    final isLetterOrDigit =
+        ch.toLowerCase() != ch.toUpperCase() || (r >= 0x30 && r <= 0x39);
     return !isLetterOrDigit && ch.trim().isNotEmpty;
   });
-  if (!hasSpecial) return r'Use pelo menos um caractere especial (como ! @ # $ % & *)';
+  if (!hasSpecial) {
+    return r'Use pelo menos um caractere especial (como ! @ # $ % & *)';
+  }
   return null;
 }
 
@@ -52,9 +54,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
-    final ok = await auth.changePassword(_currentController.text, _newController.text);
+    final ok =
+        await auth.changePassword(_currentController.text, _newController.text);
     if (ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Senha alterada')));
+      showAppSnack(context, 'Senha alterada');
       context.go('/dashboard');
     }
   }
@@ -65,127 +68,109 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final forced = auth.mustChangePassword;
 
     return Scaffold(
-      backgroundColor: AppTheme.bgDark,
-      appBar: forced
-          ? null
-          : AppBar(
-              backgroundColor: AppTheme.bgDark,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () => context.canPop() ? context.pop() : context.go('/settings'),
+      backgroundColor: AppColors.canvas,
+      body: SafeArea(
+        child: AppPage(
+          maxWidth: 520,
+          children: [
+            Reveal(
+              child: PageHeader(
+                title: forced ? 'Escolha a sua senha' : 'Alterar senha',
+                subtitle: forced
+                    ? 'Você entrou com uma senha provisória. Ela só vale uma vez: '
+                        'crie agora uma senha só sua para continuar.'
+                    : 'Por segurança, as suas outras sessões serão encerradas.',
+                leading: forced
+                    ? null
+                    : IconButton(
+                        tooltip: 'Voltar',
+                        icon:
+                            const Icon(Icons.arrow_back, color: AppColors.ink),
+                        onPressed: () => context.canPop()
+                            ? context.pop()
+                            : context.go('/settings'),
+                      ),
               ),
             ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.pageHorizontal(context),
-            vertical: 32,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  forced ? 'Escolha a sua senha' : 'Alterar senha',
-                  style: const TextStyle(
-                      color: AppTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  forced
-                      ? 'Você entrou com uma senha provisória. Ela só vale uma vez: '
-                          'crie agora uma senha só sua para continuar.'
-                      : 'Por segurança, as suas outras sessões serão encerradas.',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 15),
-                ),
-                const SizedBox(height: 24),
-                if (auth.error != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.error.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
+            Reveal(
+              index: 1,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (auth.error != null)
+                      AuthErrorBanner(message: auth.error!),
+                    AppTextField(
+                      controller: _currentController,
+                      label: forced ? 'Senha provisória' : 'Senha atual',
+                      obscureText: _obscure,
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.next,
+                      suffix: IconButton(
+                        tooltip: _obscure ? 'Mostrar senhas' : 'Ocultar senhas',
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppColors.muted,
+                        ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                      validator: (v) =>
+                          (v?.isEmpty ?? true) ? 'Preencha este campo' : null,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_rounded, color: AppTheme.error, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(auth.error!,
-                              style: const TextStyle(color: AppTheme.error, fontSize: 13)),
-                        ),
-                      ],
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      controller: _newController,
+                      label: 'Nova senha',
+                      helper:
+                          'Mínimo de 8 caracteres, com uma letra maiúscula e um '
+                          'caractere especial. Não use seu usuário, nome ou senhas comuns.',
+                      obscureText: _obscure,
+                      autofillHints: const [AutofillHints.newPassword],
+                      textInputAction: TextInputAction.next,
+                      validator: (v) {
+                        if (v?.isEmpty ?? true) return 'Preencha este campo';
+                        if (v == _currentController.text) {
+                          return 'Use uma senha diferente da atual';
+                        }
+                        return passwordRuleError(v!);
+                      },
                     ),
-                  ),
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _currentController,
-                        obscureText: _obscure,
-                        decoration: InputDecoration(
-                          labelText: forced ? 'Senha provisória' : 'Senha atual',
-                          prefixIcon: const Icon(Icons.lock_clock_rounded),
-                          suffixIcon: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                        validator: (v) => (v?.isEmpty ?? true) ? 'Campo obrigatório' : null,
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      controller: _confirmController,
+                      label: 'Confirmar nova senha',
+                      obscureText: _obscure,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      validator: (v) => v != _newController.text
+                          ? 'As senhas não coincidem'
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    AppButton(
+                      key: const ValueKey('change_password_submit_button'),
+                      label: 'Salvar nova senha',
+                      icon: Icons.check,
+                      expand: true,
+                      loading: auth.isLoading,
+                      onPressed: auth.isLoading ? null : _submit,
+                    ),
+                    if (forced) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      AppButton.text(
+                        label: 'Sair',
+                        expand: true,
+                        onPressed: () => context.read<AuthProvider>().logout(),
                       ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _newController,
-                        obscureText: _obscure,
-                        decoration: const InputDecoration(
-                          labelText: 'Nova senha',
-                          prefixIcon: Icon(Icons.lock_rounded),
-                          helperText: 'Mínimo 8 caracteres, com uma letra maiúscula e um caractere especial. '
-                              'Não use seu usuário, nome ou senhas comuns.',
-                          helperMaxLines: 3,
-                        ),
-                        validator: (v) {
-                          if (v?.isEmpty ?? true) return 'Campo obrigatório';
-                          if (v == _currentController.text) return 'Use uma senha diferente da atual';
-                          return passwordRuleError(v!);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _confirmController,
-                        obscureText: _obscure,
-                        decoration: const InputDecoration(
-                          labelText: 'Confirmar nova senha',
-                          prefixIcon: Icon(Icons.lock_outline_rounded),
-                        ),
-                        validator: (v) =>
-                            v != _newController.text ? 'As senhas não coincidem' : null,
-                      ),
-                      const SizedBox(height: 28),
-                      GradientButton(
-                        id: 'change_password_submit_button',
-                        onPressed: auth.isLoading ? null : _submit,
-                        isLoading: auth.isLoading,
-                        label: 'Salvar nova senha',
-                        icon: Icons.check_rounded,
-                      ),
-                      if (forced) ...[
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: () => context.read<AuthProvider>().logout(),
-                          child: const Text('Sair'),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

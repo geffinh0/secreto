@@ -50,6 +50,12 @@ class PortalUser {
     this.mustChangePassword = false,
   });
 
+  /// Name to show: the display name when it has text, otherwise the username.
+  String get shownName {
+    final name = displayName?.trim() ?? '';
+    return name.isNotEmpty ? name : username;
+  }
+
   factory PortalUser.fromJson(Map<String, dynamic> json) {
     return PortalUser(
       id: asInt(json['id']),

@@ -20,6 +20,7 @@ import 'package:atilas_client/screens/admin/admin_screen.dart';
 import 'package:atilas_client/screens/auth/change_password_screen.dart' show passwordRuleError;
 import 'package:atilas_client/screens/auth/login_screen.dart';
 import 'package:atilas_client/screens/bot/bot_control_screen.dart';
+import 'package:atilas_client/widgets/ui/ui.dart';
 
 /// A scripted backend: responses are looked up by "METHOD /path".
 class FakeApi extends PortalApiService {
@@ -126,6 +127,12 @@ Map<String, dynamic> statusPayload({
       'watch': watch ??
           {'shared_id': null, 'nickname': null, 'avatar': null, 'active': false},
     };
+
+/// The TextField of an AppTextField, found by the label shown above it.
+Finder fieldByLabel(String label) => find.descendant(
+      of: find.ancestor(of: find.text(label), matching: find.byType(AppTextField)),
+      matching: find.byType(TextField),
+    );
 
 void main() {
   setUpAll(() {
@@ -567,15 +574,15 @@ void main() {
       // with the square "Ahem" font, which makes the footer row overflow below ~480px.
       await pumpLogin(tester, const Size(480, 900));
       expect(tester.takeException(), isNull);
-      expect(find.text('Bem-vindo de volta!'), findsOneWidget);
+      expect(find.text('Entre na sua conta'), findsOneWidget);
       expect(find.text('Entrar'), findsOneWidget);
     });
 
     testWidgets('login screen renders on a wide desktop window', (tester) async {
       await pumpLogin(tester, const Size(1280, 800));
       expect(tester.takeException(), isNull);
-      expect(find.text('Bem-vindo de volta!'), findsOneWidget);
-      expect(find.text('Moderação automática'), findsOneWidget); // hero panel
+      expect(find.text('Entre na sua conta'), findsOneWidget);
+      expect(find.text('Criar conta'), findsOneWidget); // footer link
     });
 
     testWidgets('robot screen shows the real chat, actions and counters (no literal \${...})',
@@ -619,7 +626,8 @@ void main() {
       expect(tester.takeException(), isNull);
 
       expect(find.text('RoboMod'), findsOneWidget);
-      expect(find.text('Moderando a live...'), findsOneWidget);
+      expect(find.text('Moderando'), findsOneWidget);
+      expect(find.text('Parar moderação'), findsOneWidget);
       expect(find.text('Chat conectado'), findsOneWidget);
       expect(find.textContaining('oi gente', findRichText: true), findsOneWidget);
       expect(find.text('silenciado'), findsOneWidget);
@@ -655,7 +663,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Conectar Robô'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Conectar robô'), findsOneWidget);
       expect(find.text('E-mail e senha'), findsOneWidget);
       expect(find.text('Colar token'), findsNothing);
       expect(find.text('Código por e-mail'), findsOneWidget);
@@ -696,7 +704,7 @@ void main() {
       expect(find.text('Enviar código por SMS'), findsOneWidget);
 
       await tester.enterText(
-          find.widgetWithText(TextField, 'Telefone (com código do país)'), '+5511999999999');
+          fieldByLabel('Telefone com código do país'), '+5511999999999');
       await tester.tap(find.text('Enviar código por SMS'));
       await tester.pump(); // starts the request
       await tester.pump(); // applies the result
@@ -706,14 +714,14 @@ void main() {
       expect(find.textContaining('Reenviar código'), findsOneWidget);
 
       await tester.enterText(
-          find.widgetWithText(TextField, 'Código recebido por SMS'), '123456');
+          fieldByLabel('Código recebido por SMS'), '123456');
       await tester.tap(find.text('Confirmar código'));
       await tester.pump();
       await tester.pump();
 
       expect(find.text('RoboMod'), findsOneWidget);
       expect(find.text('Conectado com celular'), findsOneWidget);
-      expect(find.text('Desconectar'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Desconectar robô'), findsOneWidget);
     });
 
     testWidgets('robot screen: finding a streamer by her public id fills the livestream id',
@@ -746,7 +754,7 @@ void main() {
       await tester.pump();
 
       await tester.enterText(
-          find.widgetWithText(TextField, 'ID público da streamer'), '69622983');
+          fieldByLabel('ID público do streamer'), '69622983');
       await tester.tap(find.byIcon(Icons.search_rounded));
       await tester.pump();
       await tester.pump();
@@ -754,7 +762,7 @@ void main() {
       expect(find.text('Fulana'), findsOneWidget);
       expect(find.text('ao vivo agora'), findsOneWidget);
       final liveIdField =
-          tester.widget<TextField>(find.widgetWithText(TextField, 'ID da Live (livestream_id)'));
+          tester.widget<TextField>(fieldByLabel('ID da live'));
       expect(liveIdField.controller!.text, 'live42');
     });
 
@@ -788,14 +796,14 @@ void main() {
       await tester.pump();
 
       await tester.enterText(
-          find.widgetWithText(TextField, 'ID público da streamer'), '1');
+          fieldByLabel('ID público do streamer'), '1');
       await tester.tap(find.byIcon(Icons.search_rounded));
       await tester.pump();
       await tester.pump();
 
       expect(find.text('não está ao vivo'), findsOneWidget);
       final liveIdField =
-          tester.widget<TextField>(find.widgetWithText(TextField, 'ID da Live (livestream_id)'));
+          tester.widget<TextField>(fieldByLabel('ID da live'));
       expect(liveIdField.controller!.text, isEmpty); // not filled when she's offline
     });
 
@@ -850,22 +858,22 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // No saved token - the login form, not the panel, shows first.
-      expect(find.text('Painel Administrativo'), findsOneWidget);
-      expect(find.widgetWithText(TextFormField, 'Usuário administrativo'), findsOneWidget);
-      expect(find.text('Usuárias (2)'), findsNothing);
+      expect(find.text('Administração'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(2));
+      expect(find.text('Usuários (2)'), findsNothing);
 
       await tester.enterText(
-          find.widgetWithText(TextFormField, 'Usuário administrativo'), 'root');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Senha'), 'senha-forte');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Entrar'));
+          fieldByLabel('Usuário administrativo'), 'root');
+      await tester.enterText(fieldByLabel('Senha'), 'senha-forte');
+      await tester.tap(find.widgetWithText(AppButton, 'Entrar'));
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Usuárias (2)'), findsOneWidget);
+      expect(find.text('Usuários (2)'), findsOneWidget);
       expect(find.text('Geffinho'), findsOneWidget);
       expect(find.text('nyx'), findsOneWidget); // falls back to username, no display_name
-      expect(find.text('ativo'), findsOneWidget);
-      expect(find.text('não configurado'), findsOneWidget);
+      expect(find.text('Ativo'), findsOneWidget);
+      expect(find.text('Não configurado'), findsOneWidget);
 
       await tester.tap(find.text('Sessões ativas (1)'));
       await tester.pumpAndSettle();
@@ -935,10 +943,11 @@ void main() {
       expect(find.text('até 111s'), findsOneWidget);
       expect(find.text('4 / 75'), findsOneWidget);
 
-      await tester.tap(find.text('Nova agência'));
+      await tester.tap(find.widgetWithText(AppButton, 'Criar agência'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, 'Agência Lua');
-      await tester.tap(find.text('Criar'));
+      expect(find.text('Nova agência'), findsOneWidget); // the dialog
+      await tester.tap(find.widgetWithText(AppButton, 'Criar agência').last);
       await tester.pumpAndSettle();
       expect(find.text('Agência criada'), findsOneWidget);
       expect(find.text('QW7M-2ZPD'), findsOneWidget);
@@ -977,7 +986,7 @@ void main() {
       await tester.pumpWidget(host(api));
 
       // nothing can be imported before the file was checked
-      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('import_confirm_button'))).onPressed, isNull);
+      expect(tester.widget<AppButton>(find.byKey(const ValueKey('import_confirm_button'))).onPressed, isNull);
 
       await tester.enterText(find.byKey(const ValueKey('import_config_field')), backup);
       await tester.tap(find.byKey(const ValueKey('import_check_button')));
@@ -1022,7 +1031,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.textContaining('não é um backup'), findsOneWidget);
-      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('import_confirm_button'))).onPressed, isNull);
+      expect(tester.widget<AppButton>(find.byKey(const ValueKey('import_confirm_button'))).onPressed, isNull);
     });
 
     test('password rules in the app match the server: 8 characters, one uppercase, one special', () {

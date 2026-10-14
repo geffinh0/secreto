@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../core/theme/app_theme.dart';
+import '../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/change_password_screen.dart';
 import '../screens/auth/login_screen.dart';
@@ -67,8 +67,8 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: _splashPath,
         builder: (context, state) => const Scaffold(
-          backgroundColor: AppTheme.bgDark,
-          body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+          backgroundColor: AppColors.canvas,
+          body: Center(child: CircularProgressIndicator(color: AppColors.accent)),
         ),
       ),
       GoRoute(

@@ -32,7 +32,7 @@ class AutoMessageProvider extends ChangeNotifier {
       final List<dynamic> data = messagesResult['data'] as List<dynamic>;
       _messages = data.map((m) => AutoMessage.fromJson(m)).toList();
     } else {
-      _error = PortalApiService.errorMessage(messagesResult, 'Erro ao carregar mensagens');
+      _error = PortalApiService.errorMessage(messagesResult, 'Não foi possível carregar as mensagens. Tente de novo.');
     }
 
     if (settingsResult['success'] == true) {
@@ -58,7 +58,7 @@ class AutoMessageProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao adicionar mensagem');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível adicionar a mensagem. Tente de novo.');
     notifyListeners();
     return false;
   }
@@ -73,7 +73,7 @@ class AutoMessageProvider extends ChangeNotifier {
       }
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao atualizar mensagem');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível atualizar a mensagem. Tente de novo.');
     notifyListeners();
     return false;
   }
@@ -89,7 +89,7 @@ class AutoMessageProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao remover mensagem');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível remover a mensagem. Tente de novo.');
     notifyListeners();
     return false;
   }
@@ -124,7 +124,7 @@ class AutoMessageProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao salvar configurações');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível salvar as configurações. Tente de novo.');
     notifyListeners();
     return false;
   }

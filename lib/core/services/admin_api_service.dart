@@ -92,8 +92,11 @@ class AdminApiService {
       }
     }
     if (result['statusCode'] == 0) {
-      return 'Não foi possível conectar ao servidor (${AppConstants.localBackendUrl}). '
-          'Ele está rodando?';
+      // Same rule as the portal service: a URL only helps with a local dev backend.
+      const url = AppConstants.localBackendUrl;
+      return url.startsWith('http')
+          ? 'Não foi possível conectar ao servidor ($url). Ele está rodando?'
+          : 'Não foi possível conectar ao servidor. Verifique sua conexão.';
     }
     return fallback;
   }

@@ -5,9 +5,9 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Atila's Client — Painel de Controle e Moderação Automática para SuperLive">
-  <meta name="theme-color" content="#E07B39">
+  <meta name="theme-color" content="#121212">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -21,92 +21,55 @@
   <title>Atila's Client</title>
   <link rel="manifest" href="manifest.json">
   <style>
+    html, body { height: 100%; }
     body {
-      background-color: #1B140F;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+      background-color: #121212;
       margin: 0;
-      color: #F7EEE3;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #F4F4F0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
-      user-select: none;
     }
     .loading-container {
+      box-sizing: border-box;
+      height: 100%;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      transition: opacity 0.4s ease;
+      justify-content: space-between;
+      padding: 24px 16px 32px;
+      transition: opacity 0.16s ease;
     }
-    .logo-frame {
-      width: 88px;
-      height: 88px;
-      border-radius: 24px;
-      background: #241B15;
-      border: 1px solid #3A2D22;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-      animation: gentle-pulse 2.4s ease-in-out infinite;
-    }
-    .logo-frame img {
-      width: 72px;
-      height: 72px;
-      object-fit: contain;
-    }
+    .logo { width: 48px; height: 48px; object-fit: contain; }
     .loading-title {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      color: #F7EEE3;
+      font-size: 40px;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin: 0 0 8px;
     }
-    .loading-sub {
-      font-size: 12px;
-      color: #8C7968;
-      letter-spacing: 0.3px;
-    }
-    .spinner-bar {
-      width: 140px;
-      height: 3px;
-      background: #2C2119;
-      border-radius: 3px;
-      overflow: hidden;
-      position: relative;
-    }
+    .loading-sub { font-size: 16px; color: #A8A8A4; margin: 0 0 24px; }
+    .spinner-bar { width: 100%; max-width: 320px; height: 4px; background: #262626; overflow: hidden; position: relative; }
     .spinner-bar::after {
       content: '';
       position: absolute;
-      left: -50%;
+      left: -40%;
       height: 100%;
-      width: 50%;
+      width: 40%;
       background: #E07B39;
-      border-radius: 3px;
       animation: indeterminate 1.4s ease-in-out infinite;
     }
-    @keyframes gentle-pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.03); }
-    }
-    @keyframes indeterminate {
-      0% { left: -50%; width: 30%; }
-      50% { width: 60%; }
-      100% { left: 100%; width: 30%; }
-    }
+    @keyframes indeterminate { 0% { left: -40%; } 100% { left: 100%; } }
+    @media (min-width: 900px) { .loading-container { padding: 32px; } }
+    @media (prefers-reduced-motion: reduce) { .spinner-bar::after { animation: none; left: 0; width: 100%; } }
   </style>
 </head>
 <body>
   <div class="loading-container" id="loading-indicator">
-    <div class="logo-frame">
-      <img src="favicon.png" alt="Atila's Client">
+    <img class="logo" src="favicon.png" alt="">
+    <div>
+      <h1 class="loading-title">Atila's Client</h1>
+      <p class="loading-sub">Iniciando o sistema</p>
+      <div class="spinner-bar" role="progressbar" aria-label="Carregando"></div>
     </div>
-    <div style="text-align: center;">
-      <div class="loading-title">Atila's Client</div>
-      <div class="loading-sub">Iniciando sistema...</div>
-    </div>
-    <div class="spinner-bar"></div>
   </div>
 
   <script>
@@ -146,10 +109,109 @@
         loadingIndicator.style.opacity = '0';
         setTimeout(function() {
           loadingIndicator.remove();
-        }, 400);
+        }, 160);
       }
     });
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // ---- Update scheme (see DEPLOY.md, "Atualização para todos") ----------------
+    // The deploy replaces the @@BUILD_ID@@ token below with a value unique to that deploy
+    // (git sha + timestamp). It is used to (1) put a version on the URLs of the
+    // app files, (2) clear whatever an older version left in this browser exactly
+    // once, and (3) notice, while the app stays open, that a newer one exists.
+    (function () {
+      var BUILD = '@@BUILD_ID@@';
+      var DEV = BUILD.indexOf('@@') === 0; // not stamped: local `flutter run`
+      window.__BUILD_ID__ = DEV ? '' : BUILD;
+      window.__updateAvailable = false;
+
+      function purge() {
+        // Service worker + Cache Storage only. localStorage (login) is left alone.
+        var work = [];
+        if ('serviceWorker' in navigator) {
+          work.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        if (window.caches) {
+          work.push(caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+        return Promise.all(work);
+      }
+
+      function hasLeftovers() {
+        var checks = [];
+        if ('serviceWorker' in navigator) {
+          checks.push(navigator.serviceWorker.getRegistrations().then(function (r) { return r.length > 0; }));
+        }
+        if (window.caches) {
+          checks.push(caches.keys().then(function (k) { return k.length > 0; }));
+        }
+        return Promise.all(checks).then(function (r) { return r.indexOf(true) !== -1; });
+      }
+
+      function startApp() {
+        var s = document.createElement('script');
+        s.src = 'flutter_bootstrap.js' + (DEV ? '' : '?v=' + encodeURIComponent(BUILD));
+        s.async = true;
+        document.body.appendChild(s);
+      }
+
+      // The nginx sends `Clear-Site-Data: "cache"` until this cookie matches the
+      // current build, so the HTTP cache of an old visit is dropped one time.
+      if (!DEV) {
+        try {
+          document.cookie = 'app_build=' + BUILD + '; path=/; max-age=31536000; SameSite=Lax' +
+              (location.protocol === 'https:' ? '; Secure' : '');
+        } catch (e) {}
+      }
+
+      // Stored build differs (or never stored: a visitor from before this scheme):
+      // drop the old service worker and caches, then reload once into the new files.
+      function guard() {
+        if (DEV) return Promise.resolve(false);
+        var stored = null, tried = null;
+        try {
+          stored = localStorage.getItem('app_build');
+          tried = sessionStorage.getItem('app_purge');
+          localStorage.setItem('app_build', BUILD);
+        } catch (e) { return Promise.resolve(false); }
+        if (stored === BUILD || tried === BUILD) return Promise.resolve(false);
+        return hasLeftovers().then(function (left) {
+          if (!left) return false;
+          try { sessionStorage.setItem('app_purge', BUILD); } catch (e) {}
+          return purge().then(function () { return true; });
+        });
+      }
+
+      guard().then(function (reloading) {
+        if (reloading) { location.reload(); return; }
+        startApp();
+      }, startApp);
+
+      // While the app is open: ask the server which build is live.
+      function check() {
+        if (DEV) return;
+        fetch('build.json?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (j && typeof j.build === 'string' && j.build && j.build !== BUILD) {
+              window.__updateAvailable = true;
+            }
+          })
+          .catch(function () {});
+      }
+      setInterval(check, 5 * 60 * 1000);
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') check();
+      });
+      window.appUpdateAvailable = function () { return window.__updateAvailable === true; };
+      window.appApplyUpdate = function () {
+        purge().then(function () { location.reload(); }, function () { location.reload(); });
+      };
+    })();
+  </script>
 </body>
 </html>

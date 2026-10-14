@@ -106,7 +106,7 @@ class AdminProvider extends ChangeNotifier {
         hours: asInt(data['expires_in_hours']),
       );
     }
-    _error = AdminApiService.errorMessage(result, 'Não foi possível liberar a troca de senha.');
+    _error = AdminApiService.errorMessage(result, 'Não foi possível liberar a troca de senha. Tente de novo.');
     notifyListeners();
     return null;
   }
@@ -120,7 +120,7 @@ class AdminProvider extends ChangeNotifier {
       notifyListeners();
       return code;
     }
-    _error = AdminApiService.errorMessage(result, 'Não foi possível criar a agência.');
+    _error = AdminApiService.errorMessage(result, 'Não foi possível criar a agência. Tente de novo.');
     notifyListeners();
     return null;
   }
@@ -129,7 +129,7 @@ class AdminProvider extends ChangeNotifier {
   Future<bool> setAgencyActive(int agencyId, bool active) async {
     final result = await _api.post('/admin/agencies/$agencyId/active', {'active': active});
     if (result['success'] != true) {
-      _error = AdminApiService.errorMessage(result, 'Não foi possível alterar a agência.');
+      _error = AdminApiService.errorMessage(result, 'Não foi possível alterar a agência. Tente de novo.');
       notifyListeners();
       return false;
     }
@@ -147,7 +147,7 @@ class AdminProvider extends ChangeNotifier {
       notifyListeners();
       return code;
     }
-    _error = AdminApiService.errorMessage(result, 'Não foi possível gerar um novo código.');
+    _error = AdminApiService.errorMessage(result, 'Não foi possível gerar um novo código. Tente de novo.');
     notifyListeners();
     return null;
   }
@@ -200,7 +200,7 @@ class AdminProvider extends ChangeNotifier {
           .map((e) => AdminUserSummary.fromJson(e.cast<String, dynamic>()))
           .toList();
     } else {
-      _error = AdminApiService.errorMessage(usersResult, 'Erro ao carregar usuárias');
+      _error = AdminApiService.errorMessage(usersResult, 'Não foi possível carregar os usuários. Tente de novo.');
     }
 
     if (sessionsResult['success'] == true && sessionsResult['data'] is List) {
@@ -209,7 +209,7 @@ class AdminProvider extends ChangeNotifier {
           .map((e) => AdminSessionSummary.fromJson(e.cast<String, dynamic>()))
           .toList();
     } else if (usersOk) {
-      _error = AdminApiService.errorMessage(sessionsResult, 'Erro ao carregar sessões');
+      _error = AdminApiService.errorMessage(sessionsResult, 'Não foi possível carregar as sessões. Tente de novo.');
     }
 
     if (usersOk) {

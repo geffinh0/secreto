@@ -29,7 +29,7 @@ class ModerationProvider extends ChangeNotifier {
       final List<dynamic> data = result['data'] as List<dynamic>;
       _rules = data.map((r) => ModerationRule.fromJson(r)).toList();
     } else {
-      _error = PortalApiService.errorMessage(result, 'Erro ao carregar regras');
+      _error = PortalApiService.errorMessage(result, 'Não foi possível carregar as regras. Tente de novo.');
     }
 
     _isLoading = false;
@@ -50,7 +50,7 @@ class ModerationProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao adicionar regra');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível adicionar a regra. Tente de novo.');
     notifyListeners();
     return false;
   }
@@ -65,7 +65,7 @@ class ModerationProvider extends ChangeNotifier {
       }
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao atualizar regra');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível atualizar a regra. Tente de novo.');
     notifyListeners();
     return false;
   }
@@ -77,7 +77,7 @@ class ModerationProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao remover regra');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível remover a regra. Tente de novo.');
     notifyListeners();
     return false;
   }
@@ -92,7 +92,7 @@ class ModerationProvider extends ChangeNotifier {
   Future<PhraseTestResult?> testPhrase({required int userId, required String text}) async {
     final result = await _api.post('/moderation/test', {'user_id': userId, 'text': text});
     if (result['success'] == true) return PhraseTestResult.fromJson(result['data']);
-    _error = PortalApiService.errorMessage(result, 'Erro ao testar a frase');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível testar a frase. Tente de novo.');
     notifyListeners();
     return null;
   }
@@ -118,7 +118,7 @@ class ModerationProvider extends ChangeNotifier {
       }
       return bulkResult;
     }
-    _error = PortalApiService.errorMessage(result, 'Erro ao adicionar palavras em lote');
+    _error = PortalApiService.errorMessage(result, 'Não foi possível adicionar as palavras. Tente de novo.');
     notifyListeners();
     return null;
   }

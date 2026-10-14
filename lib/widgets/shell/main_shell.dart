@@ -1,468 +1,135 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/services/app_update_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
 import '../common/fox_icon.dart';
+import '../ui/ui.dart';
 
-class MainShell extends StatefulWidget {
+class _Dest {
+  final IconData icon;
+  final String label;
+  final String path;
+  const _Dest(this.icon, this.label, this.path);
+}
+
+const _painel = _Dest(Icons.grid_view_outlined, 'Painel', '/dashboard');
+const _moderacao = _Dest(Icons.shield_outlined, 'Moderação', '/moderation');
+const _robo = _Dest(Icons.smart_toy_outlined, 'Robô', '/bot');
+const _mensagens =
+    _Dest(Icons.chat_bubble_outline, 'Mensagens automáticas', '/messages');
+const _estatisticas = _Dest(Icons.bar_chart, 'Estatísticas', '/stats');
+const _configuracoes =
+    _Dest(Icons.settings_outlined, 'Configurações', '/settings');
+
+const _primary = [_painel, _moderacao, _robo];
+const _more = [_mensagens, _estatisticas, _configuracoes];
+const _all = [..._primary, ..._more];
+
+bool _matches(String location, _Dest d) => location.startsWith(d.path);
+
+/// App frame. Phone: slim top bar, content, bottom bar with Painel,
+/// Moderação, Robô and Mais. Desktop (>= 900): fixed 240px sidebar with every
+/// destination. Pages draw their own PageHeader; the shell never titles them.
+class MainShell extends StatelessWidget {
   final Widget child;
 
   const MainShell({super.key, required this.child});
 
   @override
-  State<MainShell> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<MainShell> {
-  final List<_NavItem> _navItems = [
-    const _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard', path: '/dashboard'),
-    const _NavItem(icon: Icons.shield_rounded, label: 'Moderação', path: '/moderation'),
-    const _NavItem(icon: Icons.chat_bubble_rounded, label: 'Mensagens', path: '/messages'),
-    const _NavItem(icon: Icons.smart_toy_rounded, label: 'Robô', path: '/bot'),
-    const _NavItem(icon: Icons.settings_rounded, label: 'Configurações', path: '/settings'),
-  ];
-
-  int _getCurrentIndex(BuildContext context) {
-    final location = GoRouterState.of(context).matchedLocation;
-    for (int i = 0; i < _navItems.length; i++) {
-      if (location.startsWith(_navItems[i].path)) return i;
-    }
-    return 0;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final currentIndex = _getCurrentIndex(context);
-    final isWide = MediaQuery.of(context).size.width > 900;
+    final location = GoRouterState.of(context).matchedLocation;
+    final wide = AppSpacing.isWide(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.bgDark,
-      body: Row(
-        children: [
-          if (isWide) _buildSidebar(context, currentIndex),
-          Expanded(
-            child: Column(
-              children: [
-                _buildTopBar(context),
-                Expanded(
-                  // Caps content width on very wide monitors so text/forms
-                  // never stretch edge-to-edge - mobile/tablet are narrower
-                  // than the cap already, so this is a no-op there.
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints:
-                          const BoxConstraints(maxWidth: AppSpacing.maxContentWidth),
-                      child: widget.child,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: isWide ? null : _buildBottomNav(context, currentIndex),
-    );
-  }
-
-  Widget _buildSidebar(BuildContext context, int currentIndex) {
-    final botProvider = context.watch<BotProvider>();
-
-    return Container(
-      width: 240,
-      decoration: const BoxDecoration(
-        color: AppTheme.bgCard,
-        border: Border(right: BorderSide(color: AppTheme.border)),
-      ),
-      child: Column(
-        children: [
-          // Logo
-          Container(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppTheme.bgSurface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: const FoxIcon(size: 36, borderRadius: 8),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Super',
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        height: 1.1,
-                      ),
-                    ),
-                    Text(
-                      'Moderator',
-                      style: TextStyle(
-                        color: AppTheme.primary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        height: 1.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Bot status indicator
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.bgSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: botProvider.isConnected
-                        ? AppTheme.success
-                        : AppTheme.error,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    botProvider.isConnected
-                        ? botProvider.botProfile?.nickname ?? 'Robô conectado'
-                        : 'Robô desconectado',
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Nav items
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _navItems.length,
-              itemBuilder: (context, i) {
-                final item = _navItems[i];
-                final isActive = currentIndex == i;
-                return _SidebarItem(
-                  item: item,
-                  isActive: isActive,
-                  onTap: () => context.go(item.path),
-                );
-              },
-            ),
-          ),
-
-          // User info
-          const Divider(color: AppTheme.border),
-          _buildUserTile(context),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUserTile(BuildContext context) {
-    final user = context.watch<AuthProvider>().user;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
-            child: Text(
-              (user?.displayName ?? user?.username ?? 'U')[0].toUpperCase(),
-              style: const TextStyle(
-                color: AppTheme.primary,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user?.displayName ?? user?.username ?? 'Usuário',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '@${user?.username ?? ''}',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 11,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, size: 18, color: AppTheme.textMuted),
-            tooltip: 'Sair',
-            onPressed: () => context.read<AuthProvider>().logout(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isWide = width > 900;
-    // Phones get the dot-only status pill (no "Robô online/offline" label) -
-    // between the logo box, the route icon+title and the pill, the label text
-    // was the one thing standing between a comfortable title and an ellipsis.
-    final isPhone = width < 480;
-    final (routeIcon, routeTitle) = _getRouteTitleInfo(context, isWide: isWide);
-    final botProvider = context.watch<BotProvider>();
-    // Pages reached by pushing on top of a tab (e.g. Estatísticas from the
-    // Dashboard card) aren't one of the 5 bottom-nav destinations, so there's
-    // no tab to tap back to - show a back arrow instead of the logo there.
-    final location = GoRouterState.of(context).matchedLocation;
-    final isSubRoute = !_navItems.any((item) => location.startsWith(item.path));
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: AppTheme.bgCard,
-        border: Border(bottom: BorderSide(color: AppTheme.border)),
-      ),
-      child: Row(
-        children: [
-          if (isSubRoute)
-            IconButton(
-              onPressed: () =>
-                  context.canPop() ? context.pop() : context.go('/dashboard'),
-              icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textPrimary),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            )
-          else if (!isWide) ...[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppTheme.bgSurface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.border),
-              ),
-              padding: const EdgeInsets.all(3),
-              child: const FoxIcon(size: 30, borderRadius: 7),
-            ),
-          ],
-          if (isSubRoute || !isWide) const SizedBox(width: 12),
-          Icon(routeIcon, color: AppTheme.primary, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              routeTitle,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (!isWide)
-            Container(
-              padding: isPhone
-                  ? const EdgeInsets.all(6)
-                  : const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppTheme.bgSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+      backgroundColor: AppColors.canvas,
+      body: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            if (wide) _Sidebar(location: location),
+            Expanded(
+              child: Column(
                 children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: botProvider.isConnected
-                          ? AppTheme.success
-                          : AppTheme.error,
-                    ),
-                  ),
-                  if (!isPhone) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      botProvider.isConnected ? 'Robô online' : 'Robô offline',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                  if (!wide) const _TopBar(),
+                  const _UpdateNotice(),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                            maxWidth: AppSpacing.maxContentWidth),
+                        child: child,
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-
-  // Full titles have room to breathe on desktop; narrow screens get the short
-  // form so the top bar never has to ellipsize or push the status pill off
-  // the edge (see _buildTopBar, which also drops the pill's text there).
-  (IconData, String) _getRouteTitleInfo(BuildContext context, {required bool isWide}) {
-    final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/moderation')) return (Icons.shield_rounded, 'Moderação');
-    if (location.startsWith('/messages')) {
-      return (Icons.chat_bubble_rounded, isWide ? 'Mensagens Automáticas' : 'Mensagens');
-    }
-    if (location.startsWith('/bot')) {
-      return (Icons.smart_toy_rounded, isWide ? 'Controle do Robô' : 'Robô');
-    }
-    if (location.startsWith('/settings')) return (Icons.settings_rounded, 'Configurações');
-    if (location.startsWith('/stats')) return (Icons.bar_chart_rounded, 'Estatísticas');
-    return (Icons.dashboard_rounded, 'Dashboard');
-  }
-
-  Widget _buildBottomNav(BuildContext context, int currentIndex) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.bgCard,
-        border: Border(top: BorderSide(color: AppTheme.border)),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (i) => context.go(_navItems[i].path),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppTheme.primary,
-        unselectedItemColor: AppTheme.textMuted,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        items: _navItems
-            .map((item) => BottomNavigationBarItem(
-                  icon: Icon(item.icon),
-                  label: item.label,
-                ))
-            .toList(),
-      ),
+      bottomNavigationBar: wide ? null : _BottomBar(location: location),
     );
   }
 }
 
-class _NavItem {
-  final IconData icon;
-  final String label;
-  final String path;
-  const _NavItem({required this.icon, required this.label, required this.path});
-}
-
-class _SidebarItem extends StatefulWidget {
-  final _NavItem item;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _SidebarItem({
-    required this.item,
-    required this.isActive,
-    required this.onTap,
-  });
+/// Shown while the app stays open and the server has a newer build. One tap
+/// clears the old caches and reloads into it.
+class _UpdateNotice extends StatefulWidget {
+  const _UpdateNotice();
 
   @override
-  State<_SidebarItem> createState() => _SidebarItemState();
+  State<_UpdateNotice> createState() => _UpdateNoticeState();
 }
 
-class _SidebarItemState extends State<_SidebarItem> {
-  bool _hovered = false;
+class _UpdateNoticeState extends State<_UpdateNotice> {
+  Timer? _poll;
+  bool _available = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  void _refresh() {
+    final now = AppUpdateService.available;
+    if (now != _available && mounted) setState(() => _available = now);
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.symmetric(vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: widget.isActive
-                ? AppTheme.primary.withValues(alpha: 0.15)
-                : _hovered
-                    ? AppTheme.bgSurface
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: widget.isActive
-                ? Border.all(color: AppTheme.primary.withValues(alpha: 0.3))
-                : null,
-          ),
-          child: Row(
+    if (!_available) return const SizedBox.shrink();
+    final gutter = AppSpacing.pageHorizontal(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gutter, 0, gutter, AppSpacing.sm),
+      child: SizedBox(
+        width: double.infinity,
+        child: AppSurface(
+          raised: true,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(
-                widget.item.icon,
-                size: 20,
-                color: widget.isActive ? AppTheme.primary : AppTheme.textMuted,
+              Text('Há uma nova versão do app.', style: AppType.bodyStrong),
+              const AppButton(
+                label: 'Atualizar agora',
+                icon: Icons.refresh,
+                onPressed: AppUpdateService.apply,
               ),
-              const SizedBox(width: 12),
-              Text(
-                widget.item.label,
-                style: TextStyle(
-                  color: widget.isActive ? AppTheme.primary : AppTheme.textSecondary,
-                  fontSize: 14,
-                  fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-              if (widget.isActive) ...[
-                const Spacer(),
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -471,3 +138,308 @@ class _SidebarItemState extends State<_SidebarItem> {
   }
 }
 
+class _Brand extends StatelessWidget {
+  const _Brand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const FoxIcon(size: 32),
+        const SizedBox(width: 12),
+        Text('Super Moderator', style: AppType.heading),
+      ],
+    );
+  }
+}
+
+class _BotStatus extends StatelessWidget {
+  const _BotStatus();
+
+  @override
+  Widget build(BuildContext context) {
+    final online = context.select<BotProvider, bool>((b) => b.isConnected);
+    return AppChip(
+      label: online ? 'Robô online' : 'Robô offline',
+      icon: online ? Icons.check_circle_outline : Icons.remove_circle_outline,
+      tone: online ? AppTone.success : AppTone.danger,
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  const _TopBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 400;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 64),
+      padding:
+          EdgeInsets.symmetric(horizontal: AppSpacing.pageHorizontal(context)),
+      child: Row(
+        children: [
+          if (compact) const FoxIcon(size: 32) else const _Brand(),
+          const Spacer(),
+          const _BotStatus(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomBar extends StatelessWidget {
+  final String location;
+  const _BottomBar({required this.location});
+
+  @override
+  Widget build(BuildContext context) {
+    final inMore = _more.any((d) => _matches(location, d));
+    // Four fixed-height tabs: past 130% the labels would be clipped.
+    final scaler = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3);
+    return MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: scaler),
+        child: Material(
+          color: AppColors.surface,
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 64,
+              child: Row(
+                children: [
+                  for (final d in _primary)
+                    Expanded(
+                      child: _BarItem(
+                        icon: d.icon,
+                        label: d.label,
+                        active: _matches(location, d),
+                        onTap: () => context.go(d.path),
+                      ),
+                    ),
+                  Expanded(
+                    child: _BarItem(
+                      icon: Icons.more_horiz,
+                      label: 'Mais',
+                      active: inMore,
+                      onTap: () => _openMore(context, location),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+  }
+
+  void _openMore(BuildContext context, String location) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Mais', style: AppType.title),
+              const SizedBox(height: 16),
+              AppRowList(children: [
+                for (final d in _more)
+                  AppListRow(
+                    raised: true,
+                    selected: _matches(location, d),
+                    leading: Icon(d.icon, size: 22),
+                    title: d.label,
+                    trailing:
+                        const Icon(Icons.chevron_right, color: AppColors.muted),
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      context.go(d.path);
+                    },
+                  ),
+              ]),
+              const SizedBox(height: 16),
+              const _UserBlock(labeled: true),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BarItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _BarItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? AppColors.onAccent : AppColors.muted;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppMotion.base,
+          curve: AppMotion.curve,
+          color: active ? AppColors.accent : Colors.transparent,
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 22, color: fg),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label,
+                    style: AppType.label.copyWith(color: fg), maxLines: 1),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Sidebar extends StatelessWidget {
+  final String location;
+  const _Sidebar({required this.location});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 240,
+      color: AppColors.surface,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Brand(),
+          const SizedBox(height: 16),
+          const Align(alignment: Alignment.centerLeft, child: _BotStatus()),
+          const SizedBox(height: 32),
+          Expanded(
+            child: ListView(
+              children: [
+                for (final d in _all)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: _SidebarItem(dest: d, active: _matches(location, d)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const _UserBlock(),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final _Dest dest;
+  final bool active;
+  const _SidebarItem({required this.dest, required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? AppColors.onAccent : AppColors.ink;
+    return Semantics(
+      button: true,
+      selected: active,
+      child: Material(
+        color: active ? AppColors.accent : Colors.transparent,
+        child: InkWell(
+          onTap: () => context.go(dest.path),
+          hoverColor: AppColors.raised,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(dest.icon, size: 20, color: fg),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(dest.label,
+                        style: AppType.label.copyWith(color: fg),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserBlock extends StatelessWidget {
+  final bool labeled;
+  const _UserBlock({this.labeled = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user;
+    final name = user?.shownName ?? 'Usuário';
+    return AppSurface(
+      raised: true,
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.accent,
+            child: Text(
+              name.isEmpty ? 'U' : name[0].toUpperCase(),
+              style: AppType.label.copyWith(color: AppColors.onAccent),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: AppType.label, overflow: TextOverflow.ellipsis),
+                Text('@${user?.username ?? ''}',
+                    style: AppType.meta, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          if (labeled)
+            AppButton.text(
+              label: 'Sair',
+              icon: Icons.logout,
+              onPressed: () => context.read<AuthProvider>().logout(),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.logout, size: 20),
+              tooltip: 'Sair',
+              onPressed: () => context.read<AuthProvider>().logout(),
+            ),
+        ],
+      ),
+    );
+  }
+}
