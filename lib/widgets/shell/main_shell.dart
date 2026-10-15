@@ -209,7 +209,7 @@ class _BottomBar extends StatelessWidget {
         data: MediaQuery.of(context).copyWith(textScaler: scaler),
         child: Material(
           color: AppColors.surface,
-          shape: const Border(top: BorderSide(color: AppColors.rule)),
+          shape: Border(top: BorderSide(color: AppColors.rule)),
           child: SafeArea(
             top: false,
             child: SizedBox(
@@ -262,7 +262,7 @@ class _BottomBar extends StatelessWidget {
                     leading: Icon(d.icon, size: 22),
                     title: d.label,
                     trailing:
-                        const Icon(Icons.chevron_right, color: AppColors.muted),
+                        Icon(Icons.chevron_right, color: AppColors.muted),
                     onTap: () {
                       Navigator.of(ctx).pop();
                       context.go(d.path);

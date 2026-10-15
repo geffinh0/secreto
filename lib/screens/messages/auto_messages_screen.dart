@@ -338,7 +338,7 @@ class _MessageList extends StatelessWidget {
           child: AppListRow(
             leading: ReorderableDragStartListener(
               index: index,
-              child: const SizedBox(
+              child: SizedBox(
                 width: AppSpacing.touch,
                 height: AppSpacing.touch,
                 child: Icon(Icons.drag_indicator,

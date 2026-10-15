@@ -35,7 +35,7 @@ class _GoldLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const SizedBox(height: 1, child: ColoredBox(color: AppColors.gold));
+      SizedBox(height: 1, child: ColoredBox(color: AppColors.gold));
 }
 
 /// A whiplash S-curve with two leaves and a bud, in a 100 x 30 box.

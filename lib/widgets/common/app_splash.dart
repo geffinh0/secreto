@@ -18,7 +18,7 @@ class AppSplash extends StatelessWidget {
           children: [
             const FoxArt(FoxPose.back, height: 132),
             const SizedBox(height: 24),
-            const SizedBox(
+            SizedBox(
               width: 28,
               height: 28,
               child: CircularProgressIndicator(

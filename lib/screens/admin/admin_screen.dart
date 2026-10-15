@@ -31,9 +31,9 @@ class _AdminScreenState extends State<AdminScreen> {
     final admin = context.watch<AdminProvider>();
 
     if (admin.isRestoringSession) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.canvas,
-        body: Center(child: AppStateView.loading()),
+        body: const Center(child: AppStateView.loading()),
       );
     }
     if (!admin.isAuthenticated) return const _AdminLogin();
@@ -127,7 +127,7 @@ class _AdminLoginState extends State<_AdminLogin> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline,
+                          Icon(Icons.error_outline,
                               color: AppColors.danger, size: 20),
                           const SizedBox(width: 12),
                           Expanded(
@@ -498,7 +498,7 @@ class _UsersSectionState extends State<_UsersSection> {
                 AppTextField(
                   label: 'Buscar usuário',
                   hint: 'Nome, usuário ou robô',
-                  prefix: const Icon(Icons.search, color: AppColors.muted),
+                  prefix: Icon(Icons.search, color: AppColors.muted),
                   onChanged: (v) => setState(() => _query = v),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -960,8 +960,8 @@ class _SessionsSection extends StatelessWidget {
                       : Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Padding(
-                              padding: EdgeInsets.only(top: 2),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
                               child: Icon(Icons.error_outline,
                                   color: AppColors.danger, size: 18),
                             ),

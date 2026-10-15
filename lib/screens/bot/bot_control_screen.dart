@@ -16,7 +16,7 @@ String _time(DateTime? t) =>
     t == null ? '--:--:--' : DateFormat('HH:mm:ss').format(t.toLocal());
 
 Color _toneColor(AppTone tone) => switch (tone) {
-      AppTone.accent => AppColors.accent,
+      AppTone.accent => AppColors.accentInk,
       AppTone.success => AppColors.success,
       AppTone.warning => AppColors.warning,
       AppTone.danger => AppColors.danger,
@@ -1084,7 +1084,7 @@ class _LookupResult extends StatelessWidget {
             foregroundImage:
                 result.avatar != null ? NetworkImage(result.avatar!) : null,
             onForegroundImageError: result.avatar != null ? (_, __) {} : null,
-            child: const Icon(Icons.person_rounded,
+            child: Icon(Icons.person_rounded,
                 color: AppColors.muted, size: 20),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -1199,7 +1199,7 @@ class _FavoriteStreamer extends StatelessWidget {
                     watch.avatar != null ? NetworkImage(watch.avatar!) : null,
                 onForegroundImageError:
                     watch.avatar != null ? (_, __) {} : null,
-                child: const Icon(Icons.favorite_rounded,
+                child: Icon(Icons.favorite_rounded,
                     color: AppColors.muted, size: 18),
               ),
               const SizedBox(width: AppSpacing.md),

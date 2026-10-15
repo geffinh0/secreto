@@ -8,6 +8,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Atila's Client — Painel de Controle e Moderação Automática para SuperLive">
   <meta name="theme-color" content="#F4ECDC">
+  <script>
+    // Same mood as the app, before the first paint: the saved choice
+    // (Flutter's shared_preferences key "flutter.theme_mode": light | dark |
+    // system) or, without one, the device setting.
+    (function () {
+      var mode = 'system';
+      try {
+        var raw = window.localStorage.getItem('flutter.theme_mode');
+        if (raw) { try { raw = JSON.parse(raw); } catch (e) {} mode = String(raw); }
+      } catch (e) {}
+      var dark = mode === 'dark' ||
+        (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', '#121C17');
+      }
+    })();
+  </script>
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -52,6 +71,9 @@
       border-radius: 50%;
       animation: spin 0.9s linear infinite;
     }
+    html[data-theme="dark"], html[data-theme="dark"] body { background-color: #121C17; color: #F1E9D8; }
+    html[data-theme="dark"] .ring { border-color: #263A2F; border-top-color: #B04B21; }
+    html[data-theme="dark"] .loading-sub { color: #B9C4B4; }
     .loading-sub { font-size: 14px; line-height: 1.45; color: #4A5B4F; margin: 16px 0 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .ring { animation: none; border-top-color: #A8461F; } }

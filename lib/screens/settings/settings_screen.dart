@@ -6,6 +6,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/models/models.dart';
 import '../../core/services/portal_api_service.dart';
 import '../../core/services/pwa_install_service.dart';
+import '../../core/theme/theme_controller.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_provider.dart';
 import '../../widgets/ui/ui.dart';
@@ -35,6 +36,29 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+
+    final themeController = context.watch<ThemeController>();
+    final appearance = AppSection(
+      title: 'Aparência',
+      subtitle: 'Vale só para este dispositivo. Automático segue o aparelho.',
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final option in const [
+            (AppThemeMode.system, 'Automático', Icons.brightness_auto_outlined),
+            (AppThemeMode.light, 'Claro', Icons.light_mode_outlined),
+            (AppThemeMode.dark, 'Escuro', Icons.dark_mode_outlined),
+          ])
+            AppChip(
+              label: option.$2,
+              icon: option.$3,
+              selected: themeController.mode == option.$1,
+              onTap: () => themeController.setMode(option.$1),
+            ),
+        ],
       ),
     );
 
@@ -109,6 +133,7 @@ class SettingsScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         account,
+        appearance,
         security,
         const ImportConfigCard(),
         if (AppSpacing.isWide(context)) logout

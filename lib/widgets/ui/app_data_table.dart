@@ -46,7 +46,7 @@ class AppDataTable extends StatelessWidget {
   Widget _table() {
     return Material(
         color: AppColors.surface,
-        shape: const RoundedRectangleBorder(
+        shape: RoundedRectangleBorder(
           borderRadius: AppShape.quiet,
           side: AppShape.hairline,
         ),
@@ -110,7 +110,7 @@ class AppDataTable extends StatelessWidget {
           if (i > 0) const SizedBox(height: 8),
           Material(
             color: AppColors.surface,
-            shape: const RoundedRectangleBorder(
+            shape: RoundedRectangleBorder(
               borderRadius: AppShape.quiet,
               side: AppShape.hairline,
             ),

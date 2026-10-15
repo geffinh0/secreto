@@ -118,7 +118,7 @@ class _AppButtonState extends State<AppButton> {
       case AppButtonKind.secondary:
         return AppColors.ink;
       case AppButtonKind.text:
-        return AppColors.accent;
+        return AppColors.accentInk;
     }
   }
 

@@ -28,5 +28,5 @@ class AppShape {
       RoundedRectangleBorder(borderRadius: leaf);
 
   /// 1px hairline used between rows and around ordinary panels.
-  static const BorderSide hairline = BorderSide(color: AppColors.rule);
+  static BorderSide get hairline => BorderSide(color: AppColors.rule);
 }

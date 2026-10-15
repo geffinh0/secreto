@@ -136,7 +136,7 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
                       ? Icons.fact_check_outlined
                       : Icons.check_circle_outline,
                   size: 20,
-                  color: preview ? AppColors.accent : AppColors.success),
+                  color: preview ? AppColors.accentInk : AppColors.success),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
@@ -156,8 +156,8 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
                     child: Icon(Icons.warning_amber_rounded,
                         size: 16, color: AppColors.warning),
                   ),
@@ -218,8 +218,8 @@ class _ImportConfigCardState extends State<ImportConfigCard> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 2),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
                       child: Icon(Icons.error_outline,
                           size: 20, color: AppColors.danger),
                     ),

@@ -396,7 +396,7 @@ class _RuleRow extends StatelessWidget {
             onChanged: (_) => onToggle(),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+            icon: Icon(Icons.delete_outline, color: AppColors.danger),
             tooltip: 'Remover ${rule.keyword}',
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: onDelete,

@@ -3,8 +3,8 @@ import 'app_colors.dart';
 import 'app_shape.dart';
 import 'app_type.dart';
 
-/// Material theme for the Herbarium redesign (light only): paper grounds,
-/// forest ink, terracotta action, quiet corners with the leaf shape reserved
+/// Material theme for the Herbarium redesign, in a day and a night mood: paper
+/// (or deep green) grounds, forest (or cream) ink, terracotta action, quiet corners with the leaf shape reserved
 /// for signature surfaces, hairline rules, no resting shadows. Widgets inherit
 /// everything from here so the screens only need lib/widgets/ui/.
 class AppTheme {
@@ -18,7 +18,13 @@ class AppTheme {
         borderSide: BorderSide(color: color, width: width),
       );
 
-  static ThemeData get lightTheme {
+  static ThemeData get lightTheme => build(Brightness.light);
+  static ThemeData get darkTheme => build(Brightness.dark);
+
+  /// Builds the theme for [brightness]. It also switches [AppColors] to the
+  /// matching palette first, because every colour below reads from it.
+  static ThemeData build(Brightness brightness) {
+    AppColors.dark = brightness == Brightness.dark;
     final text = TextTheme(
       displayLarge: AppType.display,
       displayMedium: AppType.title,
@@ -39,14 +45,15 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.light,
+      brightness: brightness,
       scaffoldBackgroundColor: AppColors.canvas,
       canvasColor: AppColors.canvas,
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       hoverColor: AppColors.raised,
       focusColor: AppColors.ink.withValues(alpha: 0.2),
-      colorScheme: const ColorScheme.light(
+      colorScheme: ColorScheme(
+        brightness: brightness,
         primary: AppColors.accent,
         onPrimary: AppColors.onAccent,
         secondary: AppColors.accent,
@@ -54,7 +61,7 @@ class AppTheme {
         surface: AppColors.surface,
         onSurface: AppColors.ink,
         error: AppColors.danger,
-        onError: AppColors.ink,
+        onError: AppColors.canvas,
         surfaceContainerHighest: AppColors.raised,
       ),
       textTheme: text,
@@ -66,7 +73,7 @@ class AppTheme {
         TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
         TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
       }),
-      cardTheme: const CardThemeData(
+      cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -99,8 +106,8 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: const WidgetStatePropertyAll(AppColors.accent),
-          foregroundColor: const WidgetStatePropertyAll(AppColors.onAccent),
+          backgroundColor: WidgetStatePropertyAll(AppColors.accent),
+          foregroundColor: WidgetStatePropertyAll(AppColors.onAccent),
           minimumSize: minSize,
           elevation: const WidgetStatePropertyAll(0),
           shape: buttonShape,
@@ -111,8 +118,8 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: const WidgetStatePropertyAll(AppColors.accent),
-          foregroundColor: const WidgetStatePropertyAll(AppColors.onAccent),
+          backgroundColor: WidgetStatePropertyAll(AppColors.accent),
+          foregroundColor: WidgetStatePropertyAll(AppColors.onAccent),
           minimumSize: minSize,
           shape: buttonShape,
           textStyle: WidgetStatePropertyAll(AppType.bodyStrong),
@@ -121,8 +128,8 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: ButtonStyle(
           backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
-          foregroundColor: const WidgetStatePropertyAll(AppColors.ink),
-          side: const WidgetStatePropertyAll(
+          foregroundColor: WidgetStatePropertyAll(AppColors.ink),
+          side: WidgetStatePropertyAll(
               BorderSide(color: AppColors.ink, width: 1.5)),
           minimumSize: minSize,
           shape: buttonShape,
@@ -131,13 +138,13 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
-          foregroundColor: const WidgetStatePropertyAll(AppColors.ink),
+          foregroundColor: WidgetStatePropertyAll(AppColors.ink),
           minimumSize: minSize,
           shape: buttonShape,
           textStyle: WidgetStatePropertyAll(AppType.bodyStrong),
         ),
       ),
-      iconButtonTheme: const IconButtonThemeData(
+      iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
           minimumSize: minSize,
           shape: buttonShape,
@@ -153,16 +160,16 @@ class AppTheme {
             s.contains(WidgetState.selected)
                 ? AppColors.accent
                 : AppColors.raised),
-        trackOutlineColor: const WidgetStatePropertyAll(AppColors.muted),
+        trackOutlineColor: WidgetStatePropertyAll(AppColors.muted),
       ),
       checkboxTheme: CheckboxThemeData(
         shape: _square,
-        side: const BorderSide(color: AppColors.muted, width: 2),
+        side: BorderSide(color: AppColors.muted, width: 2),
         fillColor: WidgetStateProperty.resolveWith((s) =>
             s.contains(WidgetState.selected)
                 ? AppColors.accent
                 : Colors.transparent),
-        checkColor: const WidgetStatePropertyAll(AppColors.onAccent),
+        checkColor: WidgetStatePropertyAll(AppColors.onAccent),
       ),
       chipTheme: ChipThemeData(
         shape: _square,
@@ -171,7 +178,7 @@ class AppTheme {
         selectedColor: AppColors.accent,
         labelStyle: AppType.label,
       ),
-      dividerTheme: const DividerThemeData(
+      dividerTheme: DividerThemeData(
         color: AppColors.rule,
         thickness: 1,
         space: 1,
@@ -183,8 +190,8 @@ class AppTheme {
         titleTextStyle: AppType.bodyStrong,
         subtitleTextStyle: AppType.meta,
       ),
-      iconTheme: const IconThemeData(color: AppColors.ink, size: 24),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
+      iconTheme: IconThemeData(color: AppColors.ink, size: 24),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
         color: AppColors.accent,
         linearTrackColor: AppColors.raised,
         circularTrackColor: AppColors.raised,
@@ -196,10 +203,10 @@ class AppTheme {
         titleTextStyle: AppType.title,
         contentTextStyle: AppType.body,
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: AppColors.surface,
         elevation: 4,
-        shape: RoundedRectangleBorder(
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
         ),
       ),
@@ -211,9 +218,9 @@ class AppTheme {
       ),
       dropdownMenuTheme: DropdownMenuThemeData(
         textStyle: AppType.body,
-        menuStyle: const MenuStyle(
+        menuStyle: MenuStyle(
           backgroundColor: WidgetStatePropertyAll(AppColors.surface),
-          shape: WidgetStatePropertyAll(_square),
+          shape: const WidgetStatePropertyAll(_square),
         ),
       ),
       tabBarTheme: TabBarThemeData(
@@ -234,15 +241,15 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.surface,
         contentTextStyle: AppType.body,
-        shape: const RoundedRectangleBorder(
+        shape: RoundedRectangleBorder(
           borderRadius: AppShape.quiet,
           side: BorderSide(color: AppColors.ink, width: 1.5),
         ),
         behavior: SnackBarBehavior.floating,
       ),
-      scrollbarTheme: const ScrollbarThemeData(
+      scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStatePropertyAll(AppColors.raisedHover),
-        radius: Radius.circular(4),
+        radius: const Radius.circular(4),
       ),
     );
   }

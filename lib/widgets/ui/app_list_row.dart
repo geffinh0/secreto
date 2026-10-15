@@ -83,7 +83,7 @@ class AppRowList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surface,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: AppShape.quiet,
         side: AppShape.hairline,
       ),

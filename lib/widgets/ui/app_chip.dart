@@ -7,7 +7,7 @@ enum AppTone { neutral, accent, success, warning, danger }
 
 /// Status or filter chip. Status tones keep a pale-sage ground and put the
 /// colour on the icon, so meaning never depends on colour alone (icon + word).
-/// With [onTap] it works as a filter: selected fills with forest green.
+/// With [onTap] it works as a filter: selected fills with the ink colour.
 class AppChip extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -27,7 +27,7 @@ class AppChip extends StatelessWidget {
   Color get _toneColor {
     switch (tone) {
       case AppTone.accent:
-        return AppColors.accent;
+        return AppColors.accentInk;
       case AppTone.success:
         return AppColors.success;
       case AppTone.warning:
@@ -41,9 +41,10 @@ class AppChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = selected ? AppColors.forest : AppColors.raised;
-    final fg = selected ? AppColors.onForest : AppColors.ink;
-    final iconColor = selected ? AppColors.onForest : _toneColor;
+    // Selected = inverted ink: dark chip on paper, cream chip at night.
+    final fill = selected ? AppColors.ink : AppColors.raised;
+    final fg = selected ? AppColors.canvas : AppColors.ink;
+    final iconColor = selected ? AppColors.canvas : _toneColor;
 
     final body = ConstrainedBox(
       constraints: BoxConstraints(minHeight: onTap == null ? 32 : 48),
@@ -81,7 +82,15 @@ class AppChip extends StatelessWidget {
         color: fill,
         shape: AppShape.quietBorder,
         clipBehavior: Clip.antiAlias,
-        child: InkWell(onTap: onTap, child: body),
+        // The theme's hover colour is opaque pale sage: over a selected (ink)
+        // fill it would hide the fill and leave the light label unreadable.
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: selected
+              ? AppColors.canvas.withValues(alpha: 0.16)
+              : AppColors.raisedHover,
+          child: body,
+        ),
       ),
     );
   }

@@ -217,7 +217,7 @@ class AuthShell extends StatelessWidget {
             Expanded(
               flex: 5,
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.surface,
                   border: Border(left: AppShape.hairline),
                 ),
@@ -290,7 +290,7 @@ class AuthErrorBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+            Icon(Icons.error_outline, color: AppColors.danger, size: 20),
             const SizedBox(width: AppSpacing.sm + 4),
             Expanded(child: Text(message, style: AppType.body)),
           ],

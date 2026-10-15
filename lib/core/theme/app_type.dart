@@ -8,20 +8,20 @@ class AppType {
   AppType._();
 
   static TextStyle _serif(double size, FontWeight weight,
-      {double height = 1.15, double tracking = 0, Color color = AppColors.ink}) {
+      {double height = 1.15, double tracking = 0, Color? color}) {
     return TextStyle(
       fontFamily: 'Fraunces',
       fontSize: size,
       fontWeight: weight,
       height: height,
       letterSpacing: tracking,
-      color: color,
+      color: color ?? AppColors.ink,
     );
   }
 
   // The variable file carries the weight on the wght axis.
   static TextStyle _sans(double size, FontWeight weight,
-      {double height = 1.45, double tracking = 0, Color color = AppColors.ink}) {
+      {double height = 1.45, double tracking = 0, Color? color}) {
     return TextStyle(
       fontFamily: 'SourceSans3',
       fontSize: size,
@@ -29,7 +29,7 @@ class AppType {
       fontVariations: [FontVariation('wght', weight.value.toDouble())],
       height: height,
       letterSpacing: tracking,
-      color: color,
+      color: color ?? AppColors.ink,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
   }

@@ -9,6 +9,7 @@ import 'package:atilas_client/core/models/models.dart';
 import 'package:atilas_client/core/services/admin_api_service.dart';
 import 'package:atilas_client/core/services/portal_api_service.dart';
 import 'package:atilas_client/core/theme/app_theme.dart';
+import 'package:atilas_client/core/theme/theme_controller.dart';
 import 'package:atilas_client/providers/admin_provider.dart';
 import 'package:atilas_client/providers/auth_provider.dart';
 import 'package:atilas_client/providers/auto_message_provider.dart';
@@ -545,6 +546,45 @@ void main() {
       expect(await bot.sendPhoneCode('+5511999999999'), isNull);
       expect(bot.error, contains('403'));
       bot.dispose();
+    });
+  });
+
+  group('appearance', () {
+    test('automatic follows the device; light and dark ignore it', () {
+      final c = ThemeController();
+      expect(c.resolve(Brightness.dark), Brightness.dark);
+      expect(c.resolve(Brightness.light), Brightness.light);
+      c.setMode(AppThemeMode.light);
+      expect(c.resolve(Brightness.dark), Brightness.light);
+      c.setMode(AppThemeMode.dark);
+      expect(c.resolve(Brightness.light), Brightness.dark);
+    });
+
+    test('the choice is saved and restored', () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = ThemeController();
+      await first.setMode(AppThemeMode.dark);
+      final second = ThemeController();
+      await second.load();
+      expect(second.mode, AppThemeMode.dark);
+    });
+
+    test('an unknown saved value falls back to automatic', () async {
+      SharedPreferences.setMockInitialValues({ThemeController.storageKey: 'purple'});
+      final c = ThemeController();
+      await c.load();
+      expect(c.mode, AppThemeMode.system);
+    });
+
+    test('building the dark theme switches the palette, and back', () {
+      addTearDown(() => AppColors.dark = false);
+      final night = AppTheme.darkTheme;
+      expect(AppColors.dark, isTrue);
+      expect(night.brightness, Brightness.dark);
+      expect(night.scaffoldBackgroundColor, const Color(0xFF121C17));
+      final day = AppTheme.lightTheme;
+      expect(AppColors.dark, isFalse);
+      expect(day.scaffoldBackgroundColor, const Color(0xFFF4ECDC));
     });
   });
 

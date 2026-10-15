@@ -73,7 +73,7 @@ void showAppSnack(BuildContext context, String message, {bool error = false}) {
       SnackBar(
         backgroundColor: AppColors.surface,
         behavior: SnackBarBehavior.floating,
-        shape: const RoundedRectangleBorder(
+        shape: RoundedRectangleBorder(
           borderRadius: AppShape.quiet,
           side: BorderSide(color: AppColors.ink, width: 1.5),
         ),

@@ -61,8 +61,8 @@ class AppStateView extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (isError)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
             child: Icon(Icons.error_outline, color: AppColors.danger, size: 24),
           ),
         if (title != null) Text(title!, style: AppType.heading),

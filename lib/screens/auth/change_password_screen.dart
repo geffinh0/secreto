@@ -85,7 +85,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     : IconButton(
                         tooltip: 'Voltar',
                         icon:
-                            const Icon(Icons.arrow_back, color: AppColors.ink),
+                            Icon(Icons.arrow_back, color: AppColors.ink),
                         onPressed: () => context.canPop()
                             ? context.pop()
                             : context.go('/settings'),
