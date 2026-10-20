@@ -565,11 +565,11 @@ class PerEgressCapTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RuntimeError):
                 await sessions2.start(3, _EgressClient("c"), "bot", "L")
 
-    def test_the_default_is_fourteen_per_ip(self):
+    def test_the_default_is_seven_per_ip(self):
         from engine import _sessions_per_egress
         with mock.patch.dict("os.environ", {}, clear=False):
             os.environ.pop("SM_SESSIONS_PER_EGRESS", None)
-            self.assertEqual(_sessions_per_egress(), 14)
+            self.assertEqual(_sessions_per_egress(), 7)
 
 
 class Dispatcher429Tests(unittest.IsolatedAsyncioTestCase):

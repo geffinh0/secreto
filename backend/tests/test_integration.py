@@ -51,6 +51,7 @@ def setUpModule():
     with open(key_file, "wb") as fh:
         fh.write(Fernet.generate_key())
     os.environ["SM_TOKEN_KEY_FILE"] = key_file  # robot tokens are encrypted at rest
+    os.environ["SM_SESSIONS_PER_EGRESS"] = "0"  # these tests create far more than 7 users on one IP
     db.DB_PATH = os.path.join(_tmp, "test.db")  # never touch the real database
     engine.CONFIG_TTL_SECONDS = 0.1
     engine.MIN_INTERVAL_SECONDS = 1
@@ -174,6 +175,24 @@ class AuthAndApiTests(unittest.TestCase):
                 os.environ.pop("SM_ALLOW_REGISTRATION", None)
             else:
                 os.environ["SM_ALLOW_REGISTRATION"] = old
+
+    def test_signup_is_refused_when_every_ip_has_its_seven(self):
+        before = db.connect().execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+        old = os.environ.get("SM_SESSIONS_PER_EGRESS")
+        os.environ["SM_SESSIONS_PER_EGRESS"] = str(before)   # exactly full
+        try:
+            status, body = api("POST", "/auth/register", {
+                "username": "semvaga", "email": "semvaga@example.com", "password": "Pw-teste-4821x",
+                "agency_code": agency_code()})
+            self.assertEqual(status, 409)
+            self.assertIn("sem vagas", body["detail"])
+            os.environ["SM_SESSIONS_PER_EGRESS"] = str(before + 1)   # one seat freed
+            status, _ = api("POST", "/auth/register", {
+                "username": "comvaga", "email": "comvaga@example.com", "password": "Pw-teste-4821x",
+                "agency_code": agency_code()})
+            self.assertEqual(status, 200)
+        finally:
+            os.environ["SM_SESSIONS_PER_EGRESS"] = old if old is not None else "0"
 
     def test_login_me_and_logout(self):
         name, _, _ = new_user("login")
@@ -1850,6 +1869,46 @@ class AgencyTests(unittest.TestCase):
         self.assertEqual(len(body["slots"]), body["egress_count"])
         self.assertIn("poll_interval_seconds", body["slots"][0])
         self.assertNotIn("socks", json.dumps(body))  # proxy URLs (may hold credentials) never leave
+
+    def test_admin_can_add_an_egress_ip_from_the_panel(self):
+        import superlive
+        from unittest import mock
+
+        class _Resp:
+            def json(self):
+                return {"ip": "200.1.2.3", "country": "BR", "org": "AS1 Provedor"}
+
+        before = api("GET", "/admin/capacity", token=self.admin)[1]["egress_count"]
+        url = "socks5://usuario:senha@proxy.exemplo.com:1080"
+        try:
+            with mock.patch("requests.get", return_value=_Resp()):
+                self.assertEqual(api("POST", "/admin/egress", {"url": "lixo-sem-formato"}, token=self.admin)[0], 400)
+                self.assertEqual(api("POST", "/admin/egress", {"url": url})[0], 401)
+                status, body = api("POST", "/admin/egress", {"url": url}, token=self.admin)
+                self.assertEqual(status, 200, body)
+                self.assertEqual(body["slot"], before)
+                self.assertEqual(body["country"], "BR")
+                self.assertIsNone(body["warning"])
+                self.assertEqual(api("POST", "/admin/egress", {"url": url}, token=self.admin)[0], 409)
+            cap = api("GET", "/admin/capacity", token=self.admin)[1]
+            self.assertEqual(cap["egress_count"], before + 1)
+            self.assertNotIn("senha", json.dumps(cap))             # the password never leaves
+            self.assertIn("socks5h://usuario:senha@proxy.exemplo.com:1080", superlive.get_proxy_pool())
+            conn = sqlite3.connect(db.DB_PATH)
+            stored = conn.execute("SELECT url_enc FROM egress_proxies").fetchone()[0]
+            conn.close()
+            self.assertNotIn("senha", stored)                        # encrypted at rest
+        finally:
+            sql("DELETE FROM egress_proxies")
+            superlive.set_extra_proxies([])
+
+    def test_an_egress_that_cannot_reach_superlive_is_refused(self):
+        from unittest import mock
+        with mock.patch("requests.get", side_effect=OSError("boom")):
+            status, body = api("POST", "/admin/egress",
+                               {"url": "socks5h://u:p@sem-rota.exemplo.com:1080"}, token=self.admin)
+        self.assertEqual(status, 400)
+        self.assertIn("Não consegui conectar", body["detail"])
 
 
 class WatchPingTests(RobotTestBase):

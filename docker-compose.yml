@@ -76,7 +76,7 @@ services:
       # refused past this. 14 was measured with a real account's rules (messages every 60 s are
       # what limit it: ~18 messages/min per IP). Each proxy added to SUPERLIVE_PROXY_URLS adds
       # this many. 0 = no per-IP cap.
-      SM_SESSIONS_PER_EGRESS: "${SM_SESSIONS_PER_EGRESS:-14}"
+      SM_SESSIONS_PER_EGRESS: "${SM_SESSIONS_PER_EGRESS:-7}"
       # Bootstraps the FIRST admin_accounts row at startup, only while none
       # exists yet (see main._bootstrap_admin_account) - the admin panel's
       # own login, fully separate from the portal's users table. No public

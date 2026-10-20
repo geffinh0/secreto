@@ -770,30 +770,52 @@ class _CapacityBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final seatsFree = capacity.seatsTotal - capacity.seatsUsed;
+    final noSeats = capacity.seatsTotal > 0 && seatsFree <= 0;
+    final anyDown = capacity.slots.any((s) => s.networkDown);
     final overloaded = capacity.deepestQueue > 20 ||
         (capacity.maxSessions > 0 &&
             capacity.activeSessions >= capacity.maxSessions);
+    final Widget status;
+    if (anyDown) {
+      status = const AppChip(
+          label: 'Um IP não está respondendo',
+          icon: Icons.error_outline,
+          tone: AppTone.danger);
+    } else if (noSeats) {
+      status = const AppChip(
+          label: 'Sem vagas: adicione um IP',
+          icon: Icons.warning_amber,
+          tone: AppTone.warning);
+    } else if (overloaded) {
+      status = const AppChip(
+          label: 'Capacidade no limite',
+          icon: Icons.warning_amber,
+          tone: AppTone.warning);
+    } else {
+      status = const AppChip(
+          label: 'Tudo normal',
+          icon: Icons.check_circle_outline,
+          tone: AppTone.success);
+    }
     return AppSurface(
       raised: true,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          overloaded
-              ? const AppChip(
-                  label: 'Capacidade no limite',
-                  icon: Icons.warning_amber,
-                  tone: AppTone.warning)
-              : const AppChip(
-                  label: 'Capacidade normal',
-                  icon: Icons.check_circle_outline,
-                  tone: AppTone.success),
+          status,
           const SizedBox(height: AppSpacing.lg),
           Wrap(
             spacing: AppSpacing.xl,
             runSpacing: AppSpacing.lg,
             children: [
-              _Fact(label: 'Saídas de rede', value: '${capacity.egressCount}'),
+              _Fact(label: 'IPs de saída', value: '${capacity.egressCount}'),
+              if (capacity.seatsTotal > 0)
+                _Fact(
+                  label: 'Vagas livres',
+                  value: '${seatsFree < 0 ? 0 : seatsFree} de ${capacity.seatsTotal}',
+                ),
               _Fact(
                 label: 'Lives agora',
                 value: capacity.maxSessions > 0
@@ -801,17 +823,158 @@ class _CapacityBlock extends StatelessWidget {
                     : '${capacity.activeSessions}',
               ),
               _Fact(
-                  label: 'Máximo sugerido',
-                  value: '${capacity.suggestedMaxSessions}'),
-              _Fact(
                   label: 'Fila mais longa', value: '${capacity.deepestQueue}'),
               _Fact(
                   label: 'Detecção de live',
                   value: 'até ${capacity.slowestPollSeconds}s'),
             ],
           ),
+          if (capacity.slots.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            for (final slot in capacity.slots)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text('IP ${slot.slot + 1}', style: AppType.bodyStrong),
+                    Text(
+                      '${slot.users}${slot.maxUsers > 0 ? ' de ${slot.maxUsers}' : ''} criadoras'
+                      ' · ${slot.activeSessions} robôs ligados',
+                      style: AppType.body,
+                    ),
+                    slot.networkDown
+                        ? const AppChip(
+                            label: 'Sem resposta',
+                            icon: Icons.error_outline,
+                            tone: AppTone.danger)
+                        : slot.full
+                            ? const AppChip(label: 'Lotado', icon: Icons.group)
+                            : const AppChip(
+                                label: 'Rede ok',
+                                icon: Icons.check_circle_outline,
+                                tone: AppTone.success),
+                  ],
+                ),
+              ),
+          ],
+          if (noSeats || anyDown) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              anyDown
+                  ? 'Um IP sem resposta costuma ser o proxy fora do ar: confira o painel do fornecedor.'
+                  : 'Para liberar mais vagas, contrate mais um IP fixo brasileiro e use o botão "Adicionar IP".',
+              style: AppType.meta,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          AppButton.secondary(
+            label: 'Adicionar IP',
+            icon: Icons.add,
+            onPressed: () => _addEgress(context),
+          ),
         ],
       ),
+    );
+  }
+}
+
+Future<void> _addEgress(BuildContext context) async {
+  final provider = context.read<AdminProvider>();
+  final result = await showDialog<Map<String, dynamic>>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _AddEgressDialog(provider: provider),
+  );
+  if (result == null || !context.mounted) return;
+  final country = (result['country'] ?? '').toString();
+  showAppSnack(
+      context,
+      'IP adicionado${country.isEmpty ? '' : ' ($country)'}. Mais vagas liberadas.');
+  final warning = result['warning'];
+  if (warning is String && warning.isNotEmpty) {
+    showAppSnack(context, warning, error: true);
+  }
+}
+
+/// Owns its controller and does the call itself, so it can show progress and the server's
+/// refusal ("não consegui conectar...") without closing.
+class _AddEgressDialog extends StatefulWidget {
+  final AdminProvider provider;
+  const _AddEgressDialog({required this.provider});
+
+  @override
+  State<_AddEgressDialog> createState() => _AddEgressDialogState();
+}
+
+class _AddEgressDialogState extends State<_AddEgressDialog> {
+  final _controller = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final url = _controller.text.trim();
+    if (url.length < 8) {
+      setState(() => _error = 'Cole o endereço completo do proxy.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final result = await widget.provider.addEgress(url);
+    if (!mounted) return;
+    if (result != null) {
+      Navigator.of(context).pop(result);
+    } else {
+      setState(() {
+        _busy = false;
+        _error = widget.provider.error ?? 'Não foi possível adicionar o IP.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DialogFrame(
+      title: 'Adicionar IP',
+      actions: [
+        AppButton.secondary(
+            label: 'Cancelar',
+            onPressed: _busy ? null : () => Navigator.of(context).pop()),
+        AppButton(
+          label: 'Testar e adicionar',
+          loading: _busy,
+          onPressed: _busy ? null : _submit,
+        ),
+      ],
+      children: [
+        Text(
+          'Cole o endereço do proxy fixo brasileiro. O sistema testa a conexão com o '
+          'SuperLive antes de aceitar. Cada IP libera mais vagas de criadoras. '
+          'Depois de adicionado, ele não pode ser removido nem trocado de posição.',
+          style: AppType.body,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _controller,
+          label: 'Endereço do proxy',
+          hint: 'socks5h://usuario:senha@host:porta',
+          helper: 'Se a senha tiver @ : / # ou %, troque pelo código %40 %3A %2F %23 %25.',
+          errorText: _error,
+          autofocus: true,
+          enabled: !_busy,
+          onSubmitted: (_) => _submit(),
+        ),
+      ],
     );
   }
 }

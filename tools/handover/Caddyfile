@@ -1,0 +1,6 @@
+# HTTPS automático (Let's Encrypt) para o domínio do .env. O DNS do domínio
+# precisa apontar para o IP deste servidor e as portas 80 e 443 precisam estar abertas.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy web:80
+}

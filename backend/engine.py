@@ -1325,13 +1325,14 @@ def _max_sessions() -> int:
 
 
 def _sessions_per_egress() -> int:
-    """Robots allowed at once on ONE egress IP (0 = no per-IP cap). Measured with the real
-    rules of a production account (DEPLOY.md, "Medição"): past ~14 the shared queue stops
-    keeping up with chat messages every 60 s."""
+    """Creators per egress IP (0 = no per-IP cap): the same number limits how many may sign
+    up on one IP (main.register) and how many robots may run on it. Measured with the real
+    rules of a production account (DEPLOY.md, "Medição"): 7 keeps chat messages at ~5 s;
+    14 is already at the edge."""
     try:
-        return max(0, int(os.getenv("SM_SESSIONS_PER_EGRESS", "14")))
+        return max(0, int(os.getenv("SM_SESSIONS_PER_EGRESS", "7")))
     except ValueError:
-        return 14
+        return 7
 
 
 def egress_of(client) -> str:

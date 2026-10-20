@@ -814,8 +814,45 @@ class AdminAgency {
 }
 
 /// Is the SuperLive egress keeping up? Shown on the Agências tab.
+class AdminEgressSlot {
+  final int slot;
+  final String label;
+  final int users;
+  final int maxUsers;
+  final int activeSessions;
+  final int queueDepth;
+  final int networkStreak;
+
+  const AdminEgressSlot({
+    required this.slot,
+    this.label = '',
+    this.users = 0,
+    this.maxUsers = 0,
+    this.activeSessions = 0,
+    this.queueDepth = 0,
+    this.networkStreak = 0,
+  });
+
+  /// Three failures in a row: the proxy behind this IP is not answering.
+  bool get networkDown => networkStreak >= 3;
+  bool get full => maxUsers > 0 && users >= maxUsers;
+
+  factory AdminEgressSlot.fromJson(Map<String, dynamic> json) => AdminEgressSlot(
+        slot: asInt(json['slot']),
+        label: json['label']?.toString() ?? '',
+        users: asInt(json['users']),
+        maxUsers: asInt(json['max_sessions']),
+        activeSessions: asInt(json['active_sessions']),
+        queueDepth: asInt(json['queue_depth']),
+        networkStreak: asInt(json['network_streak']),
+      );
+}
+
 class AdminCapacity {
   final int egressCount;
+  final int seatsTotal;
+  final int seatsUsed;
+  final List<AdminEgressSlot> slots;
   final int activeSessions;
   final int maxSessions;
   final int suggestedMaxSessions;
@@ -823,6 +860,9 @@ class AdminCapacity {
   final int slowestPollSeconds;
 
   const AdminCapacity({
+    this.seatsTotal = 0,
+    this.seatsUsed = 0,
+    this.slots = const [],
     this.egressCount = 1,
     this.activeSessions = 0,
     this.maxSessions = 0,
@@ -835,7 +875,15 @@ class AdminCapacity {
     final slots = (json['slots'] as List? ?? const []).whereType<Map>().toList();
     int maxOf(String key) =>
         slots.fold<int>(0, (m, s) => asInt(s[key]) > m ? asInt(s[key]) : m);
+    final seats = json['seats'] is Map
+        ? (json['seats'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
     return AdminCapacity(
+      seatsTotal: asInt(seats['total']),
+      seatsUsed: asInt(seats['used']),
+      slots: [
+        for (final s in slots) AdminEgressSlot.fromJson(s.cast<String, dynamic>())
+      ],
       egressCount: asInt(json['egress_count']),
       activeSessions: asInt(json['active_sessions']),
       maxSessions: asInt(json['max_sessions']),

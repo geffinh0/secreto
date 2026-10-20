@@ -1,0 +1,101 @@
+# Instalação própria (sem proxy compartilhado): backend + web + Caddy (HTTPS automático).
+# Tudo é configurado pelo arquivo .env (veja .env.example). Rode ./install.sh.
+name: atilas-client
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    container_name: atilas_client_backend
+    restart: unless-stopped
+    environment:
+      # IPs de saída: um por vírgula, formato socks5h://usuario:senha@host:porta
+      SUPERLIVE_PROXY_URL: ""
+      SUPERLIVE_PROXY_URLS: "${SUPERLIVE_PROXY_URLS:-}"
+      # criadoras por IP (cadastro e robôs). 7 foi o valor medido como confortável.
+      SM_SESSIONS_PER_EGRESS: "${SM_SESSIONS_PER_EGRESS:-7}"
+      SM_MAX_SESSIONS: "${SM_MAX_SESSIONS:-0}"
+      SM_ALLOW_REGISTRATION: "${SM_ALLOW_REGISTRATION:-1}"
+      SM_REGISTER_IP_MAX: "${SM_REGISTER_IP_MAX:-20}"
+      SM_LOGIN_IP_MAX: "${SM_LOGIN_IP_MAX:-50}"
+      SM_POLL_BUDGET_RPS: "${SM_POLL_BUDGET_RPS:-2.0}"
+      SM_THREADS: "${SM_THREADS:-64}"
+      SUPERLIVE_SESSION_POLL_S: "${SUPERLIVE_SESSION_POLL_S:-20}"
+      SUPERLIVE_DEDUPE_LOOKUP: "1"
+      SUPERLIVE_NETWORK_COOLDOWN: "1"
+      SUPERLIVE_PACING_LOG_FILE: "${SUPERLIVE_PACING_LOG_FILE:-}"
+      # primeiro administrador do painel (só cria se ainda não existir nenhum)
+      ADMIN_BOOTSTRAP_USERNAME: "${ADMIN_BOOTSTRAP_USERNAME:-}"
+      ADMIN_BOOTSTRAP_PASSWORD: "${ADMIN_BOOTSTRAP_PASSWORD:-}"
+      # chave usada só por update.sh para saber se há live sendo moderada (gerada pelo install.sh)
+      HEALTHBOT_API_KEY: "${HEALTHBOT_API_KEY:-}"
+      # confia no IP do nginx do web para ler o IP real de quem acessa
+      FORWARDED_ALLOW_IPS: "172.28.0.10"
+      SM_TOKEN_KEY_FILE: /run/secrets/sm_token_key
+    secrets:
+      - sm_token_key
+    volumes:
+      - backend_data:/data
+    networks:
+      internal:
+        ipv4_address: 172.28.0.11
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+      args:
+        BUILD_ID: "${BUILD_ID:-dev}"
+    container_name: atilas_client_web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      internal:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: atilas_client_caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      DOMAIN: "${DOMAIN:?preencha DOMAIN no .env}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+secrets:
+  sm_token_key:
+    file: ./secrets/sm_token_key
+
+volumes:
+  backend_data:
+  caddy_data:
+  caddy_config:

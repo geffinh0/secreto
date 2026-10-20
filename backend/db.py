@@ -230,6 +230,16 @@ def init_db():
         # Agencies: each new portal user signs up with one agency's code, so the
         # admin can see how many creators every agency has (and how many are
         # actually running a robot). `code` is the only secret: random, 8 chars.
+        # egress IPs added from the admin panel; the URL (it carries the proxy password) is
+        # stored encrypted with the same key as the robot tokens. Never deleted: a user's slot
+        # number is her position in the pool.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS egress_proxies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url_enc TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
         c.execute("""
             CREATE TABLE IF NOT EXISTS agencies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -423,6 +433,50 @@ def get_live_pattern(conn, user_id: int):
             starts.append(when)
     created = conn.execute("SELECT created_at FROM users WHERE id = ?", (user_id,)).fetchone()
     return starts, last_end, parse(created["created_at"]) if created else None
+
+
+def load_extra_proxies(conn) -> list:
+    """The panel-added egress URLs, decrypted, oldest first. One that cannot be decrypted
+    (wrong key) becomes an unreachable placeholder so every later slot keeps its number."""
+    urls = []
+    for row in conn.execute("SELECT url_enc FROM egress_proxies ORDER BY id"):
+        try:
+            urls.append(security.decrypt_robot_token(row["url_enc"]))
+        except Exception:  # noqa: BLE001
+            log.error("egress_proxies: nao consegui decifrar um proxy (chave errada?)")
+            urls.append("socks5h://chave-errada.invalid:1")
+    return urls
+
+
+def add_extra_proxy(conn, url: str) -> None:
+    conn.execute("INSERT INTO egress_proxies (url_enc) VALUES (?)", (security.encrypt_robot_token(url),))
+    conn.commit()
+
+
+def egress_seats(conn, pool_size: int, per_egress: int) -> dict:
+    """Sign-up room: ``per_egress`` creators per IP. Everyone with an account takes a seat
+    (a user who never connected a robot yet still gets a slot on her first connection)."""
+    pool_size = max(1, pool_size)
+    total = pool_size * per_egress if per_egress else 0
+    used = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+    return {"per_egress": per_egress, "total": total, "used": used,
+            "free": max(0, total - used) if per_egress else None}
+
+
+def signup_has_room(conn, pool_size: int, per_egress: int) -> bool:
+    """False when every IP already has ``per_egress`` creators (0 = no cap)."""
+    if not per_egress:
+        return True
+    pool_size = max(1, pool_size)
+    seats = egress_seats(conn, pool_size, per_egress)
+    if seats["free"] <= 0:
+        return False
+    load = {i: 0 for i in range(pool_size)}
+    for r in conn.execute("SELECT egress_slot, COUNT(*) AS n FROM users "
+                          "WHERE egress_slot IS NOT NULL GROUP BY egress_slot"):
+        if (r["egress_slot"] % pool_size) in load:
+            load[r["egress_slot"] % pool_size] += r["n"]
+    return min(load.values()) < per_egress
 
 
 def get_or_assign_egress_slot(conn, user_id: int, pool_size: int) -> int:

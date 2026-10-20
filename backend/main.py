@@ -26,7 +26,8 @@ from engine import (
     IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
 )
 from engine import client_for_user, egress_of, lookup_stats, watch_poll_interval
-from superlive import SuperLiveClient, SuperLiveError, get_proxy_pool, pacing_stats, queue_depths
+from superlive import (BASE_URL as SUPERLIVE_BASE_URL, SuperLiveClient, SuperLiveError, _redact_proxy,
+                       get_proxy_pool, pacing_stats, queue_depths, set_extra_proxies)
 
 _log_handlers = [logging.StreamHandler()]
 # Opt-in persistent log file (SM_LOG_FILE=path/to/file.log) - used for local
@@ -163,6 +164,7 @@ async def lifespan(_app: FastAPI):
     db.init_db()
     conn = db.connect()
     try:
+        set_extra_proxies(db.load_extra_proxies(conn))  # IPs added from the admin panel
         for watch in db.all_active_watches(conn):
             # jitter: hundreds of watchers must not all poll in the same second
             watchers.start(watch["user_id"], jitter=True)
@@ -576,6 +578,10 @@ def register(req: RegisterRequest, request: Request, conn: sqlite3.Connection = 
     if agency is None or not agency["active"]:
         register_throttle.record_failure(ip_key)
         raise HTTPException(400, "Código de agência inválido. Peça o código à sua agência.")
+    if not db.signup_has_room(conn, len(get_proxy_pool()), int(os.getenv("SM_SESSIONS_PER_EGRESS", "7") or 0)):
+        raise HTTPException(
+            409, "Estamos sem vagas no momento. Avise o administrador para liberar mais vagas e "
+                 "tente de novo depois.")
     taken = "Esse nome de usuário já está em uso. Escolha outro."
     if conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?)", (req.username,)).fetchone():
         raise HTTPException(400, taken)
@@ -595,6 +601,7 @@ def register(req: RegisterRequest, request: Request, conn: sqlite3.Connection = 
         raise HTTPException(400, taken) from None
     user_id = cursor.lastrowid
     db.get_settings(conn, user_id)  # creates the default settings row
+    db.get_or_assign_egress_slot(conn, user_id, len(get_proxy_pool()))  # takes her seat on the emptiest IP
 
     token = create_session(conn, user_id)
     user = public_user(conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
@@ -1869,6 +1876,68 @@ def admin_rotate_agency_code(agency_id: int, admin: dict = Depends(get_current_a
     return {"code": db.format_agency_code(code)}
 
 
+class AdminEgressAdd(BaseModel):
+    url: str = Field(min_length=8, max_length=500)
+
+
+def _normalize_proxy_url(raw: str) -> str:
+    from urllib.parse import urlsplit
+    raw = raw.strip()
+    try:
+        parts = urlsplit(raw)
+        port = parts.port
+    except ValueError:
+        parts, port = None, None
+    if parts is None or parts.scheme not in ("socks5", "socks5h", "http", "https")             or not parts.hostname or not port:
+        raise HTTPException(
+            400, "Endereço inválido. Use o formato socks5h://usuario:senha@host:porta "
+                 "(ou http://usuario:senha@host:porta).")
+    if parts.scheme == "socks5":
+        raw = "socks5h://" + raw[len("socks5://"):]   # let the proxy resolve names
+    return raw
+
+
+@app.post("/admin/egress")
+def admin_add_egress(req: AdminEgressAdd, admin: dict = Depends(get_current_admin),
+                     conn: sqlite3.Connection = Depends(get_db)):
+    """Adds an egress IP to the pool (the next free seats: SM_SESSIONS_PER_EGRESS more creators).
+    The proxy is tried first; one that cannot reach SuperLive is refused. It is appended at the
+    END of the pool and never removed, so no creator's IP ever changes."""
+    import requests
+    url = _normalize_proxy_url(req.url)
+    if url in get_proxy_pool():
+        raise HTTPException(409, "Esse IP já está na lista.")
+    proxies = {"http": url, "https": url}
+    try:
+        # any HTTP answer from SuperLive (even 4xx) proves the tunnel works
+        requests.get(SUPERLIVE_BASE_URL, proxies=proxies, timeout=(8, 12))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            400, "Não consegui conectar ao SuperLive por esse proxy ("
+                 f"{type(exc).__name__}). Confira usuário, senha, host e porta e se o plano está ativo.") from None
+    info = {}
+    try:
+        info = requests.get("https://ipinfo.io/json", proxies=proxies, timeout=(6, 8)).json()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        db.add_extra_proxy(conn, url)
+    except security.RobotKeyUnavailable:
+        raise HTTPException(503, "Chave de criptografia indisponível no servidor: não dá para guardar o IP.") from None
+    set_extra_proxies(db.load_extra_proxies(conn))
+    country = info.get("country") or ""
+    logging.getLogger("super_moderator.main").info("admin %s adicionou o IP de saida %s (pais %s)", admin.get("username"), _redact_proxy(url), country or "?")
+    return {
+        "slot": len(get_proxy_pool()) - 1,
+        "label": _redact_proxy(url),
+        "ip": info.get("ip"),
+        "country": country,
+        "org": info.get("org"),
+        "warning": ("Este IP não parece ser do Brasil (" + country + "). O SuperLive pode estranhar logins de outro país."
+                    if country and country != "BR" else None),
+    }
+
+
 @app.get("/admin/capacity")
 def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Connection = Depends(get_db)):
     """Is the SuperLive egress keeping up? Per egress slot: creators pinned to
@@ -1892,7 +1961,8 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
             "poll_interval_seconds": round(watch_poll_interval(watch_n)),
         })
     active = sum(1 for s in sessions.all_sessions().values() if s.is_active)
-    per_egress_cap = int(os.getenv("SM_SESSIONS_PER_EGRESS", "14") or 0)
+    per_egress_cap = int(os.getenv("SM_SESSIONS_PER_EGRESS", "7") or 0)
+    pacing = pacing_stats()
     running_by_egress = {}
     for s in sessions.all_sessions().values():
         if s.is_active:
@@ -1901,6 +1971,8 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
     for entry in per_slot:
         entry["active_sessions"] = running_by_egress.get(pool[entry["slot"]], 0)
         entry["max_sessions"] = per_egress_cap
+        entry["label"] = _redact_proxy(pool[entry["slot"]]) or "conexão direta da VPS"
+        entry["network_streak"] = pacing.get(_redact_proxy(pool[entry["slot"]]), {}).get("network_streak", 0)
     return {
         "egress_count": len(pool),
         "slots": per_slot,
@@ -1911,10 +1983,11 @@ def admin_capacity(admin: dict = Depends(get_current_admin), conn: sqlite3.Conne
         # robots allowed per egress IP (SM_SESSIONS_PER_EGRESS); a new robot is refused once its IP
         # has this many, counting the ones waiting for a live. One more IP = this many more robots.
         "sessions_per_egress": per_egress_cap,
+        "seats": db.egress_seats(conn, len(pool), per_egress_cap),
         "suggested_max_sessions": per_egress_cap * len(pool),
         "lookup": lookup_stats(),
         # measured, not estimated: queue wait per priority and call time (L) per egress
-        "pacing": pacing_stats(),
+        "pacing": pacing,
     }
 
 

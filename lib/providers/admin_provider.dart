@@ -111,6 +111,20 @@ class AdminProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Adds an egress IP (proxy URL). Returns the server's answer (slot, ip, country, warning)
+  /// or null (see [error]). The server tries the proxy first and refuses one that does not work.
+  Future<Map<String, dynamic>?> addEgress(String url) async {
+    final result = await _api.post('/admin/egress', {'url': url});
+    if (result['success'] == true && result['data'] is Map) {
+      await _loadCapacity();
+      notifyListeners();
+      return (result['data'] as Map).cast<String, dynamic>();
+    }
+    _error = AdminApiService.errorMessage(
+        result, 'Não foi possível adicionar o IP. Tente de novo.');
+    return null;
+  }
+
   /// Creates an agency; returns its signup code, or null (see [error]).
   Future<String?> createAgency(String name) async {
     final result = await _api.post('/admin/agencies', {'name': name});

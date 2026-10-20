@@ -74,6 +74,15 @@ def _redact_proxy(proxy: str) -> str:
     return host.split("://")[-1]
 
 
+# IPs added from the admin panel (db.egress_proxies): always AFTER the ones in the environment,
+# in the order they were added, so a slot number never moves.
+_extra_proxies: list = []
+
+
+def set_extra_proxies(urls) -> None:
+    _extra_proxies[:] = [u for u in urls if u]
+
+
 def get_proxy_pool() -> list:
     """Every egress the robots may leave through: ``SUPERLIVE_PROXY_URLS``
     (comma-separated) when set, else the single legacy proxy (or ``""`` =
@@ -81,7 +90,7 @@ def get_proxy_pool() -> list:
     connected before the pool existed live on slot 0 and keep their IP."""
     raw = os.getenv("SUPERLIVE_PROXY_URLS", "")
     pool = [p.strip() for p in raw.split(",") if p.strip()]
-    return pool or [get_proxy_url()]
+    return (pool or [get_proxy_url()]) + _extra_proxies
 
 
 def proxy_for_slot(slot) -> str:
@@ -155,6 +164,7 @@ class _EgressStats:
         self.by_path: "collections.Counter[str]" = collections.Counter()
         self.shed = 0      # background calls refused because the queue was long
         self.paused = 0    # background calls skipped during a network pause
+        self.net_streak = 0  # network failures in a row right now (0 = the egress is answering)
         self.last_log = time.monotonic()
         self.sent_at_last_log = 0
 
@@ -234,6 +244,7 @@ def pacing_stats() -> dict:
             "call": _summary(st.call),
             "sent": st.sent,
             "network_errors": st.network_errors,
+            "network_streak": st.net_streak,
             "throttled_429": st.throttled,
             "shed": st.shed,
             "skipped_network_pause": st.paused,
@@ -408,6 +419,7 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
                 st.network_errors += 1
                 err_kind = exc.kind
                 net_fail += 1
+                st.net_streak = net_fail
                 if net_fail >= 3 and _network_cooldown():
                     net_backoff = min(max(net_backoff * 2, _network_pause_min()), 30.0)
                     net_pause_until = time.monotonic() + net_backoff
@@ -420,6 +432,7 @@ async def _dispatcher(queue: "_EgressQueue", proxy: str = "") -> None:
             # successes keeps escalating the pause rather than starting over at 2s
             backoff_429 = backoff_429 / 2 if backoff_429 >= 4.0 else 0.0
             net_fail, net_backoff, net_pause_until = 0, 0.0, 0.0
+            st.net_streak = 0
             if not fut.cancelled():
                 fut.set_result(result)
         finally:
