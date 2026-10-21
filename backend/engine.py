@@ -429,6 +429,7 @@ class BotSession:
         self._combo_units = {}           # (sender key, combo id) -> gifts of that combo already counted
         self._gift_frame_ids = deque(maxlen=4000)   # frames already counted (a replay is not a gift)
         self._gift_frame_set = set()
+        self._gift_shape_logged = False
         self._cfg = None
         self._cfg_at = 0.0
         self._forbidden_hits = 0
@@ -560,9 +561,13 @@ class BotSession:
         diamonds in THAT live (the ledger is per live). Never raises: it must not disturb the
         end-of-live handling."""
         if not ranking:
+            log.info("session %s: ranking da live %s nao salvo: ninguem enviou diamantes que o robo visse",
+                     self.user_id, ended_live_id)
             return
         try:
             if not self._config()["settings"].get("live_ranking_enabled"):
+                log.info("session %s: ranking da live %s nao salvo: opcao desligada (%d usuarios, %d diamantes)",
+                         self.user_id, ended_live_id, len(ranking), total)
                 return
             conn = db.connect()
             try:
@@ -575,7 +580,14 @@ class BotSession:
                             f"{format_diamonds(total)} diamantes")
             log.info("session %s: ranking da live %s salvo (%d usuarios, %d diamantes)",
                      self.user_id, ended_live_id, len(ranking), total)
+            if not live_over:
+                log.info("session %s: ranking da live %s: robo parado com a live no ar, DM nao enviada",
+                         self.user_id, ended_live_id)
+            elif not self._config()["settings"].get("live_ranking_dm_enabled"):
+                log.info("session %s: ranking da live %s: DM desligada", self.user_id, ended_live_id)
             if live_over and self._config()["settings"].get("live_ranking_dm_enabled"):
+                log.info("session %s: DM do ranking da live %s agendada para daqui a %.0fs",
+                         self.user_id, ended_live_id, RANKING_DM_DELAY_SECONDS)
                 task = asyncio.get_running_loop().create_task(
                     self._send_ranking_dm(ended_live_id), name=f"ranking-dm-{self.user_id}")
                 _detached_tasks.add(task)
@@ -629,6 +641,9 @@ class BotSession:
             conv_id = conv.get("conversation_id")
             cost = conv.get("initial_coin_cost")
             cost = int(cost) if isinstance(cost, (int, float)) and not isinstance(cost, bool) else 0
+            log.info("session %s: DM do ranking: conversa com a streamer %s -> conversation_id=%s "
+                     "custo_inicial=%s bloqueada=%s campos=%s", self.user_id, streamer,
+                     "sim" if conv_id else "NAO", cost, bool(conv.get("is_blocked")), sorted(conv.keys())[:20])
             if conv.get("is_blocked"):
                 return "Não enviado: a conversa entre o robô e a streamer está bloqueada."
             if cost > 0:
@@ -642,7 +657,11 @@ class BotSession:
                 if i:
                     await asyncio.sleep(2)                # one message at a time, like a person
                 await self.client.send_private_text(conv_id, chunk)
+                log.info("session %s: DM do ranking: mensagem %d/%d enviada (%d caracteres)",
+                         self.user_id, i + 1, len(chunks), len(chunk))
         except SuperLiveError as exc:
+            log.warning("session %s: DM do ranking recusada pelo SuperLive: HTTP %s, %s, corpo=%s",
+                        self.user_id, exc.status, exc.message, str(exc.body)[:300])
             if exc.is_auth_error:
                 return "Não enviado: o token do robô expirou. Reconecte o robô na aba Robô."
             return f"Não enviado: o SuperLive recusou a mensagem ({exc.message})."
@@ -1328,12 +1347,22 @@ class BotSession:
         * frames of other lives are dropped earlier (``livestream_id`` filter in ``_on_frame``).
         """
         gift = data.get("gift") if isinstance(data.get("gift"), dict) else {}
+        if not self._gift_shape_logged:
+            # the first gift frame of the session, structure only (no names, no text): this is how
+            # the real format gets compared with what the counting rules expect
+            self._gift_shape_logged = True
+            log.info("session %s: formato do 1o presente: campos=%s gift=%s combo=%s", self.user_id,
+                     sorted(data.keys())[:25], sorted(gift.keys())[:25],
+                     data.get("gift_combo_detail") if isinstance(data.get("gift_combo_detail"), dict) else None)
         cost = gift.get("cost")
         if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not 0 < cost <= 10_000_000:
+            log.info("session %s: presente IGNORADO (custo invalido: %r) live=%s de=%s", self.user_id,
+                     cost, data.get("livestream_id") or self.livestream_id, data.get("user_id") or "(sem id)")
             return                                   # also drops NaN / infinity (a JSON "NaN" parses)
         cost = int(cost)
         if isinstance(frame_id, str) and len(frame_id) >= 8:
             if frame_id in self._gift_frame_set:
+                log.info("session %s: presente IGNORADO (quadro repetido %s)", self.user_id, frame_id[:8])
                 return
             if len(self._gift_frame_ids) == self._gift_frame_ids.maxlen:
                 self._gift_frame_set.discard(self._gift_frame_ids[0])
@@ -1359,6 +1388,8 @@ class BotSession:
             # the other frames of its combo, so it is taken as the size of this one frame.
             units = max(batch, _positive_int(combo.get("gift_combo_count"), 1))
         if units <= 0:
+            log.info("session %s: presente sem valor novo (combo %s ja contado ate %s) de=%s", self.user_id,
+                     combo_id[:8], self._combo_units.get((sender, combo_id)), sender or "(sem id)")
             return
         if sender not in self._diamonds:
             self._gift_order[sender] = len(self._gift_order)
