@@ -1160,6 +1160,292 @@ class LiveLookupDedupeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after["skipped_same_id"], before["skipped_same_id"] + 1)
 
 
+class GiftLedgerTests(unittest.TestCase):
+    """How many diamonds each sender gave in ONE live: plain gifts, batches, combos, repeats."""
+
+    def make(self):
+        from engine import BotSession
+        return BotSession(user_id=1, client=_FakeClient(), robot_sl_id="bot", livestream_id="L1")
+
+    @staticmethod
+    def gift(user="9", cost=10, name="Ana", combo=None, count=None, batch=None, **extra):
+        data = {"livestream_id": "L1", "user_id": user, "name": name, "gift": {"cost": cost}}
+        if combo is not None:
+            data["gift_combo_detail"] = {"gift_combo_id": combo}
+            if count is not None:
+                data["gift_combo_detail"]["gift_combo_count"] = count
+        if batch is not None:
+            data["gift_batch_size"] = batch
+        data.update(extra)
+        return data
+
+    def test_a_plain_gift_is_worth_its_cost(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=30))
+        self.assertEqual(s._diamonds, {"9": 30})
+
+    def test_a_batch_is_cost_times_batch_size(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=10, batch=5))
+        self.assertEqual(s._diamonds["9"], 50)
+
+    def test_a_combo_is_counted_once_not_as_1_plus_2_plus_n(self):
+        s = self.make()
+        for step in range(1, 6):                       # frames of one combo: running total 1..5
+            s._on_gift(self.gift(cost=10, combo="c1", count=step))
+        self.assertEqual(s._diamonds["9"], 50)         # 5 gifts x 10, NOT 10x(1+2+3+4+5)=150
+
+    def test_a_repeated_or_late_combo_frame_adds_nothing(self):
+        s = self.make()
+        for step in (1, 3, 3, 2, 3):                   # a gap, a repeat and an out-of-order frame
+            s._on_gift(self.gift(cost=10, combo="c1", count=step))
+        self.assertEqual(s._diamonds["9"], 30)
+
+    def test_two_combos_and_two_senders_do_not_mix(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=10, combo="c1", count=4))
+        s._on_gift(self.gift(cost=20, combo="c2", count=2))                  # same sender, another combo
+        s._on_gift(self.gift(user="7", name="Bia", cost=10, combo="c1", count=2))   # same id, other sender
+        self.assertEqual(s._diamonds, {"9": 80, "7": 20})
+
+    def test_a_combo_frame_without_a_running_total_counts_one_step(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=10, combo="c1"))
+        s._on_gift(self.gift(cost=10, combo="c1"))
+        self.assertEqual(s._diamonds["9"], 20)
+
+    def test_a_replayed_frame_is_not_counted_twice(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=40), "frame-aaaa-0001")
+        s._on_gift(self.gift(cost=40), "frame-aaaa-0001")       # same frame again
+        s._on_gift(self.gift(cost=40), "frame-aaaa-0002")       # a different one
+        self.assertEqual(s._diamonds["9"], 80)
+
+    def test_short_or_missing_frame_ids_never_hide_a_gift(self):
+        s = self.make()
+        for _ in range(3):
+            s._on_gift(self.gift(cost=10), "srv-1")             # constant short id: cannot be trusted
+            s._on_gift(self.gift(cost=10), None)
+        self.assertEqual(s._diamonds["9"], 60)
+
+    def test_values_that_are_not_a_positive_cost_are_ignored(self):
+        s = self.make()
+        for bad in (0, -5, True, "10", None, float("nan")):
+            s._on_gift(self.gift(cost=bad))
+        s._on_gift({"livestream_id": "L1", "user_id": "9"})                 # no gift at all
+        s._on_gift({"gift": "x", "user_id": "9"})
+        self.assertEqual(s._diamonds, {})
+
+    def test_hostile_batch_and_combo_values_cannot_break_it(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=10, batch="abc"))
+        s._on_gift(self.gift(cost=10, batch=-3))
+        s._on_gift(self.gift(cost=10, combo="c9", count="x"))
+        s._on_gift(self.gift(cost=10, combo="c9", count=-2))
+        self.assertEqual(s._diamonds["9"], 40)                   # each fell back to one unit
+
+    def test_a_sender_without_id_goes_to_one_anonymous_line(self):
+        s = self.make()
+        s._on_gift(self.gift(user="", cost=10, name="Fulano", is_incognito=True))
+        s._on_gift(self.gift(user=None, cost=5))
+        s._on_gift(self.gift(user="9", cost=20))
+        ranking = s.live_ranking()
+        self.assertEqual([(r["name"], r["diamonds"]) for r in ranking], [("Ana", 20), ("Anônimos", 15)])
+        self.assertEqual(sum(s._diamonds.values()), 35)          # the total still includes them
+
+    def test_an_incognito_gifter_keeps_her_id_but_not_her_name(self):
+        s = self.make()
+        s._on_gift(self.gift(user="9", cost=10, name="Ana Secreta", is_incognito=True))
+        self.assertEqual(s.live_ranking()[0]["name"], "Usuário 9")
+
+    def test_ranking_is_biggest_first_and_ties_go_to_whoever_gave_first(self):
+        s = self.make()
+        s._on_gift(self.gift(user="1", name="Primeiro", cost=50))
+        s._on_gift(self.gift(user="2", name="Segundo", cost=50))
+        s._on_gift(self.gift(user="3", name="Maior", cost=70))
+        s._on_gift(self.gift(user="4", name="Pequeno", cost=5))
+        self.assertEqual([r["name"] for r in s.live_ranking()], ["Maior", "Primeiro", "Segundo", "Pequeno"])
+
+    def test_the_latest_name_wins(self):
+        s = self.make()
+        s._on_gift(self.gift(name="Ana"))
+        s._on_gift(self.gift(name="Ana Maria"))
+        self.assertEqual(s.live_ranking()[0]["name"], "Ana Maria")
+
+    def test_the_ledger_is_per_live(self):
+        s = self.make()
+        s._on_gift(self.gift(cost=100, combo="c1", count=1))
+        s._reset_gift_ledger()                                   # the robot moved to another live
+        self.assertEqual(s.live_ranking(), [])
+        s._on_gift(self.gift(cost=10, combo="c1", count=1))      # the same combo id again counts afresh
+        self.assertEqual(s._diamonds["9"], 10)
+
+    def test_text_format(self):
+        from engine import ranking_text
+        entries = [{"name": "usuario x", "diamonds": 1234}, {"name": "usuario  q\nzz", "diamonds": 1}]
+        self.assertEqual(ranking_text(entries, 1235),
+                         "usuario x: enviou 1.234 diamantes\nusuario q zz: enviou 1 diamante\nTotal: 1.235 diamantes")
+
+
+class _DMClient:
+    """Fake SuperLive client for the ranking DM: records what would be sent."""
+
+    def __init__(self, cost=0, blocked=False, conv_id="conv-1", fail=None):
+        self.cost, self.blocked, self.conv_id, self.fail = cost, blocked, conv_id, fail
+        self.info_calls, self.sent = [], []
+
+    async def conversation_info(self, user_id):
+        self.info_calls.append(user_id)
+        return {"conversation_id": self.conv_id, "initial_coin_cost": self.cost, "is_blocked": self.blocked}
+
+    async def send_private_text(self, conversation_id, text):
+        if self.fail:
+            raise self.fail
+        self.sent.append((conversation_id, text))
+        return {"success": True}
+
+
+class RankingDMTests(unittest.IsolatedAsyncioTestCase):
+    """The end-of-live ranking sent to the streamer by private message (inbox, not live chat)."""
+
+    def setUp(self):
+        import db
+        import engine
+        self.db, self.engine = db, engine
+        self.old_path, self.old_delay = db.DB_PATH, engine.RANKING_DM_DELAY_SECONDS
+        engine.RANKING_DM_DELAY_SECONDS = 0
+        self.tmp = tempfile.mkdtemp(prefix="sm-dm-")
+        db.DB_PATH = os.path.join(self.tmp, "t.db")
+        db.init_db()
+        conn = db.connect()
+        conn.execute("INSERT INTO users (id, username, email, password_hash) VALUES (1, 'u1', 'u1@x', 'x')")
+        conn.commit()
+        db.save_live_ranking(conn, 1, "L1", 80, [{"user_id": "9", "name": "Ana", "diamonds": 50},
+                                                {"user_id": "7", "name": "Bia", "diamonds": 30}])
+        conn.execute("UPDATE live_rankings SET ended_at = '2026-10-21 01:30:00'")
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        self.db.DB_PATH = self.old_path
+        self.engine.RANKING_DM_DELAY_SECONDS = self.old_delay
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def session(self, client, streamer="100", robot="bot"):
+        s = self.engine.BotSession(user_id=1, client=client, robot_sl_id=robot, livestream_id=None)
+        s.streamer_id = streamer
+        return s
+
+    def status(self):
+        conn = self.db.connect()
+        try:
+            return self.db.get_live_ranking(conn, 1, "L1")["dm_status"]
+        finally:
+            conn.close()
+
+    async def test_sends_the_ranking_to_the_streamer_once_and_never_with_coins(self):
+        client = _DMClient()
+        s = self.session(client)
+        await s._send_ranking_dm("L1")
+        self.assertEqual(client.info_calls, ["100"])                      # the streamer of that live
+        self.assertEqual(len(client.sent), 1)
+        conv, text = client.sent[0]
+        self.assertEqual(conv, "conv-1")
+        self.assertEqual(text, "Ranking de diamantes da live de 20/10 às 22:30 (horário de Brasília)\n\n"
+                               "Ana: enviou 50 diamantes\nBia: enviou 30 diamantes\nTotal: 80 diamantes")
+        self.assertTrue(self.status().startswith("Enviado"))
+        await s._send_ranking_dm("L1")                                    # the same live again
+        self.assertEqual(len(client.sent), 1)
+
+    async def test_a_conversation_whose_first_message_costs_coins_is_not_used(self):
+        client = _DMClient(cost=50)
+        await self.session(client)._send_ranking_dm("L1")
+        self.assertEqual(client.sent, [])
+        self.assertIn("custa 50 moedas", self.status())
+        self.assertIn("nunca gasta moedas", self.status())
+
+    async def test_a_blocked_conversation_is_not_used(self):
+        client = _DMClient(blocked=True)
+        await self.session(client)._send_ranking_dm("L1")
+        self.assertEqual(client.sent, [])
+        self.assertIn("bloqueada", self.status())
+
+    async def test_a_refusal_from_superlive_is_recorded(self):
+        from superlive import SuperLiveError
+        client = _DMClient(fail=SuperLiveError("Message not allowed", 400))
+        await self.session(client)._send_ranking_dm("L1")
+        self.assertIn("recusou", self.status())
+        self.assertIn("Message not allowed", self.status())
+
+    async def test_unknown_streamer_or_robot_is_the_streamer(self):
+        client = _DMClient()
+        await self.session(client, streamer=None)._send_ranking_dm("L1")
+        self.assertIn("não sei qual é a conta", self.status())
+        await self.session(client, streamer="bot", robot="bot")._send_ranking_dm("L1")
+        self.assertIn("própria conta", self.status())
+        self.assertEqual(client.info_calls, [])
+
+    async def test_back_in_the_same_live_means_it_was_not_over(self):
+        client = _DMClient()
+        s = self.session(client)
+        s.livestream_id, s.state = "L1", "running"
+        await s._send_ranking_dm("L1")
+        self.assertEqual(client.sent, [])
+        self.assertIsNone(self.status())
+
+    async def test_a_live_without_a_saved_ranking_sends_nothing(self):
+        client = _DMClient()
+        await self.session(client)._send_ranking_dm("OUTRA")
+        self.assertEqual(client.info_calls, [])
+
+    def live_session(self, client):
+        s = self.session(client)
+        cfg = {"settings": {"live_ranking_enabled": True, "live_ranking_dm_enabled": True,
+                            "moderation_enabled": True}, "messages": [], "matcher": None}
+        s._config = lambda force=False: cfg
+        s.livestream_id, s.state = "L2", "running"
+        s._on_gift({"livestream_id": "L2", "user_id": "9", "name": "Ana", "gift": {"cost": 40}})
+        return s
+
+    def saved(self, live):
+        conn = self.db.connect()
+        try:
+            return self.db.get_live_ranking(conn, 1, live)
+        finally:
+            conn.close()
+
+    async def test_stopping_the_robot_mid_live_saves_the_ranking_but_sends_nothing(self):
+        client = _DMClient()
+        s = self.live_session(client)
+        await s.stop()                                   # she stopped the robot; the live goes on
+        await asyncio.sleep(0.05)
+        self.assertEqual(self.saved("L2")["total_diamonds"], 40)
+        self.assertEqual(client.info_calls, [])
+        self.assertEqual(client.sent, [])
+
+    async def test_a_live_that_really_ended_sends_the_dm_even_if_the_robot_stops(self):
+        client = _DMClient()
+        s = self.live_session(client)
+        await s.stop(reason="A live foi encerrada", live_ended=True)   # no favourite: stops at the end
+        await asyncio.sleep(0.05)
+        self.assertEqual(len(client.sent), 1)
+        self.assertIn("Ana: enviou 40 diamantes", client.sent[0][1])
+        self.assertTrue(self.saved("L2")["dm_status"].startswith("Enviado"))
+
+    def test_long_rankings_are_cut_and_split_under_the_message_limit(self):
+        from engine import DM_CHUNK_CHARS, ranking_dm_messages
+        entries = [{"name": f"Pessoa numero {i:03d} com nome comprido", "diamonds": 1000 - i} for i in range(45)]
+        total = sum(e["diamonds"] for e in entries)
+        chunks = ranking_dm_messages(entries, total, "2026-10-21 01:30:00")
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(c) <= DM_CHUNK_CHARS for c in chunks))
+        joined = "\n".join(chunks)
+        self.assertEqual(joined.count(": enviou "), 30)                       # top 30 by name
+        rest = sum(e["diamonds"] for e in entries[30:])
+        self.assertIn("e mais 15 pessoas: " + f"{rest:,}".replace(",", ".") + " diamantes", joined)
+        self.assertTrue(joined.endswith(f"Total: {total:,} diamantes".replace(",", ".")))
+
+
 class PassiveTelemetryTests(unittest.IsolatedAsyncioTestCase):
     """Counters only: they must never change what a session does."""
 

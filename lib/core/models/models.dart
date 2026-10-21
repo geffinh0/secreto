@@ -246,7 +246,10 @@ class BotSettings {
   static const int maxIntervalSeconds = 3600;
 
   /// Lowest diamond threshold the backend accepts for immunity.
-  static const int minDiamondImmunityThreshold = 50;
+  static const int minDiamondImmunityThreshold = 30;
+
+  /// What a creator starts with (the floor was lowered to 30 without changing this).
+  static const int defaultDiamondImmunityThreshold = 50;
 
   final int? id;
   final int userId;
@@ -256,6 +259,10 @@ class BotSettings {
   final bool kickPermanent;
   final bool diamondImmunityEnabled;
   final int diamondImmunityThreshold;
+  final bool liveRankingEnabled;
+
+  /// Also send that ranking to the streamer by private message (inbox) when the live ends.
+  final bool liveRankingDmEnabled;
 
   BotSettings({
     this.id,
@@ -265,7 +272,9 @@ class BotSettings {
     this.moderationEnabled = true,
     this.kickPermanent = false,
     this.diamondImmunityEnabled = false,
-    this.diamondImmunityThreshold = minDiamondImmunityThreshold,
+    this.diamondImmunityThreshold = defaultDiamondImmunityThreshold,
+    this.liveRankingEnabled = false,
+    this.liveRankingDmEnabled = false,
   });
 
   factory BotSettings.fromJson(Map<String, dynamic> json) {
@@ -277,8 +286,10 @@ class BotSettings {
       moderationEnabled: asBool(json['moderation_enabled'], true),
       kickPermanent: asBool(json['kick_permanent']),
       diamondImmunityEnabled: asBool(json['diamond_immunity_enabled']),
-      diamondImmunityThreshold:
-          asInt(json['diamond_immunity_threshold'], minDiamondImmunityThreshold),
+      diamondImmunityThreshold: asInt(
+          json['diamond_immunity_threshold'], defaultDiamondImmunityThreshold),
+      liveRankingEnabled: asBool(json['live_ranking_enabled']),
+      liveRankingDmEnabled: asBool(json['live_ranking_dm_enabled']),
     );
   }
 
@@ -290,6 +301,8 @@ class BotSettings {
         'kick_permanent': kickPermanent,
         'diamond_immunity_enabled': diamondImmunityEnabled,
         'diamond_immunity_threshold': diamondImmunityThreshold,
+        'live_ranking_enabled': liveRankingEnabled,
+        'live_ranking_dm_enabled': liveRankingDmEnabled,
       };
 
   BotSettings copyWith({
@@ -301,6 +314,8 @@ class BotSettings {
     bool? kickPermanent,
     bool? diamondImmunityEnabled,
     int? diamondImmunityThreshold,
+    bool? liveRankingEnabled,
+    bool? liveRankingDmEnabled,
   }) {
     return BotSettings(
       id: id ?? this.id,
@@ -314,6 +329,69 @@ class BotSettings {
           diamondImmunityEnabled ?? this.diamondImmunityEnabled,
       diamondImmunityThreshold:
           diamondImmunityThreshold ?? this.diamondImmunityThreshold,
+      liveRankingEnabled: liveRankingEnabled ?? this.liveRankingEnabled,
+      liveRankingDmEnabled: liveRankingDmEnabled ?? this.liveRankingDmEnabled,
+    );
+  }
+}
+
+// =====================================================
+// DIAMOND RANKING OF ONE LIVE (written when the live ends)
+// =====================================================
+class RankingEntry {
+  final String name;
+  final int diamonds;
+
+  const RankingEntry({required this.name, required this.diamonds});
+
+  factory RankingEntry.fromJson(Map<String, dynamic> json) => RankingEntry(
+        name: json['name']?.toString() ?? '?',
+        diamonds: asInt(json['diamonds']),
+      );
+}
+
+class LiveRanking {
+  final String livestreamId;
+  final DateTime? endedAt;
+  final int totalDiamonds;
+  final List<RankingEntry> entries;
+
+  /// The same ranking as plain text ("nome: enviou N diamantes"), ready to copy.
+  final String text;
+
+  /// What happened to the private message to the streamer (null = not attempted).
+  final String? dmStatus;
+
+  const LiveRanking({
+    required this.livestreamId,
+    required this.endedAt,
+    required this.totalDiamonds,
+    required this.entries,
+    required this.text,
+    this.dmStatus,
+  });
+
+  factory LiveRanking.fromJson(Map<String, dynamic> json) {
+    // the server stores UTC without a zone suffix ("2026-10-21 03:10:00")
+    final raw = json['ended_at']?.toString();
+    DateTime? ended;
+    if (raw != null && raw.isNotEmpty) {
+      ended = DateTime.tryParse(raw.contains('T') ? raw : raw.replaceFirst(' ', 'T'));
+      if (ended != null && !raw.endsWith('Z') && !raw.contains('+')) {
+        ended = DateTime.utc(ended.year, ended.month, ended.day, ended.hour,
+            ended.minute, ended.second);
+      }
+    }
+    return LiveRanking(
+      livestreamId: json['livestream_id']?.toString() ?? '',
+      endedAt: ended,
+      totalDiamonds: asInt(json['total_diamonds']),
+      entries: [
+        for (final e in (json['entries'] as List? ?? const []).whereType<Map>())
+          RankingEntry.fromJson(e.cast<String, dynamic>())
+      ],
+      text: json['text']?.toString() ?? '',
+      dmStatus: json['dm_status']?.toString(),
     );
   }
 }
@@ -614,6 +692,8 @@ class ActivityEntry {
         'session_auto_started' => 'Moderação iniciada automaticamente',
         'favorite_live_connected' => 'Streamer ao vivo & Robô conectado',
         'live_summary' => 'Resumo da Transmissão',
+        'live_ranking' => 'Ranking de diamantes da live',
+        'live_ranking_dm' => 'Ranking enviado por mensagem privada',
         'live_ended' => 'Live encerrada',
         'session_switched_live' => 'Live alterada',
         'watch_stuck' => 'Aguardando nova transmissão',

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/auto_message_provider.dart';
 import '../../providers/stats_provider.dart';
 import '../../widgets/ui/ui.dart';
 
@@ -17,12 +19,24 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load(30));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load(30);
+      _loadRankingState();
+    });
   }
 
   void _load(int days) {
     final user = context.read<AuthProvider>().user;
     if (user != null) context.read<StatsProvider>().load(user.id, days: days);
+  }
+
+  void _loadRankingState() {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+    context.read<StatsProvider>().loadRankings();
+    if (context.read<AutoMessageProvider>().settings == null) {
+      context.read<AutoMessageProvider>().load(user.id);
+    }
   }
 
   @override
@@ -31,7 +45,10 @@ class _StatsScreenState extends State<StatsScreen> {
     final stats = provider.stats;
 
     return AppPage(
-      onRefresh: () async => _load(provider.days),
+      onRefresh: () async {
+        _load(provider.days);
+        _loadRankingState();
+      },
       children: [
         Reveal(
           child: PageHeader(
@@ -79,7 +96,155 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
           Reveal(index: 4, child: _ByDay(stats: stats)),
         ],
+        const Reveal(index: 5, child: _DiamondRankings()),
       ],
+    );
+  }
+}
+
+/// Switch + the saved ranking of each past live. The list is per live on purpose: nothing here
+/// adds one live's diamonds to another's.
+class _DiamondRankings extends StatelessWidget {
+  const _DiamondRankings();
+
+  static final _intFmt = NumberFormat.decimalPattern('pt_BR');
+
+  Future<void> _toggle(BuildContext context, String key, bool value) async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+    final provider = context.read<AutoMessageProvider>();
+    final ok = await provider.saveSettings(user.id, {key: value});
+    if (!ok && context.mounted) {
+      showAppSnack(context, provider.error ?? 'Não foi possível salvar. Tente de novo.',
+          error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AutoMessageProvider>().settings;
+    final enabled = settings?.liveRankingEnabled ?? false;
+    final dmEnabled = settings?.liveRankingDmEnabled ?? false;
+    final stats = context.watch<StatsProvider>();
+    final rankings = stats.rankings;
+    return AppSection(
+      title: 'Ranking de diamantes por live',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppSurface(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSwitchRow(
+                  title: 'Guardar o ranking quando a live acabar',
+                  subtitle: 'Mostra quem enviou diamantes e quanto, só naquela live. '
+                      'Conta os presentes que o robô viu enquanto estava na live; '
+                      'lives sem presentes não geram ranking.',
+                  value: enabled,
+                  onChanged: (v) => _toggle(context, 'live_ranking_enabled', v),
+                ),
+                if (enabled) ...[
+                  const SizedBox(height: 8),
+                  AppSwitchRow(
+                    title: 'Enviar o ranking por mensagem privada para a streamer',
+                    subtitle: 'Cerca de 1 minuto depois do fim da live, o robô manda o ranking '
+                        'nas mensagens (DM) do SuperLive, não no chat da live. Se a primeira '
+                        'mensagem do robô para ela custar moedas, nada é enviado.',
+                    value: dmEnabled,
+                    onChanged: (v) => _toggle(context, 'live_ranking_dm_enabled', v),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (stats.rankingsFailed)
+            const AppStateView(
+                title: 'Não foi possível carregar os rankings',
+                message: 'Puxe a tela para atualizar.')
+          else if (rankings.isEmpty)
+            AppStateView(
+                title: 'Nenhum ranking ainda',
+                message: enabled
+                    ? 'O próximo ranking aparece aqui quando uma live com presentes acabar.'
+                    : 'Ligue a opção acima para guardar o ranking das próximas lives.')
+          else
+            for (final r in rankings)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: _RankingCard(ranking: r),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RankingCard extends StatelessWidget {
+  final LiveRanking ranking;
+  const _RankingCard({required this.ranking});
+
+  static const _shown = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = _DiamondRankings._intFmt;
+    final when = ranking.endedAt != null
+        ? DateFormat("dd/MM 'às' HH:mm").format(ranking.endedAt!.toLocal())
+        : 'Live ${ranking.livestreamId}';
+    final entries = ranking.entries;
+    return AppSurface(
+      raised: true,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Live de $when', style: AppType.bodyStrong),
+              Text(
+                '${fmt.format(ranking.totalDiamonds)} diamantes · '
+                '${entries.length} ${entries.length == 1 ? 'pessoa' : 'pessoas'}',
+                style: AppType.meta,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (var i = 0; i < entries.length && i < _shown; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '${i + 1}. ${entries[i].name}: enviou ${fmt.format(entries[i].diamonds)} '
+                '${entries[i].diamonds == 1 ? 'diamante' : 'diamantes'}',
+                style: AppType.body,
+              ),
+            ),
+          if (entries.length > _shown)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('e mais ${entries.length - _shown} (todos vão no texto copiado)',
+                  style: AppType.meta),
+            ),
+          if (ranking.dmStatus != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(ranking.dmStatus!, style: AppType.meta),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          AppButton.text(
+            label: 'Copiar ranking',
+            icon: Icons.copy,
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: ranking.text));
+              if (context.mounted) showAppSnack(context, 'Ranking copiado');
+            },
+          ),
+        ],
+      ),
     );
   }
 }

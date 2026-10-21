@@ -42,6 +42,8 @@ class MockSuperLive:
         self.email_otp_codes = {}    # email_otp_code_id -> {"email", "code"}
         self._next_email_otp_code_id = 1
         self.ws_auth_ok = True
+        self.conversation_cost = {}   # user_id -> initial_coin_cost of the robot's conversation with her
+        self.blocked_users = set()    # user_ids whose conversation with the robot is blocked
         self.ws_connects = 0
         self.heartbeat_seconds = 1
         self.clients = set()
@@ -258,6 +260,21 @@ class MockSuperLive:
                 if owner is None:
                     return JSONResponse({"message": "livestream not found"}, status_code=404)
                 return {"user": {"id": int(owner), "nickname": "Streamer"}}
+            if path == "conversation/info":
+                uid = str(body.get("user_id") or "")
+                if not uid:
+                    return JSONResponse({"message": "conversation not found"}, status_code=404)
+                return {"conversation": {
+                    "conversation_id": f"conv-{uid}", "initial_coin_cost": mock.conversation_cost.get(uid, 0),
+                    "is_blocked": uid in mock.blocked_users, "user": {"id": int(uid)},
+                }}
+            if path == "conversation/send_text_message":
+                text = body.get("text") or ""
+                if not body.get("conversation_id") or not text or len(text) > 500:
+                    return JSONResponse({"message": "invalid message"}, status_code=400)
+                if body.get("initial_coins"):
+                    return JSONResponse({"message": "coins not allowed in tests"}, status_code=400)
+                return {"success": True}
             if path in ("livestream/chat/mute", "livestream/kick",
                         "livestream/chat/send_text_message", "user/logout"):
                 return {"success": True}

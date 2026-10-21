@@ -367,6 +367,8 @@ class RobotTestBase(unittest.TestCase):
         mock.user_live_id.update({STREAMER_ID: "live1", mock_superlive.OFFLINE_STREAMER_ID: None})
         mock.streams.clear()
         mock.streams.update({"live1": STREAMER_ID})
+        mock.conversation_cost.clear()
+        mock.blocked_users.clear()
         self.name, self.token, self.uid = new_user("robot")
 
     def tearDown(self):
@@ -1075,6 +1077,186 @@ class ModerationFlowTests(RobotTestBase):
             wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)
         finally:
             engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+
+
+class LiveRankingTests(RobotTestBase):
+    """Function "live_ranking_enabled": at the end of a live, who sent how many diamonds in THAT live."""
+
+    def gift(self, user, name, cost, live="live1", **extra):
+        data = {"livestream_id": live, "user_id": str(user), "name": name, "gift": {"cost": cost}}
+        data.update(extra)
+        mock.emit("livestream_gift_sent", data)
+
+    def end_and_wait(self, live):
+        mock.end_live(STREAMER_ID, live)
+        wait_for(lambda: self.status()["session"]["state"] == "waiting_for_live", 8)
+
+    def rankings(self):
+        status, body = api("GET", "/live_rankings", token=self.token)
+        self.assertEqual(status, 200, body)
+        return body["rankings"]
+
+    def test_the_function_is_off_by_default_and_can_be_switched_on(self):
+        status, body = api("GET", f"/settings?user_id={self.uid}", token=self.token)
+        self.assertFalse(body["live_ranking_enabled"])
+        self.settings(live_ranking_enabled=True)
+        status, body = api("GET", f"/settings?user_id={self.uid}", token=self.token)
+        self.assertTrue(body["live_ranking_enabled"])
+
+    def test_nothing_is_saved_while_it_is_off(self):
+        self.connect_robot()
+        self.start_live()
+        self.gift(9, "Ana", 100)
+        self.settle(0.3)
+        self.end_and_wait("live1")
+        self.assertEqual(self.rankings(), [])
+
+    def test_ranking_of_a_live_with_plain_gifts_and_a_combo(self):
+        self.settings(live_ranking_enabled=True)
+        self.connect_robot()
+        self.start_live()
+        self.gift(9, "Ana", 30)
+        for step in (1, 2, 3):                                           # one combo of 3 x 10
+            self.gift(10, "Bia", 10, gift_combo_detail={"gift_combo_id": "cb1", "gift_combo_count": step})
+        self.gift(9, "Ana", 20)
+        self.settle(0.4)
+        self.end_and_wait("live1")
+        ranking = self.rankings()
+        self.assertEqual(len(ranking), 1)
+        self.assertEqual(ranking[0]["livestream_id"], "live1")
+        self.assertEqual(ranking[0]["total_diamonds"], 80)
+        self.assertEqual([(e["name"], e["diamonds"]) for e in ranking[0]["entries"]], [("Ana", 50), ("Bia", 30)])
+        self.assertEqual(ranking[0]["text"],
+                         "Ana: enviou 50 diamantes\nBia: enviou 30 diamantes\nTotal: 80 diamantes")
+
+    def test_each_live_has_only_its_own_gifts(self):
+        old_poll = engine.LIVE_POLL_INTERVAL_SECONDS
+        engine.LIVE_POLL_INTERVAL_SECONDS = 0.2
+        try:
+            self.settings(live_ranking_enabled=True)
+            self.connect_robot()
+            self.start_live()
+            self.gift(9, "Ana", 100)
+            self.settle(0.3)
+            self.end_and_wait("live1")
+
+            mock.start_new_live(STREAMER_ID, "live2")
+            wait_for(lambda: self.status()["session"]["state"] == "running", 8)
+            wait_for(lambda: self.status()["session"]["ws_state"] == "connected", 8)
+            self.gift(11, "Caio", 40, live="live2")
+            self.gift(9, "Ana", 5, live="live1")                      # a stray frame of the OLD live
+            self.settle(0.3)
+            self.end_and_wait("live2")
+
+            ranking = self.rankings()
+            self.assertEqual([r["livestream_id"] for r in ranking], ["live2", "live1"])   # newest first
+            self.assertEqual([(e["name"], e["diamonds"]) for e in ranking[0]["entries"]], [("Caio", 40)])
+            self.assertEqual([(e["name"], e["diamonds"]) for e in ranking[1]["entries"]], [("Ana", 100)])
+        finally:
+            engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+
+    def test_a_live_without_gifts_saves_nothing(self):
+        self.settings(live_ranking_enabled=True)
+        self.connect_robot()
+        self.start_live()
+        self.settle(0.3)
+        self.end_and_wait("live1")
+        self.assertEqual(self.rankings(), [])
+
+    def test_rankings_belong_to_their_creator(self):
+        self.settings(live_ranking_enabled=True)
+        self.connect_robot()
+        self.start_live()
+        self.gift(9, "Ana", 100)
+        self.settle(0.3)
+        self.end_and_wait("live1")
+        _, other_token, _ = new_user("rankother")
+        status, body = api("GET", "/live_rankings", token=other_token)
+        self.assertEqual((status, body["rankings"]), (200, []))
+        self.assertEqual(api("GET", "/live_rankings")[0], 401)
+
+    def test_dm_goes_to_the_streamer_inbox_when_switched_on(self):
+        old_delay = engine.RANKING_DM_DELAY_SECONDS
+        engine.RANKING_DM_DELAY_SECONDS = 0.1
+        try:
+            self.settings(live_ranking_enabled=True, live_ranking_dm_enabled=True)
+            self.connect_robot()
+            self.start_live()
+            self.gift(9, "Ana", 50)
+            self.settle(0.3)
+            self.end_and_wait("live1")
+            wait_for(lambda: len(mock.calls_to("conversation/send_text_message")) == 1, 8, "no DM sent")
+            info = mock.calls_to("conversation/info")[0]["body"]
+            self.assertEqual(info["user_id"], STREAMER_ID)
+            sent = mock.calls_to("conversation/send_text_message")[0]["body"]
+            self.assertEqual(sent["conversation_id"], f"conv-{STREAMER_ID}")
+            self.assertEqual(sent["initial_coins"], 0)
+            self.assertIn("Ana: enviou 50 diamantes", sent["text"])
+            self.assertIn("Total: 50 diamantes", sent["text"])
+            self.assertEqual(mock.calls_to("livestream/chat/send_text_message"), [])   # not the live chat
+            wait_for(lambda: (self.rankings()[0].get("dm_status") or "").startswith("Enviado"), 5)
+        finally:
+            engine.RANKING_DM_DELAY_SECONDS = old_delay
+
+    def test_no_dm_unless_its_own_switch_is_on(self):
+        old_delay = engine.RANKING_DM_DELAY_SECONDS
+        engine.RANKING_DM_DELAY_SECONDS = 0.1
+        try:
+            self.settings(live_ranking_enabled=True)
+            self.connect_robot()
+            self.start_live()
+            self.gift(9, "Ana", 50)
+            self.settle(0.3)
+            self.end_and_wait("live1")
+            self.settle(0.8)
+            self.assertEqual(mock.calls_to("conversation/info"), [])
+            self.assertEqual(mock.calls_to("conversation/send_text_message"), [])
+            self.assertIsNone(self.rankings()[0].get("dm_status"))
+        finally:
+            engine.RANKING_DM_DELAY_SECONDS = old_delay
+
+    def test_a_paid_first_message_is_never_sent(self):
+        old_delay = engine.RANKING_DM_DELAY_SECONDS
+        engine.RANKING_DM_DELAY_SECONDS = 0.1
+        try:
+            mock.conversation_cost[STREAMER_ID] = 30
+            self.settings(live_ranking_enabled=True, live_ranking_dm_enabled=True)
+            self.connect_robot()
+            self.start_live()
+            self.gift(9, "Ana", 50)
+            self.settle(0.3)
+            self.end_and_wait("live1")
+            wait_for(lambda: "custa 30 moedas" in (self.rankings()[0].get("dm_status") or ""), 8)
+            self.assertEqual(mock.calls_to("conversation/send_text_message"), [])
+        finally:
+            engine.RANKING_DM_DELAY_SECONDS = old_delay
+
+    def test_diamond_immunity_floor_is_30(self):
+        self.settings(diamond_immunity_enabled=True, diamond_immunity_threshold=30)
+        status, body = api("GET", f"/settings?user_id={self.uid}", token=self.token)
+        self.assertEqual(body["diamond_immunity_threshold"], 30)
+        status, body = api("PUT", f"/settings/{self.uid}", {"diamond_immunity_threshold": 29}, self.token)
+        self.assertEqual(status, 422)
+
+    def test_diamond_immunity_default_is_still_50(self):
+        _, token, uid = new_user("immdefault")
+        status, body = api("GET", f"/settings?user_id={uid}", token=token)
+        self.assertEqual(body["diamond_immunity_threshold"], 50)
+
+    def test_a_30_diamond_gifter_is_immune_at_threshold_30(self):
+        self.add_rule("feia", "kick")
+        self.settings(diamond_immunity_enabled=True, diamond_immunity_threshold=30)
+        self.connect_robot()
+        self.start_live()
+        self.gift(9, "Ana", 29)
+        self.settle(0.3)
+        mock.chat(9, "Ana", "feia")
+        wait_for(lambda: len(mock.calls_to("livestream/kick")) == 1)             # 29 < 30: moderated
+        self.gift(10, "Bia", 30)
+        self.settle(0.3)
+        mock.chat(10, "Bia", "feia")
+        self.settle(0.4)
+        self.assertEqual(len(mock.calls_to("livestream/kick")), 1)               # 30 >= 30: immune
 
 
 class ModerationToolsTests(RobotTestBase):

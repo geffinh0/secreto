@@ -35,6 +35,15 @@ fornecedor. As criadoras daquele IP ficam sem moderação até ele voltar; o sis
 
 Para esquecimento de senha, use **Usuários → Liberar troca de senha**.
 
+## Ranking de diamantes por live
+Cada criadora pode ligar, na tela **Estatísticas**, "Guardar o ranking quando a live acabar". Ao fim de cada
+live com presentes, o sistema guarda quem enviou quantos diamantes **só naquela live** (as 30 últimas lives),
+com botão de copiar no formato `nome: enviou N diamantes`. Não posta no chat da live. Com a segunda opção
+("Enviar o ranking por mensagem privada"), cerca de 1 minuto após o fim o robô manda o ranking nas mensagens
+privadas do SuperLive para a streamer; nunca gasta moedas (se a primeira mensagem custar moedas, nada é enviado
+e o app mostra o motivo).
+Os valores contam os presentes que o robô viu enquanto estava na live (se ele entrou no meio, o começo não entra).
+
 ## Backup, restauração e atualização
 ```bash
 ./backup.sh                                  # copia o banco para backups/ (mantém os 30 últimos)

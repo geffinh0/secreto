@@ -94,9 +94,39 @@ O front usa `http://localhost:8000`; para outro endereço:
 - Uma mesma palavra pode estar cadastrada em silenciar **e** em banir ao mesmo tempo (a
   duplicidade só é bloqueada dentro da mesma lista).
 - *Banimento permanente* (opção na tela de Moderação) usa `permanent: true` no kick.
-- *Imunidade por diamantes* (opção na tela de Moderação, mínimo 50): quem já enviou
-  diamantes suficientes **naquela live** fica isento de silenciar/banir. O valor acumulado
-  zera a cada nova live (não é cumulativo entre transmissões).
+- *Imunidade por diamantes* (opção na tela de Moderação, mínimo 30; quem não escolheu
+  nada começa em 50): quem já enviou diamantes suficientes **naquela live** fica isento de
+  silenciar/banir. O valor acumulado zera a cada nova live (não é cumulativo entre transmissões).
+- *Ranking de diamantes por live* (opção desligada por padrão, na tela de Estatísticas): ao
+  fim de cada live, guarda **só daquela live** quem enviou quantos diamantes (um por linha:
+  `nome: enviou N diamantes`), com botão de copiar. É guardado no banco (`live_rankings`, as
+  30 últimas lives de cada criadora) e lido em `GET /live_rankings`. Não posta no chat da live
+  (o SuperLive recusa mensagens numa live encerrada).
+- *Enviar o ranking por mensagem privada* (segunda opção, só aparece com o ranking ligado): ~45 s
+  depois do fim da live (`SM_RANKING_DM_DELAY_S`; se o robô reencontrar a MESMA live nesse meio
+  tempo, espera o fim de verdade), o robô manda o ranking para a streamer nas **mensagens
+  privadas** do SuperLive: `conversation/info` com o `user_id` dela devolve o `conversation_id`
+  e o `initial_coin_cost`; depois `conversation/send_text_message` com `initial_coins: 0`.
+  **Nunca gasta moedas**: se a primeira mensagem do robô para ela custar moedas
+  (`initial_coin_cost > 0`) ou a conversa estiver bloqueada, nada é enviado e o motivo aparece
+  no app. Textos longos viram várias mensagens de até 480 caracteres (o app limita a 500), no
+  máximo 30 nomes (o resto somado numa linha). Uma vez por live; o resultado fica em
+  `live_rankings.dm_status`. Esses dois endpoints vêm do código decompilado e só foram testados
+  contra o SuperLive simulado.
+
+**Como os diamantes são contados** (`BotSession._on_gift`, uma única contagem por live que
+alimenta a imunidade, o total do resumo e o ranking):
+- valor do presente = `gift.cost` (sem custo, custo ≤ 0 ou absurdo: ignora);
+- presente sem combo = `cost × gift_batch_size` (1 se não houver);
+- combo (`gift_combo_id`) = `cost ×` o **maior** `gift_combo_count` visto para aquele combo
+  (o app do SuperLive trata o contador como total corrente e descarta quadro repetido; somar
+  `cost × contagem` em cada quadro, como era antes, contava 1+2+…+n);
+- o mesmo quadro (`id`) repetido não conta duas vezes; quadros de outra live (`livestream_id`
+  diferente) são descartados; quem o SuperLive não identifica (sem `user_id`) vira uma linha
+  "Anônimos"; quem envia no modo incógnito aparece como "Usuário <id>".
+- Só entram presentes vistos **enquanto o robô estava na live**: se ele entrou no meio, o que
+  veio antes não entra. Cada presente gera uma linha de log (`presente live=... custo=...
+  contagem=...`) para conferir essas regras com quadros reais.
 - Mudar regras/opções durante a live vale em poucos segundos.
 
 ### Quando a live termina e uma nova começa
@@ -201,6 +231,10 @@ Reconecta sozinho com backoff.
 O resto foi implementado a partir do código decompilado e testado contra um SuperLive
 simulado (`backend/tests/mock_superlive.py`), não contra o serviço de verdade:
 
+- **Contagem de combos e ranking de diamantes**: o total de diamantes das lives aparece
+  diferente de zero em produção (então `gift.cost` chega), mas a regra "combo = maior contagem"
+  vem do código do app, não de quadros reais capturados; confira as linhas de log `presente ...`
+  numa live com combos antes de confiar nos valores.
 - **Imunidade por diamantes**: os nomes de campo (`gift.cost`,
   `gift_combo_detail.gift_combo_count`, `gift_batch_size`) vêm direto das classes
   decompiladas (`GiftStreamEventData`/`APIGift`/`APIGiftComboDetail`, alta confiança), mas

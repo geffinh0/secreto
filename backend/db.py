@@ -3,6 +3,7 @@ import logging
 import os
 import secrets
 import sqlite3
+from typing import Optional
 
 import security
 
@@ -22,13 +23,22 @@ DEFAULT_SETTINGS = {
     "kick_permanent": False,
     "diamond_immunity_enabled": False,
     "diamond_immunity_threshold": 50,
+    "live_ranking_enabled": False,
+    "live_ranking_dm_enabled": False,
 }
 
-MIN_DIAMOND_IMMUNITY_THRESHOLD = 50
+# Lowest threshold the API accepts for diamond immunity (was 50); the value a robot starts with
+# is still 50, so lowering the floor changes nothing for anyone until she chooses a lower one.
+MIN_DIAMOND_IMMUNITY_THRESHOLD = 30
+DEFAULT_DIAMOND_IMMUNITY_THRESHOLD = 50
+# Rankings of past lives kept per creator (oldest are deleted).
+MAX_LIVE_RANKINGS = 30
+MAX_RANKING_ENTRIES = 300
 
 _BOOL_KEYS = (
     "is_active", "is_admin", "auto_messages_enabled",
-    "moderation_enabled", "kick_permanent", "diamond_immunity_enabled", "ok", "active",
+    "moderation_enabled", "kick_permanent", "diamond_immunity_enabled", "live_ranking_enabled",
+    "live_ranking_dm_enabled", "ok", "active",
 )
 
 # bot_settings columns exposed via the API. end_message_enabled/end_message_template
@@ -36,7 +46,8 @@ _BOOL_KEYS = (
 # same deal with ai_name_filter_mode now (discontinued AI name filter feature).
 _SETTINGS_COLUMNS = (
     "id, user_id, auto_messages_enabled, message_interval_seconds, "
-    "moderation_enabled, kick_permanent, diamond_immunity_enabled, diamond_immunity_threshold"
+    "moderation_enabled, kick_permanent, diamond_immunity_enabled, diamond_immunity_threshold, "
+    "live_ranking_enabled, live_ranking_dm_enabled"
 )
 
 
@@ -308,8 +319,29 @@ def init_db():
         if "diamond_immunity_threshold" not in _columns(conn, "bot_settings"):
             c.execute(
                 "ALTER TABLE bot_settings ADD COLUMN diamond_immunity_threshold "
-                f"INTEGER DEFAULT {MIN_DIAMOND_IMMUNITY_THRESHOLD}"
+                f"INTEGER DEFAULT {DEFAULT_DIAMOND_IMMUNITY_THRESHOLD}"
             )
+        if "live_ranking_enabled" not in _columns(conn, "bot_settings"):
+            c.execute("ALTER TABLE bot_settings ADD COLUMN live_ranking_enabled INTEGER DEFAULT 0")
+        if "live_ranking_dm_enabled" not in _columns(conn, "bot_settings"):
+            c.execute("ALTER TABLE bot_settings ADD COLUMN live_ranking_dm_enabled INTEGER DEFAULT 0")
+        # who sent how many diamonds in ONE live, written when the live ends (function off by
+        # default: only creators who turn it on get rows). One row per (creator, live).
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS live_rankings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                livestream_id TEXT NOT NULL,
+                total_diamonds INTEGER NOT NULL,
+                entries TEXT NOT NULL,
+                ended_at TEXT DEFAULT (datetime('now')),
+                dm_status TEXT,
+                UNIQUE (user_id, livestream_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        if "dm_status" not in _columns(conn, "live_rankings"):
+            c.execute("ALTER TABLE live_rankings ADD COLUMN dm_status TEXT")
         if "last_livestream_id" not in _columns(conn, "robot_accounts"):
             c.execute("ALTER TABLE robot_accounts ADD COLUMN last_livestream_id TEXT")
 
@@ -503,6 +535,61 @@ def get_or_assign_egress_slot(conn, user_id: int, pool_size: int) -> int:
 
 
 # ─── Settings / rules / messages helpers (also used by the moderation engine) ───
+def save_live_ranking(conn, user_id: int, livestream_id: str, total: int, entries: list) -> None:
+    """Stores the ranking of one live. If the same live is saved twice (the robot lost and found
+    it again), the bigger total wins, so a late, partial save never replaces the complete one."""
+    import json
+    conn.execute(
+        "INSERT INTO live_rankings (user_id, livestream_id, total_diamonds, entries) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, livestream_id) DO UPDATE SET total_diamonds = excluded.total_diamonds, "
+        "entries = excluded.entries, ended_at = datetime('now') "
+        "WHERE excluded.total_diamonds >= live_rankings.total_diamonds",
+        (user_id, str(livestream_id), int(total), json.dumps(entries[:MAX_RANKING_ENTRIES], ensure_ascii=False)),
+    )
+    conn.execute(
+        "DELETE FROM live_rankings WHERE user_id = ? AND id NOT IN "
+        "(SELECT id FROM live_rankings WHERE user_id = ? ORDER BY id DESC LIMIT ?)",
+        (user_id, user_id, MAX_LIVE_RANKINGS),
+    )
+    conn.commit()
+
+
+def get_live_ranking(conn, user_id: int, livestream_id: str) -> Optional[dict]:
+    import json
+    row = conn.execute(
+        "SELECT livestream_id, total_diamonds, entries, ended_at, dm_status FROM live_rankings "
+        "WHERE user_id = ? AND livestream_id = ?", (user_id, str(livestream_id))).fetchone()
+    if row is None:
+        return None
+    try:
+        entries = json.loads(row["entries"])
+    except ValueError:
+        entries = []
+    return {"livestream_id": row["livestream_id"], "total_diamonds": row["total_diamonds"],
+            "ended_at": row["ended_at"], "entries": entries, "dm_status": row["dm_status"]}
+
+
+def set_live_ranking_dm_status(conn, user_id: int, livestream_id: str, status: str) -> None:
+    conn.execute("UPDATE live_rankings SET dm_status = ? WHERE user_id = ? AND livestream_id = ?",
+                 (status[:300], user_id, str(livestream_id)))
+    conn.commit()
+
+
+def list_live_rankings(conn, user_id: int, limit: int = MAX_LIVE_RANKINGS) -> list:
+    import json
+    out = []
+    for row in conn.execute(
+            "SELECT livestream_id, total_diamonds, entries, ended_at, dm_status FROM live_rankings "
+            "WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, max(1, min(int(limit), MAX_LIVE_RANKINGS)))):
+        try:
+            entries = json.loads(row["entries"])
+        except ValueError:
+            entries = []
+        out.append({"livestream_id": row["livestream_id"], "total_diamonds": row["total_diamonds"],
+                    "ended_at": row["ended_at"], "entries": entries, "dm_status": row["dm_status"]})
+    return out
+
+
 def get_settings(conn, user_id: int) -> dict:
     query = f"SELECT {_SETTINGS_COLUMNS} FROM bot_settings WHERE user_id = ?"
     row = conn.execute(query, (user_id,)).fetchone()

@@ -15,6 +15,7 @@ import itertools
 import json
 import logging
 import os
+import random
 import re
 import time
 import uuid
@@ -875,6 +876,25 @@ class SuperLiveClient:
             "livestream/chat/send_text_message",
             {"livestream_id": livestream_id, "text": text, "guid": str(uuid.uuid4())},
         )
+
+    # ── private messages (the inbox, not the live chat) ──────────────────
+    async def conversation_info(self, user_id: str) -> dict:
+        """The robot's private conversation with ``user_id`` (``conversation/info`` accepts a
+        user id, like the app does when it opens a chat from a profile). Carries
+        ``conversation_id`` and ``initial_coin_cost`` (coins the FIRST message would cost)."""
+        body = unwrap(await self.post("conversation/info", {"user_id": str(user_id)}))
+        conv = body.get("conversation")
+        return conv if isinstance(conv, dict) else {}
+
+    async def send_private_text(self, conversation_id: str, text: str) -> dict:
+        """One text in a private conversation. ``initial_coins`` is ALWAYS 0: this never spends
+        the robot's coins (a conversation whose first message costs coins is refused by the
+        caller before getting here). ``dev_payload`` is the app's 20-char client id."""
+        payload = "".join(random.choice("0123456789qwertyuiopasdfghjklzxcvbnm") for _ in range(20))
+        return await self.post("conversation/send_text_message", {
+            "conversation_id": str(conversation_id), "text": text, "dev_payload": payload,
+            "should_translate": False, "initial_coins": 0,
+        })
 
     async def mute(self, livestream_id: str, user_id: str) -> dict:
         return await self.post(

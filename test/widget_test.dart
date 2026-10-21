@@ -15,6 +15,8 @@ import 'package:atilas_client/providers/auth_provider.dart';
 import 'package:atilas_client/providers/auto_message_provider.dart';
 import 'package:atilas_client/providers/bot_provider.dart';
 import 'package:atilas_client/providers/moderation_provider.dart';
+import 'package:atilas_client/providers/stats_provider.dart';
+import 'package:atilas_client/screens/stats/stats_screen.dart';
 import 'package:atilas_client/screens/settings/import_config_card.dart';
 import 'package:atilas_client/screens/admin/admin_screen.dart';
 import 'package:atilas_client/screens/auth/change_password_screen.dart' show passwordRuleError;
@@ -178,10 +180,11 @@ void main() {
       expect(s.toJson().containsKey('end_message_enabled'), isFalse);
     });
 
-    test('BotSettings defaults the diamond immunity threshold to the minimum', () {
+    test('BotSettings starts the diamond immunity threshold at 50 (the floor is 30)', () {
       final s = BotSettings(userId: 1);
       expect(s.diamondImmunityEnabled, isFalse);
-      expect(s.diamondImmunityThreshold, BotSettings.minDiamondImmunityThreshold);
+      expect(s.diamondImmunityThreshold, BotSettings.defaultDiamondImmunityThreshold);
+      expect(BotSettings.minDiamondImmunityThreshold, lessThan(s.diamondImmunityThreshold));
     });
 
     test('RobotStatus parses the backend payload', () {
@@ -585,6 +588,107 @@ void main() {
       final day = AppTheme.lightTheme;
       expect(AppColors.dark, isFalse);
       expect(day.scaffoldBackgroundColor, const Color(0xFFF4ECDC));
+    });
+  });
+
+  group('diamond ranking and immunity floor', () {
+    test('settings: the floor is 30, a creator still starts at 50, the ranking is off', () {
+      expect(BotSettings.minDiamondImmunityThreshold, 30);
+      final fresh = BotSettings(userId: 1);
+      expect(fresh.diamondImmunityThreshold, 50);
+      expect(fresh.liveRankingEnabled, isFalse);
+      final parsed = BotSettings.fromJson({
+        'user_id': 1, 'live_ranking_enabled': 1, 'diamond_immunity_threshold': 30,
+      });
+      expect(parsed.liveRankingEnabled, isTrue);
+      expect(parsed.liveRankingDmEnabled, isFalse);
+      expect(BotSettings.fromJson({'user_id': 1, 'live_ranking_dm_enabled': true}).liveRankingDmEnabled, isTrue);
+      expect(parsed.diamondImmunityThreshold, 30);
+      expect(BotSettings.fromJson({'user_id': 1}).diamondImmunityThreshold, 50);
+    });
+
+    test('LiveRanking reads the server payload (UTC date without a zone suffix)', () {
+      final r = LiveRanking.fromJson({
+        'livestream_id': 'L9', 'total_diamonds': 80, 'ended_at': '2026-10-21 03:10:00',
+        'entries': [
+          {'user_id': '9', 'name': 'Ana', 'diamonds': 50},
+          {'user_id': '10', 'name': 'Bia', 'diamonds': 30},
+        ],
+        'text': 'Ana: enviou 50 diamantes\nBia: enviou 30 diamantes\nTotal: 80 diamantes',
+      });
+      expect(r.totalDiamonds, 80);
+      expect(r.entries.map((e) => '${e.name}=${e.diamonds}'), ['Ana=50', 'Bia=30']);
+      expect(r.endedAt!.isUtc, isTrue);
+      expect(r.endedAt!.hour, 3);
+    });
+
+    Future<void> pumpStats(WidgetTester tester, FakeApi api, {required bool enabled}) async {
+      SharedPreferences.setMockInitialValues({
+        AppConstants.keyPortalToken: 'tok',
+        AppConstants.keyPortalUser: jsonEncode({
+          'id': 1, 'username': 'alice', 'email': 'a@x.com', 'is_admin': false,
+          'created_at': '2026-10-03T00:00:00.000Z',
+        }),
+      });
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1200, 3000);
+      addTearDown(tester.view.resetPhysicalSize);
+      final auth = AuthProvider(api: api);
+      await auth.initialize();
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider(create: (_) => StatsProvider(api: api)),
+          ChangeNotifierProvider(create: (_) => AutoMessageProvider(api: api)),
+        ],
+        child: MaterialApp(theme: AppTheme.lightTheme, home: const StatsScreen()),
+      ));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+
+    FakeApi statsApi({required bool enabled, required List<Map<String, dynamic>> rankings}) => FakeApi()
+      ..on('GET /auth/me', ok({'id': 1, 'username': 'alice', 'email': 'a@x.com', 'is_admin': 0, 'created_at': '2026-10-03 03:24:06'}))
+      ..on('GET /stats?user_id=1&days=30', ok({'total_actions': 0, 'mutes': 0, 'kicks': 0, 'lives': 0, 'top_keywords': [], 'recent_lives': [], 'by_day': []}))
+      ..on('GET /settings?user_id=1', ok({'user_id': 1, 'live_ranking_enabled': enabled ? 1 : 0}))
+      ..on('GET /messages?user_id=1', ok([]))
+      ..on('GET /live_rankings', ok({'rankings': rankings}));
+
+    testWidgets('stats screen lists each live\'s ranking, one line per sender', (tester) async {
+      final api = statsApi(enabled: true, rankings: [
+        {
+          'livestream_id': 'L2', 'total_diamonds': 1235, 'ended_at': '2026-10-21 03:10:00',
+          'entries': [
+            {'user_id': '9', 'name': 'Ana', 'diamonds': 1234},
+            {'user_id': '10', 'name': 'Bia', 'diamonds': 1},
+          ],
+          'text': 'x',
+        },
+        {
+          'livestream_id': 'L1', 'total_diamonds': 5, 'ended_at': '2026-10-20 01:00:00',
+          'entries': [{'user_id': '11', 'name': 'Caio', 'diamonds': 5}],
+          'text': 'y',
+          'dm_status': 'Enviado por mensagem privada para a streamer (1 mensagem).',
+        },
+      ]);
+      await pumpStats(tester, api, enabled: true);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Ranking de diamantes por live'), findsOneWidget);
+      expect(find.text('1. Ana: enviou 1.234 diamantes'), findsOneWidget);
+      expect(find.text('2. Bia: enviou 1 diamante'), findsOneWidget);
+      expect(find.text('1. Caio: enviou 5 diamantes'), findsOneWidget);   // its own list, not summed
+      expect(find.text('Copiar ranking'), findsNWidgets(2));
+      expect(find.text('Enviado por mensagem privada para a streamer (1 mensagem).'), findsOneWidget);
+      expect(find.text('Enviar o ranking por mensagem privada para a streamer'), findsOneWidget);
+    });
+
+    testWidgets('with no ranking yet it says how to get one', (tester) async {
+      await pumpStats(tester, statsApi(enabled: false, rankings: const []), enabled: false);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Nenhum ranking ainda'), findsOneWidget);
+      expect(find.textContaining('Ligue a opção acima'), findsOneWidget);
+      expect(find.text('Enviar o ranking por mensagem privada para a streamer'), findsNothing);
     });
   });
 

@@ -25,7 +25,7 @@ from db import row_to_dict
 from engine import (
     IDLE_SNAPSHOT, MIN_INTERVAL_SECONDS, RuleMatcher, SessionManager, WatchManager, normalize,
 )
-from engine import client_for_user, egress_of, lookup_stats, watch_poll_interval
+from engine import client_for_user, egress_of, lookup_stats, ranking_text, watch_poll_interval
 from superlive import (BASE_URL as SUPERLIVE_BASE_URL, SuperLiveClient, SuperLiveError, _redact_proxy,
                        get_proxy_pool, pacing_stats, queue_depths, set_extra_proxies)
 
@@ -445,6 +445,8 @@ class BotSettingsUpdate(BaseModel):
     diamond_immunity_enabled: Optional[bool] = None
     diamond_immunity_threshold: Optional[int] = Field(
         default=None, ge=db.MIN_DIAMOND_IMMUNITY_THRESHOLD, le=1_000_000)
+    live_ranking_enabled: Optional[bool] = None
+    live_ranking_dm_enabled: Optional[bool] = None
 
 
 class RobotConnectRequest(BaseModel):
@@ -1039,7 +1041,7 @@ def get_settings(user_id: int, current_user: dict = Depends(get_current_user),
 
 
 _BOOL_SETTINGS = ("auto_messages_enabled", "moderation_enabled", "kick_permanent",
-                  "diamond_immunity_enabled")
+                  "diamond_immunity_enabled", "live_ranking_enabled", "live_ranking_dm_enabled")
 
 
 @app.put("/settings/{user_id}")
@@ -1578,6 +1580,18 @@ def robot_log(limit: int = 50, current_user: dict = Depends(get_current_user),
 def list_activity(limit: int = 50, current_user: dict = Depends(get_current_user),
                   conn: sqlite3.Connection = Depends(get_db)):
     return db.list_activity(conn, current_user["id"], limit=max(1, min(limit, 200)))
+
+
+# ─── Diamond ranking of past lives (function "live_ranking_enabled") ────────
+@app.get("/live_rankings")
+def list_live_rankings(limit: int = db.MAX_LIVE_RANKINGS, current_user: dict = Depends(get_current_user),
+                       conn: sqlite3.Connection = Depends(get_db)):
+    """The last lives' rankings of the logged-in creator: who sent how many diamonds in EACH live
+    (not summed across lives), biggest first, plus the same list as plain text to copy."""
+    rankings = db.list_live_rankings(conn, current_user["id"], limit=limit)
+    for r in rankings:
+        r["text"] = ranking_text(r["entries"], r["total_diamonds"])
+    return {"rankings": rankings}
 
 
 # ─── Stats (moderation history, aggregated from moderation_log) ─────────────

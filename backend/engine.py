@@ -118,6 +118,80 @@ def lookup_stats() -> dict:
     return dict(_lookup_stats)
 
 
+def _positive_int(value, default: int) -> int:
+    """``value`` as an int >= 1, else ``default`` (never raises: frames come from the network)."""
+    if isinstance(value, bool):
+        return default
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number >= 1 else default
+
+
+def format_diamonds(amount: int) -> str:
+    return f"{int(amount):,}".replace(",", ".")
+
+
+def _clean_name(name: str) -> str:
+    return " ".join(str(name).split())[:40] or "?"
+
+
+# Private-message limits: the app's message box takes 500 characters; stay under it.
+DM_CHUNK_CHARS = 480
+DM_MAX_LINES = 30
+# Wait after a live ends before sending the ranking by private message: if the robot finds the
+# SAME live again (a false "ended"), the DM waits for the real end instead of going out partial.
+RANKING_DM_DELAY_SECONDS = float(os.getenv("SM_RANKING_DM_DELAY_S", "45") or 45)
+# DM jobs outlive the session that started them (a robot without a favourite stops right at the
+# end of the live, and stopping cancels the session's own tasks).
+_detached_tasks: set = set()
+
+
+def _ended_label(ended_at_utc: str) -> str:
+    """'21/10 às 22:30' in Brasília time (UTC-3, no daylight saving since 2019)."""
+    try:
+        when = datetime.strptime(str(ended_at_utc)[:19], "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        when = datetime.now(timezone.utc).replace(tzinfo=None)
+    return (when - timedelta(hours=3)).strftime("%d/%m às %H:%M")
+
+
+def ranking_dm_messages(entries: list, total: int, ended_at_utc: str) -> list:
+    """The ranking as private message(s): a header, one ``nome: enviou N diamantes`` line per
+    sender (the top ``DM_MAX_LINES``; the rest summed in one line) and the total, split on line
+    boundaries so no message passes ``DM_CHUNK_CHARS``."""
+    shown = entries[:DM_MAX_LINES]
+    body = ranking_text(shown, total).split("\n")
+    total_line = body.pop()
+    rest = entries[DM_MAX_LINES:]
+    if rest:
+        rest_sum = sum(int(e["diamonds"]) for e in rest)
+        body.append(f"e mais {len(rest)} {'pessoa' if len(rest) == 1 else 'pessoas'}: "
+                    f"{format_diamonds(rest_sum)} {'diamante' if rest_sum == 1 else 'diamantes'}")
+    lines = [f"Ranking de diamantes da live de {_ended_label(ended_at_utc)} (horário de Brasília)", ""]
+    lines += body + [total_line]
+    chunks, current = [], ""
+    for line in lines:
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > DM_CHUNK_CHARS and current:
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    if current.strip():
+        chunks.append(current)
+    return chunks
+
+
+def ranking_text(entries: list, total: int) -> str:
+    """The ranking as plain text, one line per sender: ``nome: enviou N diamantes``."""
+    lines = [f"{_clean_name(e['name'])}: enviou {format_diamonds(e['diamonds'])} "
+             f"{'diamante' if e['diamonds'] == 1 else 'diamantes'}" for e in entries]
+    lines.append(f"Total: {format_diamonds(total)} {'diamante' if total == 1 else 'diamantes'}")
+    return "\n".join(lines)
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -348,7 +422,13 @@ class BotSession:
         self._queue = asyncio.Queue(maxsize=MAX_QUEUED_ACTIONS)
         self._pending = set()
         self._acted = {}                 # user_id -> highest action level applied
-        self._diamonds = {}              # user_id -> diamonds sent in the CURRENT live
+        # Gift ledger of the CURRENT live only (cleared when the robot moves to another live):
+        self._diamonds = {}              # sender key -> diamonds sent (the user id; "" bucket = no id)
+        self._gift_names = {}            # sender key -> last display name seen
+        self._gift_order = {}            # sender key -> order of the first gift (tie-break)
+        self._combo_units = {}           # (sender key, combo id) -> gifts of that combo already counted
+        self._gift_frame_ids = deque(maxlen=4000)   # frames already counted (a replay is not a gift)
+        self._gift_frame_set = set()
         self._cfg = None
         self._cfg_at = 0.0
         self._forbidden_hits = 0
@@ -408,8 +488,10 @@ class BotSession:
             asyncio.create_task(self._live_monitor_loop(), name=f"monitor-{self.user_id}"),
         ]
 
-    def _emit_live_summary(self, ended_live_id: str) -> Optional[dict]:
-        """Emit live broadcast summary when a livestream ends."""
+    def _emit_live_summary(self, ended_live_id: str, live_over: bool = True) -> Optional[dict]:
+        """Emit live broadcast summary when a livestream ends. ``live_over`` is False when the
+        robot was stopped while the live went on: the ranking so far is still saved, but nothing
+        is sent to the streamer (the live has not ended)."""
         if not ended_live_id:
             return None
 
@@ -424,6 +506,7 @@ class BotSession:
             dur_str = f"{secs}s"
 
         total_diamonds = sum(self._diamonds.values()) if hasattr(self, "_diamonds") else 0
+        ranking = self.live_ranking() if hasattr(self, "_diamonds") else []
         mutes = self._live_mutes_count
         kicks = self._live_kicks_count
         total_actions = mutes + kicks
@@ -449,6 +532,7 @@ class BotSession:
             "actions_failed": self.actions_failed,
             "messages_sent": msgs_sent,
             "diamonds": total_diamonds,
+            "gifters": len(ranking),
             "summary_text": summary_text,
             "ts": now_iso(),
         }
@@ -466,16 +550,111 @@ class BotSession:
             db.log_activity(self.user_id, "live_summary", summary_text)
         except Exception:
             pass
+        self._save_live_ranking(ended_live_id, ranking, total_diamonds, live_over)
 
         return summary_data
 
+    def _save_live_ranking(self, ended_live_id: str, ranking: list, total: int,
+                           live_over: bool = True) -> None:
+        """End-of-live ranking, only when the creator turned the function on and someone gave
+        diamonds in THAT live (the ledger is per live). Never raises: it must not disturb the
+        end-of-live handling."""
+        if not ranking:
+            return
+        try:
+            if not self._config()["settings"].get("live_ranking_enabled"):
+                return
+            conn = db.connect()
+            try:
+                db.save_live_ranking(conn, self.user_id, ended_live_id, total, ranking)
+            finally:
+                conn.close()
+            db.log_activity(self.user_id, "live_ranking",
+                            f"Ranking da live {ended_live_id}: {len(ranking)} "
+                            f"{'usuário' if len(ranking) == 1 else 'usuários'}, "
+                            f"{format_diamonds(total)} diamantes")
+            log.info("session %s: ranking da live %s salvo (%d usuarios, %d diamantes)",
+                     self.user_id, ended_live_id, len(ranking), total)
+            if live_over and self._config()["settings"].get("live_ranking_dm_enabled"):
+                task = asyncio.get_running_loop().create_task(
+                    self._send_ranking_dm(ended_live_id), name=f"ranking-dm-{self.user_id}")
+                _detached_tasks.add(task)
+                task.add_done_callback(_detached_tasks.discard)
+        except Exception:  # noqa: BLE001
+            log.exception("session %s: nao consegui salvar o ranking da live %s", self.user_id, ended_live_id)
+
+    async def _send_ranking_dm(self, ended_live_id: str) -> None:
+        """Sends the saved ranking of ``ended_live_id`` to the streamer by private message (inbox,
+        not the live chat), once. Writes the outcome next to the ranking (shown in the app)."""
+        try:
+            await asyncio.sleep(RANKING_DM_DELAY_SECONDS)
+            if self.livestream_id == ended_live_id and self.is_active:
+                return      # the robot is back in that same live: its real end sends the DM
+            status = await self._deliver_ranking_dm(ended_live_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("session %s: DM do ranking da live %s falhou", self.user_id, ended_live_id)
+            status = "Não enviado: erro inesperado no servidor."
+        if not status:
+            return
+        try:
+            conn = db.connect()
+            try:
+                db.set_live_ranking_dm_status(conn, self.user_id, ended_live_id, status)
+            finally:
+                conn.close()
+            db.log_activity(self.user_id, "live_ranking_dm", f"live {ended_live_id}: {status}")
+        except Exception:  # noqa: BLE001
+            log.exception("session %s: nao consegui gravar o estado da DM do ranking", self.user_id)
+        log.info("session %s: DM do ranking da live %s: %s", self.user_id, ended_live_id, status)
+
+    async def _deliver_ranking_dm(self, ended_live_id: str) -> Optional[str]:
+        conn = db.connect()
+        try:
+            ranking = db.get_live_ranking(conn, self.user_id, ended_live_id)
+        finally:
+            conn.close()
+        if not ranking or not ranking["entries"]:
+            return None
+        if (ranking.get("dm_status") or "").startswith("Enviado"):
+            return None                                   # never twice for the same live
+        streamer = self.streamer_id
+        if not streamer:
+            return "Não enviado: não sei qual é a conta da streamer desta live."
+        if self.robot_sl_id and str(self.robot_sl_id) == str(streamer):
+            return "Não enviado: o robô é a própria conta da streamer (não dá para mandar DM para si mesma)."
+        try:
+            conv = await self.client.conversation_info(streamer)
+            conv_id = conv.get("conversation_id")
+            cost = conv.get("initial_coin_cost")
+            cost = int(cost) if isinstance(cost, (int, float)) and not isinstance(cost, bool) else 0
+            if conv.get("is_blocked"):
+                return "Não enviado: a conversa entre o robô e a streamer está bloqueada."
+            if cost > 0:
+                return (f"Não enviado: a primeira mensagem do robô para a streamer custa {cost} moedas, "
+                        "e o sistema nunca gasta moedas. Mande uma mensagem pelo app com a conta do "
+                        "robô para abrir a conversa; depois disso o ranking passa a ser enviado.")
+            if not conv_id:
+                return "Não enviado: o SuperLive não abriu a conversa com a streamer."
+            chunks = ranking_dm_messages(ranking["entries"], ranking["total_diamonds"], ranking["ended_at"])
+            for i, chunk in enumerate(chunks):
+                if i:
+                    await asyncio.sleep(2)                # one message at a time, like a person
+                await self.client.send_private_text(conv_id, chunk)
+        except SuperLiveError as exc:
+            if exc.is_auth_error:
+                return "Não enviado: o token do robô expirou. Reconecte o robô na aba Robô."
+            return f"Não enviado: o SuperLive recusou a mensagem ({exc.message})."
+        return f"Enviado por mensagem privada para a streamer ({len(chunks)} {'mensagem' if len(chunks) == 1 else 'mensagens'})."
+
     async def stop(self, reason: str = "Parado pelo usuário",
-                   final_state: str = "stopped") -> None:
+                   final_state: str = "stopped", live_ended: bool = False) -> None:
         async with self._stop_lock:
             if self._finalized:
                 return
             if self.livestream_id and self.state in ("running", "starting"):
-                self._emit_live_summary(self.livestream_id)
+                self._emit_live_summary(self.livestream_id, live_over=live_ended)
             self.state = "stopping"
             ws = self._ws
             self._ws = None
@@ -910,7 +1089,7 @@ class BotSession:
             self._drain_queue()
             self.state = "running"
             self.last_error = None
-            self._diamonds.clear()
+            self._reset_gift_ledger()
             self._acted.clear()
             self._live_found_event.set()
 
@@ -978,7 +1157,7 @@ class BotSession:
                     pass
 
             if not has_target:
-                self._spawn(self.stop(reason="A live foi encerrada"))
+                self._spawn(self.stop(reason="A live foi encerrada", live_ended=True))
                 return
 
             old_live = self.livestream_id
@@ -1038,7 +1217,7 @@ class BotSession:
             if kind == "livestream_message_sent":
                 self._on_chat(data)
             elif kind == "livestream_gift_sent":
-                self._on_gift(data)
+                self._on_gift(data, frame.get("id"))
             elif kind in ("livestream_user_joined", "livestream_joined", "user_joined", "livestream_user_enter"):
                 u_id = str(data.get("user_id") or data.get("id") or "")
                 u_name = str(data.get("name") or data.get("nickname") or u_id)
@@ -1119,31 +1298,96 @@ class BotSession:
         entry.action = action
 
     def _is_diamond_immune(self, user_id: str, cfg: dict) -> bool:
-        threshold = cfg["settings"].get("diamond_immunity_threshold") or db.MIN_DIAMOND_IMMUNITY_THRESHOLD
+        threshold = cfg["settings"].get("diamond_immunity_threshold") or db.DEFAULT_DIAMOND_IMMUNITY_THRESHOLD
         return self._diamonds.get(user_id, 0) >= threshold
 
     # ---- gifts / diamonds ---------------------------------------------------
-    def _on_gift(self, data: dict) -> None:
-        """Accumulates diamonds sent by each user during the current live, so
-        ``diamond_immunity_enabled`` can exempt generous gifters from mute/kick
-        rules. Field names come from the decompiled app (``GiftStreamEventData`` /
-        ``APIGift`` / ``APIGiftComboDetail``): a gift's value is ``gift.cost``,
-        multiplied by the combo count when the gift was sent as part of a combo
-        (``gift_combo_detail.gift_combo_count``), falling back to
-        ``gift_batch_size`` for batched sends, or 1 for a single gift.
+    def _reset_gift_ledger(self) -> None:
+        self._diamonds.clear()
+        self._gift_names.clear()
+        self._gift_order.clear()
+        self._combo_units.clear()
+        self._gift_frame_ids.clear()
+        self._gift_frame_set.clear()
+
+    def _on_gift(self, data: dict, frame_id=None) -> None:
+        """Counts the diamonds each sender gave in the CURRENT live (diamond immunity, the live
+        summary total and the end-of-live ranking all read this one ledger).
+
+        Field names come from the decompiled app (``GiftStreamEventData`` / ``APIGift`` /
+        ``APIGiftComboDetail``). Rules, in the order they apply:
+
+        * a gift is worth ``gift.cost`` diamonds per unit; no cost (or 0) = nothing counted;
+        * a frame already counted (same frame id) is ignored, so a replay never doubles a gift;
+        * a combo (``gift_combo_detail.gift_combo_id``) arrives as one frame per step, and the app
+          itself shows ``gift_combo_count`` as the running total of the combo (a frame whose count
+          equals what is shown is discarded as a repeat). So a combo is worth cost x the HIGHEST
+          count seen for that combo id: each frame only adds the units not counted yet. Summing
+          cost x count over the frames of a combo (what this did before) counted 1+2+...+n units;
+        * a gift without a combo id is worth cost x ``gift_batch_size`` (1 when absent);
+        * frames of other lives are dropped earlier (``livestream_id`` filter in ``_on_frame``).
         """
-        user_id = str(data.get("user_id") or "")
         gift = data.get("gift") if isinstance(data.get("gift"), dict) else {}
         cost = gift.get("cost")
-        if not user_id or not isinstance(cost, (int, float)) or cost <= 0:
-            return
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not 0 < cost <= 10_000_000:
+            return                                   # also drops NaN / infinity (a JSON "NaN" parses)
+        cost = int(cost)
+        if isinstance(frame_id, str) and len(frame_id) >= 8:
+            if frame_id in self._gift_frame_set:
+                return
+            if len(self._gift_frame_ids) == self._gift_frame_ids.maxlen:
+                self._gift_frame_set.discard(self._gift_frame_ids[0])
+            self._gift_frame_ids.append(frame_id)
+            self._gift_frame_set.add(frame_id)
+
+        sender = str(data.get("user_id") or "")
         combo = data.get("gift_combo_detail") if isinstance(data.get("gift_combo_detail"), dict) else {}
-        multiplier = combo.get("gift_combo_count") or data.get("gift_batch_size") or 1
-        try:
-            multiplier = int(multiplier)
-        except (TypeError, ValueError):
-            multiplier = 1
-        self._diamonds[user_id] = self._diamonds.get(user_id, 0) + int(cost) * max(1, multiplier)
+        combo_id = str(combo.get("gift_combo_id") or "")
+        batch = _positive_int(data.get("gift_batch_size"), 1)
+        if combo_id:
+            count = _positive_int(combo.get("gift_combo_count"), 0)
+            key = (sender, combo_id)
+            counted = self._combo_units.get(key, 0)
+            if count:
+                units = max(0, count - counted)           # running total: only what is new
+                self._combo_units[key] = max(counted, count)
+            else:
+                units = batch                             # no running total to trust: one step
+                self._combo_units[key] = counted + batch
+        else:
+            # no combo id: one plain gift (or a batch). A count without an id cannot be tied to
+            # the other frames of its combo, so it is taken as the size of this one frame.
+            units = max(batch, _positive_int(combo.get("gift_combo_count"), 1))
+        if units <= 0:
+            return
+        if sender not in self._diamonds:
+            self._gift_order[sender] = len(self._gift_order)
+        self._diamonds[sender] = self._diamonds.get(sender, 0) + cost * units
+        name = str(data.get("name") or "").strip()
+        if sender and name and not data.get("is_incognito"):    # the id-less bucket mixes people: no name
+            self._gift_names[sender] = name
+        # one line per gift event: the real frames were never seen before, so this is how the
+        # counting rules above get checked against production (ids, combo counts, batches)
+        log.info("session %s: presente live=%s de=%s custo=%d unidades=%d combo=%s contagem=%s lote=%s "
+                 "frame=%s total_do_usuario=%d",
+                 self.user_id, data.get("livestream_id") or self.livestream_id, sender or "(sem id)", cost,
+                 units, combo_id[:8] or "-", combo.get("gift_combo_count"), data.get("gift_batch_size"),
+                 str(frame_id)[:8] if frame_id else "-", self._diamonds[sender])
+
+    def live_ranking(self) -> list:
+        """Who sent how many diamonds in the current live, biggest first (ties: whoever gave first).
+        Senders the SuperLive did not identify are grouped in one "Anônimos" line."""
+        rows = []
+        for sender, diamonds in self._diamonds.items():
+            if diamonds <= 0:
+                continue
+            name = self._gift_names.get(sender) or ("Anônimos" if not sender else f"Usuário {sender}")
+            rows.append({"user_id": sender, "name": name, "diamonds": diamonds,
+                         "_order": self._gift_order.get(sender, 0)})
+        rows.sort(key=lambda r: (-r["diamonds"], r["_order"]))
+        for r in rows:
+            r.pop("_order")
+        return rows
 
     async def _action_worker(self) -> None:
         while True:

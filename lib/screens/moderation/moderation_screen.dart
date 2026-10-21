@@ -471,7 +471,7 @@ class _OptionsBlockState extends State<_OptionsBlock> {
     final permanent = settings?.kickPermanent ?? false;
     final immunity = settings?.diamondImmunityEnabled ?? false;
     final threshold = settings?.diamondImmunityThreshold ??
-        BotSettings.minDiamondImmunityThreshold;
+        BotSettings.defaultDiamondImmunityThreshold;
     if (threshold != _lastKnownThreshold && !_thresholdFocus.hasFocus) {
       _lastKnownThreshold = threshold;
       _thresholdController.text = '$threshold';
