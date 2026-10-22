@@ -116,7 +116,9 @@ O front usa `http://localhost:8000`; para outro endereço:
 
 **Como os diamantes são contados** (`BotSession._on_gift`, uma única contagem por live que
 alimenta a imunidade, o total do resumo e o ranking):
-- valor do presente = `gift.cost` (sem custo, custo ≤ 0 ou absurdo: ignora);
+- valor do presente = `gift.diamond` (os DIAMANTES que a streamer recebe), **não** `gift.cost`
+  (as MOEDAS que o espectador paga). Os quadros reais trazem os dois. Sem valor, ≤ 0 ou absurdo:
+  ignora; só um quadro sem o campo `diamond` cai nas moedas (com aviso no log);
 - presente sem combo = `cost × gift_batch_size` (1 se não houver);
 - combo (`gift_combo_id`) = `cost ×` o **maior** `gift_combo_count` visto para aquele combo
   (o app do SuperLive trata o contador como total corrente e descarta quadro repetido; somar
@@ -199,9 +201,8 @@ backend registra o aparelho na primeira conexão do robô e reaproveita o mesmo 
 
 WebSocket: o servidor envia `{"id","type","data"}` (`livestream_message_sent` traz
 `user_id`, `name`, `text`, `livestream_id`; `livestream_gift_sent` traz `user_id`,
-`gift.cost` (valor em diamantes) e, quando enviado em combo,
-`gift_combo_detail.gift_combo_count` — total = `gift.cost * gift_combo_count` (ou
-`gift_batch_size` quando não há combo); `livestream_ended` avisa que a live acabou — ver
+`gift.diamond` (diamantes que a streamer recebe; `gift.cost` são as moedas pagas) e, quando
+enviado em combo, `gift_combo_detail.gift_combo_count` — ver "Como os diamantes são contados"; `livestream_ended` avisa que a live acabou — ver
 "Quando a live termina e uma nova começa" acima). O robô envia `{"id","action","data"}`:
 `enter_livestream`, `heartbeat` (`"state":"livestream:<id>"`) e `leave_livestream`.
 Reconecta sozinho com backoff.

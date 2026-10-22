@@ -1336,7 +1336,9 @@ class BotSession:
         Field names come from the decompiled app (``GiftStreamEventData`` / ``APIGift`` /
         ``APIGiftComboDetail``). Rules, in the order they apply:
 
-        * a gift is worth ``gift.cost`` diamonds per unit; no cost (or 0) = nothing counted;
+        * a gift is worth ``gift.diamond`` DIAMONDS per unit (what the streamer receives), NOT
+          ``gift.cost`` (the COINS the viewer pays); no value (or 0) = nothing counted. Only a
+          frame without the ``diamond`` field falls back to the coin cost;
         * a frame already counted (same frame id) is ignored, so a replay never doubles a gift;
         * a combo (``gift_combo_detail.gift_combo_id``) arrives as one frame per step, and the app
           itself shows ``gift_combo_count`` as the running total of the combo (a frame whose count
@@ -1354,12 +1356,25 @@ class BotSession:
             log.info("session %s: formato do 1o presente: campos=%s gift=%s combo=%s", self.user_id,
                      sorted(data.keys())[:25], sorted(gift.keys())[:25],
                      data.get("gift_combo_detail") if isinstance(data.get("gift_combo_detail"), dict) else None)
-        cost = gift.get("cost")
+        # ``gift.cost`` is what the VIEWER pays, in COINS; ``gift.diamond`` is what the streamer
+        # receives, in DIAMONDS (the real frames carry both, and the app's APISuperGift model
+        # too). The ledger counts diamonds. Only a frame with no ``diamond`` field at all falls
+        # back to the coin cost (logged), so an older/odd frame still counts something.
+        coins = gift.get("cost")
+        if "diamond" in gift:
+            cost, unit = gift.get("diamond"), "diamante"
+        else:
+            cost, unit = coins, "MOEDA (sem campo diamond)"
         if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not 0 < cost <= 10_000_000:
-            log.info("session %s: presente IGNORADO (custo invalido: %r) live=%s de=%s", self.user_id,
-                     cost, data.get("livestream_id") or self.livestream_id, data.get("user_id") or "(sem id)")
+            log.info("session %s: presente IGNORADO (%s invalido: %r; moedas=%r) live=%s de=%s", self.user_id,
+                     unit, cost, coins, data.get("livestream_id") or self.livestream_id,
+                     data.get("user_id") or "(sem id)")
             return                                   # also drops NaN / infinity (a JSON "NaN" parses)
         cost = int(cost)
+        if unit != "diamante" and not getattr(self, "_gift_fallback_logged", False):
+            self._gift_fallback_logged = True
+            log.warning("session %s: presente sem o campo 'diamond': contando as MOEDAS (cost=%s) no lugar",
+                        self.user_id, coins)
         if isinstance(frame_id, str) and len(frame_id) >= 8:
             if frame_id in self._gift_frame_set:
                 log.info("session %s: presente IGNORADO (quadro repetido %s)", self.user_id, frame_id[:8])
@@ -1399,9 +1414,10 @@ class BotSession:
             self._gift_names[sender] = name
         # one line per gift event: the real frames were never seen before, so this is how the
         # counting rules above get checked against production (ids, combo counts, batches)
-        log.info("session %s: presente live=%s de=%s custo=%d unidades=%d combo=%s contagem=%s lote=%s "
-                 "frame=%s total_do_usuario=%d",
+        log.info("session %s: presente live=%s de=%s diamantes=%d moedas=%s unidades=%d combo=%s contagem=%s "
+                 "lote=%s frame=%s total_do_usuario=%d",
                  self.user_id, data.get("livestream_id") or self.livestream_id, sender or "(sem id)", cost,
+                 coins,
                  units, combo_id[:8] or "-", combo.get("gift_combo_count"), data.get("gift_batch_size"),
                  str(frame_id)[:8] if frame_id else "-", self._diamonds[sender])
 

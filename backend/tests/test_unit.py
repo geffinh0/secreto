@@ -1184,6 +1184,24 @@ class GiftLedgerTests(unittest.TestCase):
         s._on_gift(self.gift(cost=30))
         self.assertEqual(s._diamonds, {"9": 30})
 
+    def test_diamonds_are_counted_not_the_coins_the_viewer_paid(self):
+        s = self.make()
+        s._on_gift({"livestream_id": "L1", "user_id": "9", "name": "Ana", "gift": {"cost": 100, "diamond": 30}})
+        self.assertEqual(s._diamonds["9"], 30)               # 100 coins paid, 30 diamonds received
+
+    def test_diamonds_times_combo_count(self):
+        s = self.make()
+        for step in range(1, 4):
+            s._on_gift({"livestream_id": "L1", "user_id": "9", "gift": {"cost": 10, "diamond": 4},
+                        "gift_combo_detail": {"gift_combo_id": "c1", "gift_combo_count": step}})
+        self.assertEqual(s._diamonds["9"], 12)               # 3 gifts x 4 diamonds
+
+    def test_a_present_with_zero_or_missing_diamond_value_counts_nothing_when_the_field_exists(self):
+        s = self.make()
+        for bad in (0, None, -1, "5"):
+            s._on_gift({"livestream_id": "L1", "user_id": "9", "gift": {"cost": 50, "diamond": bad}})
+        self.assertEqual(s._diamonds, {})                    # the coins are NOT used instead
+
     def test_a_batch_is_cost_times_batch_size(self):
         s = self.make()
         s._on_gift(self.gift(cost=10, batch=5))
