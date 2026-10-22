@@ -97,8 +97,9 @@ O front usa `http://localhost:8000`; para outro endereço:
 - *Imunidade por diamantes* (opção na tela de Moderação, mínimo 30; quem não escolheu
   nada começa em 50): quem já enviou diamantes suficientes **naquela live** fica isento de
   silenciar/banir. O valor acumulado zera a cada nova live (não é cumulativo entre transmissões).
-- *Ranking de diamantes por live* (opção desligada por padrão, na tela de Estatísticas): ao
-  fim de cada live, guarda **só daquela live** quem enviou quantos diamantes (um por linha:
+- *Ranking de diamantes por live* (opção desligada por padrão, na tela de Estatísticas): é o
+  **resumo da live pública** (o app, a DM e o resumo da live dizem isso; o que acontece depois de
+  a live virar premium não entra). Ao fim de cada live, guarda **só daquela live** quem enviou quantos diamantes (um por linha:
   `nome: enviou N diamantes`), com botão de copiar. É guardado no banco (`live_rankings`, as
   30 últimas lives de cada criadora) e lido em `GET /live_rankings`. Não posta no chat da live
   (o SuperLive recusa mensagens numa live encerrada).

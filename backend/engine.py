@@ -137,12 +137,20 @@ def _clean_name(name: str) -> str:
     return " ".join(str(name).split())[:40] or "?"
 
 
+# Frame types whose payload is logged (a few per session): the premium switch and the live's totals.
+_SAMPLED_FRAMES = frozenset({
+    "livestream_access_changed", "livestream_diamonds_update", "livestream_turned_private",
+    "livestream_forced_private", "livestream_streamer_rank_update", "livestream_private_user_exit",
+})
+
 # Private-message limits: the app's message box takes 500 characters; stay under it.
 DM_CHUNK_CHARS = 480
 DM_MAX_LINES = 30
 # Wait after a live ends before sending the ranking by private message: if the robot finds the
 # SAME live again (a false "ended"), the DM waits for the real end instead of going out partial.
 RANKING_DM_DELAY_SECONDS = float(os.getenv("SM_RANKING_DM_DELAY_S", "45") or 45)
+# Seconds after a live ends at which the diagnostic probe asks SuperLive for its own totals ((): off).
+PROBE_DELAYS = (5, 600)
 # DM jobs outlive the session that started them (a robot without a favourite stops right at the
 # end of the live, and stopping cancels the session's own tasks).
 _detached_tasks: set = set()
@@ -157,7 +165,7 @@ def _ended_label(ended_at_utc: str) -> str:
     return (when - timedelta(hours=3)).strftime("%d/%m às %H:%M")
 
 
-def ranking_dm_messages(entries: list, total: int, ended_at_utc: str) -> list:
+def ranking_dm_messages(entries: list, total: int, ended_at_utc: str, premium: bool = False) -> list:
     """The ranking as private message(s): a header, one ``nome: enviou N diamantes`` line per
     sender (the top ``DM_MAX_LINES``; the rest summed in one line) and the total, split on line
     boundaries so no message passes ``DM_CHUNK_CHARS``."""
@@ -169,7 +177,10 @@ def ranking_dm_messages(entries: list, total: int, ended_at_utc: str) -> list:
         rest_sum = sum(int(e["diamonds"]) for e in rest)
         body.append(f"e mais {len(rest)} {'pessoa' if len(rest) == 1 else 'pessoas'}: "
                     f"{format_diamonds(rest_sum)} {'diamante' if rest_sum == 1 else 'diamantes'}")
-    lines = [f"Ranking de diamantes da live de {_ended_label(ended_at_utc)} (horário de Brasília)", ""]
+    lines = [f"Resumo da live pública - ranking de diamantes ({_ended_label(ended_at_utc)}, horário de Brasília)"]
+    if premium:
+        lines.append("A live virou premium: este resumo cobre só a parte pública, até esse momento.")
+    lines.append("")
     lines += body + [total_line]
     chunks, current = [], ""
     for line in lines:
@@ -430,6 +441,8 @@ class BotSession:
         self._gift_frame_ids = deque(maxlen=4000)   # frames already counted (a replay is not a gift)
         self._gift_frame_set = set()
         self._gift_shape_logged = False
+        self._ended_by = None            # why the live handled next ended: "premium" or None (it ended)
+        self._frame_samples = Counter()  # payload samples logged per frame type (see _on_frame)
         self._cfg = None
         self._cfg_at = 0.0
         self._forbidden_hits = 0
@@ -508,6 +521,7 @@ class BotSession:
 
         total_diamonds = sum(self._diamonds.values()) if hasattr(self, "_diamonds") else 0
         ranking = self.live_ranking() if hasattr(self, "_diamonds") else []
+        ended_by, self._ended_by = self._ended_by, None
         mutes = self._live_mutes_count
         kicks = self._live_kicks_count
         total_actions = mutes + kicks
@@ -515,7 +529,7 @@ class BotSession:
         msgs_sent = self._live_messages_sent
 
         summary_text = (
-            f"Resumo da Live {ended_live_id}: Duração: {dur_str} | "
+            f"Resumo da live pública {ended_live_id}: Duração: {dur_str} | "
             f"Chat monitorado: {chat_count} msgs | "
             f"Moderações: {total_actions} ({mutes} silenciamentos, {kicks} expulsões) | "
             f"Mensagens automáticas: {msgs_sent} | "
@@ -534,6 +548,7 @@ class BotSession:
             "messages_sent": msgs_sent,
             "diamonds": total_diamonds,
             "gifters": len(ranking),
+            "ended_by": ended_by,
             "summary_text": summary_text,
             "ts": now_iso(),
         }
@@ -551,12 +566,12 @@ class BotSession:
             db.log_activity(self.user_id, "live_summary", summary_text)
         except Exception:
             pass
-        self._save_live_ranking(ended_live_id, ranking, total_diamonds, live_over)
+        self._save_live_ranking(ended_live_id, ranking, total_diamonds, live_over, ended_by)
 
         return summary_data
 
     def _save_live_ranking(self, ended_live_id: str, ranking: list, total: int,
-                           live_over: bool = True) -> None:
+                           live_over: bool = True, ended_by: Optional[str] = None) -> None:
         """End-of-live ranking, only when the creator turned the function on and someone gave
         diamonds in THAT live (the ledger is per live). Never raises: it must not disturb the
         end-of-live handling."""
@@ -571,7 +586,7 @@ class BotSession:
                 return
             conn = db.connect()
             try:
-                db.save_live_ranking(conn, self.user_id, ended_live_id, total, ranking)
+                db.save_live_ranking(conn, self.user_id, ended_live_id, total, ranking, ended_by)
             finally:
                 conn.close()
             db.log_activity(self.user_id, "live_ranking",
@@ -652,7 +667,8 @@ class BotSession:
                         "robô para abrir a conversa; depois disso o ranking passa a ser enviado.")
             if not conv_id:
                 return "Não enviado: o SuperLive não abriu a conversa com a streamer."
-            chunks = ranking_dm_messages(ranking["entries"], ranking["total_diamonds"], ranking["ended_at"])
+            chunks = ranking_dm_messages(ranking["entries"], ranking["total_diamonds"], ranking["ended_at"],
+                                         premium=ranking.get("ended_by") == "premium")
             for i, chunk in enumerate(chunks):
                 if i:
                     await asyncio.sleep(2)                # one message at a time, like a person
@@ -1182,6 +1198,7 @@ class BotSession:
             old_live = self.livestream_id
             if old_live:
                 self._emit_live_summary(old_live)
+                self._spawn_totals_probe(old_live)
             self._last_ended_livestream_id = old_live
             self.livestream_id = None
             self._drain_queue()
@@ -1233,6 +1250,12 @@ class BotSession:
             frame_stream = data.get("livestream_id")
             if frame_stream and str(frame_stream) != self.livestream_id:
                 return
+            if kind in _SAMPLED_FRAMES and self._frame_samples[kind] < 3:
+                # the format of these was never seen: a few payloads per session, to learn what
+                # signals a live turning premium and what the live's own totals look like
+                self._frame_samples[kind] += 1
+                log.info("session %s: AMOSTRA de %s #%d: %s", self.user_id, kind, self._frame_samples[kind],
+                         json.dumps(data, ensure_ascii=False)[:600])
             if kind == "livestream_message_sent":
                 self._on_chat(data)
             elif kind == "livestream_gift_sent":
@@ -1321,6 +1344,53 @@ class BotSession:
         return self._diamonds.get(user_id, 0) >= threshold
 
     # ---- gifts / diamonds ---------------------------------------------------
+    def _spawn_totals_probe(self, live_id: str) -> None:
+        total = sum(self._diamonds.values())
+        task = asyncio.get_running_loop().create_task(
+            self._probe_live_totals(live_id, total), name=f"probe-{self.user_id}")
+        _detached_tasks.add(task)
+        task.add_done_callback(_detached_tasks.discard)
+
+    async def _probe_live_totals(self, live_id: str, ledger_total: int) -> None:
+        """DIAGNOSTIC ONLY (changes nothing): asks SuperLive for its own numbers of the live just
+        ended, twice (now and 10 minutes later, when a live that went premium has really finished),
+        and logs them next to what this robot counted. It answers, from production, whether the
+        diamonds of the premium part can be read back (``livestream/statistics``: earned_diamonds,
+        public/private start times; ``livestream/top_gifters``: diamonds per user)."""
+        for delay in PROBE_DELAYS:
+            try:
+                await asyncio.sleep(delay)
+                stats = await self.client.post("livestream/statistics", {"livestream_id": str(live_id)},
+                                               priority=PRIORITY_LOW)
+                data = stats.get("statistics") if isinstance(stats, dict) and isinstance(stats.get("statistics"), dict) \
+                    else (stats.get("data") if isinstance(stats, dict) else None)
+                log.info("session %s: SONDA live %s (+%ss) statistics=%s | robo contou %d diamantes",
+                         self.user_id, live_id, delay, json.dumps(data, ensure_ascii=False)[:400], ledger_total)
+            except SuperLiveError as exc:
+                log.info("session %s: SONDA live %s (+%ss) statistics recusado: HTTP %s %s corpo=%s",
+                         self.user_id, live_id, delay, exc.status, exc.message, str(exc.body)[:200])
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                log.exception("session %s: SONDA statistics falhou", self.user_id)
+            try:
+                top = await self.client.post("livestream/top_gifters", {"livestream_id": str(live_id)},
+                                             priority=PRIORITY_LOW)
+                body = top.get("data") if isinstance(top, dict) and isinstance(top.get("data"), dict) else top
+                gifters = body.get("gifters") if isinstance(body, dict) and isinstance(body.get("gifters"), list) else []
+                log.info("session %s: SONDA live %s (+%ss) top_gifters: total_diamonds=%s total_coins=%s "
+                         "pessoas_na_pagina=%d primeiros=%s | robo contou %d diamantes", self.user_id, live_id, delay,
+                         (body or {}).get("total_diamonds"), (body or {}).get("total_coins"), len(gifters),
+                         [(g.get("diamonds"), g.get("coins")) for g in gifters[:3] if isinstance(g, dict)],
+                         ledger_total)
+            except SuperLiveError as exc:
+                log.info("session %s: SONDA live %s (+%ss) top_gifters recusado: HTTP %s %s corpo=%s",
+                         self.user_id, live_id, delay, exc.status, exc.message, str(exc.body)[:200])
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                log.exception("session %s: SONDA top_gifters falhou", self.user_id)
+
     def _reset_gift_ledger(self) -> None:
         self._diamonds.clear()
         self._gift_names.clear()
@@ -1535,6 +1605,9 @@ class BotSession:
                 if exc.is_auth_error:
                     self._fail("O token do robô expirou. Reconecte o robô na aba Robô.")
                     return
+                if self._is_premium_refusal(exc) and self.livestream_id:
+                    await self._live_went_premium()
+                    continue
                 refusal = self._permanent_message_refusal(exc)
                 if refusal:
                     self._messages_blocked_live = self.livestream_id
@@ -1547,6 +1620,27 @@ class BotSession:
             except Exception:  # noqa: BLE001
                 log.exception("auto message loop error")
                 await asyncio.sleep(MIN_INTERVAL_SECONDS)
+
+    @staticmethod
+    def _is_premium_refusal(exc: SuperLiveError) -> bool:
+        """HTTP 400 code 10 "This is a PREMIUM stream. To enter, send a gift worth N": the streamer
+        turned the live premium (entry by gift). A robot that does not pay is out of it."""
+        body = exc.body if isinstance(exc.body, dict) else {}
+        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        return exc.status == 400 and error.get("code") == 10 and "PREMIUM" in (exc.message or "").upper()
+
+    async def _live_went_premium(self) -> None:
+        """The live turned premium: the robot has no use in it (it cannot chat, and does not pay
+        to enter), so the cycle of this live ENDS NOW: summary, ranking and DM go out from what was
+        counted until here, and the robot waits for her next live. The same live is never
+        re-entered (``_last_ended_livestream_id``)."""
+        live = self.livestream_id
+        log.info("session %s: a live %s virou PREMIUM: encerrando o ciclo desta live agora",
+                 self.user_id, live)
+        self._ended_by = "premium"
+        await self.on_live_ended()
+        if self._ended_by == "premium":      # on_live_ended did nothing (e.g. already stopping)
+            self._ended_by = None
 
     @staticmethod
     def _permanent_message_refusal(exc: SuperLiveError) -> Optional[str]:

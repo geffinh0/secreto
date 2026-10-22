@@ -670,6 +670,7 @@ void main() {
           'entries': [{'user_id': '11', 'name': 'Caio', 'diamonds': 5}],
           'text': 'y',
           'dm_status': 'Enviado por mensagem privada para a streamer (1 mensagem).',
+          'ended_by': 'premium',
         },
       ]);
       await pumpStats(tester, api, enabled: true);
@@ -680,6 +681,7 @@ void main() {
       expect(find.text('1. Caio: enviou 5 diamantes'), findsOneWidget);   // its own list, not summed
       expect(find.text('Copiar ranking'), findsNWidgets(2));
       expect(find.text('Enviado por mensagem privada para a streamer (1 mensagem).'), findsOneWidget);
+      expect(find.text('A live virou premium: este resumo cobre só a parte pública, até esse momento.'), findsOneWidget);
       expect(find.text('Enviar o ranking por mensagem privada para a streamer'), findsOneWidget);
     });
 

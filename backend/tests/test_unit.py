@@ -264,7 +264,7 @@ class AntiEvasionAndNewRulesTests(unittest.TestCase):
         self.assertEqual(summary["kicks"], 1)
         self.assertEqual(summary["actions_ok"], 3)
         self.assertEqual(summary["diamonds"], 150)
-        self.assertIn("Resumo da Live live999", summary["summary_text"])
+        self.assertIn("Resumo da live pública live999", summary["summary_text"])
         self.assertEqual(session.last_live_summary, summary)
         self.assertTrue(len(session.alerts) > 0)
 
@@ -1369,7 +1369,7 @@ class RankingDMTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(client.sent), 1)
         conv, text = client.sent[0]
         self.assertEqual(conv, "conv-1")
-        self.assertEqual(text, "Ranking de diamantes da live de 20/10 às 22:30 (horário de Brasília)\n\n"
+        self.assertEqual(text, "Resumo da live pública - ranking de diamantes (20/10 às 22:30, horário de Brasília)\n\n"
                                "Ana: enviou 50 diamantes\nBia: enviou 30 diamantes\nTotal: 80 diamantes")
         self.assertTrue(self.status().startswith("Enviado"))
         await s._send_ranking_dm("L1")                                    # the same live again
@@ -1449,6 +1449,38 @@ class RankingDMTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(client.sent), 1)
         self.assertIn("Ana: enviou 40 diamantes", client.sent[0][1])
         self.assertTrue(self.saved("L2")["dm_status"].startswith("Enviado"))
+
+    async def test_premium_refusal_ends_the_cycle_now_and_the_dm_says_so(self):
+        from superlive import SuperLiveError
+        client = _DMClient()
+        s = self.live_session(client)
+        exc = SuperLiveError("This is a PREMIUM stream. To enter, send a gift worth 199 or more.", 400,
+                             {"error": {"code": 10, "message": "This is a PREMIUM stream."}})
+        self.assertTrue(s._is_premium_refusal(exc))
+        self.assertFalse(s._is_premium_refusal(SuperLiveError("x", 400, {"error": {"code": 3, "message": "PREMIUM"}})))
+        self.assertFalse(s._is_premium_refusal(SuperLiveError("PREMIUM", 403, {"error": {"code": 10}})))
+        s.streamer_shared_id = "555"                                  # has a target: waits for the next live
+        await s._live_went_premium()
+        self.assertEqual(s.state, "waiting_for_live")
+        self.assertIsNone(s.livestream_id)
+        self.assertEqual(s._last_ended_livestream_id, "L2")           # this live is never re-entered
+        await asyncio.sleep(0.05)
+        saved = self.saved("L2")
+        self.assertEqual(saved["ended_by"], "premium")
+        self.assertEqual(saved["total_diamonds"], 40)
+        self.assertEqual(len(client.sent), 1)
+        self.assertIn("Resumo da live pública", client.sent[0][1])
+        self.assertIn("virou premium: este resumo cobre só a parte pública", client.sent[0][1])
+
+    async def test_a_live_that_just_ended_has_no_premium_note(self):
+        client = _DMClient()
+        s = self.live_session(client)
+        s.streamer_shared_id = "555"
+        await s.on_live_ended()
+        await asyncio.sleep(0.05)
+        self.assertIsNone(self.saved("L2")["ended_by"])
+        self.assertIn("Resumo da live pública", client.sent[0][1])
+        self.assertNotIn("premium", client.sent[0][1])
 
     def test_long_rankings_are_cut_and_split_under_the_message_limit(self):
         from engine import DM_CHUNK_CHARS, ranking_dm_messages
@@ -1543,7 +1575,7 @@ class PermanentMessageRefusalTests(unittest.TestCase):
 
 
 class AutoMessageStopsOnRefusedLiveTests(unittest.IsolatedAsyncioTestCase):
-    async def test_a_premium_refusal_stops_the_messages_for_that_live_only(self):
+    async def test_a_premium_refusal_ends_that_live_and_messages_resume_on_the_next(self):
         from engine import BotSession
         sent = []
 
@@ -1561,13 +1593,20 @@ class AutoMessageStopsOnRefusedLiveTests(unittest.IsolatedAsyncioTestCase):
         cfg = {"settings": {"auto_messages_enabled": True, "message_interval_seconds": 10},
                "messages": ["oi"]}
         session._config = lambda force=False: cfg
+        ended = []
+
+        async def went_premium():                       # what the real one does, minus the DB/DM work
+            ended.append(session.livestream_id)
+            session.livestream_id = None                # the robot left that live
+
+        session._live_went_premium = went_premium
         with mock.patch("engine.MIN_INTERVAL_SECONDS", 0), \
                 mock.patch.object(BotSession, "_interval", staticmethod(lambda c: 0.01)), \
                 mock.patch.object(BotSession, "_handle_live_error_or_change", mock.AsyncMock()):
             task = asyncio.create_task(session._auto_message_loop())
             await asyncio.sleep(0.15)
-            self.assertEqual(sent, ["L1"])                                  # tried once, then stopped
-            self.assertIn("exige presente", session.last_error)
+            self.assertEqual(sent, ["L1"])                                  # tried once, then left
+            self.assertEqual(ended, ["L1"])                                 # the cycle ended at that moment
             session.livestream_id = "L2"                                    # next live: tries again
             await asyncio.sleep(0.1)
             task.cancel()

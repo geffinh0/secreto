@@ -57,6 +57,7 @@ def setUpModule():
     engine.MIN_INTERVAL_SECONDS = 1
     engine.LIVE_END_RECHECK_SECONDS = 0.2   # keep the end-of-live confirmation fast in tests
     engine.ACTION_SPACING_SECONDS = 0.05
+    engine.PROBE_DELAYS = ()                 # the diagnostic probe sleeps for minutes: off in tests
     main.CODE_SEND_MIN_GAP_SECONDS = 0   # the login-code tests resend back to back
     _agency.clear()
     mock.start(MOCK_PORT)
@@ -1154,6 +1155,28 @@ class LiveRankingTests(RobotTestBase):
             self.assertEqual([(e["name"], e["diamonds"]) for e in ranking[1]["entries"]], [("Ana", 100)])
         finally:
             engine.LIVE_POLL_INTERVAL_SECONDS = old_poll
+
+    def test_when_the_live_turns_premium_the_cycle_ends_at_once(self):
+        """She turns the live premium: SuperLive refuses the robot's chat message ("PREMIUM"). The
+        robot leaves that live right away, saves the ranking up to there and waits for the next."""
+        self.settings(live_ranking_enabled=True)
+        sql("UPDATE bot_settings SET auto_messages_enabled = 1, message_interval_seconds = 1 WHERE user_id = ?",
+            (self.uid,))
+        api("POST", "/messages", {"user_id": self.uid, "content": "oi", "sort_order": 0}, self.token)
+        self.connect_robot()
+        self.start_live()
+        self.gift(9, "Ana", 50)
+        self.settle(0.3)
+        mock.fail["livestream/chat/send_text_message"] = (
+            400, {"error": {"code": 10, "message": "This is a PREMIUM stream. To enter, send a gift worth 199 or more."}})
+        wait_for(lambda: self.status()["session"]["state"] == "waiting_for_live", 8, "did not leave the premium live")
+        ranking = self.rankings()
+        self.assertEqual(len(ranking), 1)
+        self.assertEqual(ranking[0]["ended_by"], "premium")
+        self.assertEqual(ranking[0]["total_diamonds"], 50)
+        # the same live is still on air (premium): the robot must not come back to it
+        self.settle(1.5)
+        self.assertEqual(self.status()["session"]["state"], "waiting_for_live")
 
     def test_a_live_without_gifts_saves_nothing(self):
         self.settings(live_ranking_enabled=True)

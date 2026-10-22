@@ -336,12 +336,15 @@ def init_db():
                 entries TEXT NOT NULL,
                 ended_at TEXT DEFAULT (datetime('now')),
                 dm_status TEXT,
+                ended_by TEXT,
                 UNIQUE (user_id, livestream_id),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
         if "dm_status" not in _columns(conn, "live_rankings"):
             c.execute("ALTER TABLE live_rankings ADD COLUMN dm_status TEXT")
+        if "ended_by" not in _columns(conn, "live_rankings"):
+            c.execute("ALTER TABLE live_rankings ADD COLUMN ended_by TEXT")
         if "last_livestream_id" not in _columns(conn, "robot_accounts"):
             c.execute("ALTER TABLE robot_accounts ADD COLUMN last_livestream_id TEXT")
 
@@ -535,16 +538,19 @@ def get_or_assign_egress_slot(conn, user_id: int, pool_size: int) -> int:
 
 
 # ─── Settings / rules / messages helpers (also used by the moderation engine) ───
-def save_live_ranking(conn, user_id: int, livestream_id: str, total: int, entries: list) -> None:
+def save_live_ranking(conn, user_id: int, livestream_id: str, total: int, entries: list,
+                      ended_by: Optional[str] = None) -> None:
     """Stores the ranking of one live. If the same live is saved twice (the robot lost and found
     it again), the bigger total wins, so a late, partial save never replaces the complete one."""
     import json
     conn.execute(
-        "INSERT INTO live_rankings (user_id, livestream_id, total_diamonds, entries) VALUES (?, ?, ?, ?) "
+        "INSERT INTO live_rankings (user_id, livestream_id, total_diamonds, entries, ended_by) "
+        "VALUES (?, ?, ?, ?, ?) "
         "ON CONFLICT(user_id, livestream_id) DO UPDATE SET total_diamonds = excluded.total_diamonds, "
-        "entries = excluded.entries, ended_at = datetime('now') "
+        "entries = excluded.entries, ended_at = datetime('now'), ended_by = excluded.ended_by "
         "WHERE excluded.total_diamonds >= live_rankings.total_diamonds",
-        (user_id, str(livestream_id), int(total), json.dumps(entries[:MAX_RANKING_ENTRIES], ensure_ascii=False)),
+        (user_id, str(livestream_id), int(total), json.dumps(entries[:MAX_RANKING_ENTRIES], ensure_ascii=False),
+         ended_by),
     )
     conn.execute(
         "DELETE FROM live_rankings WHERE user_id = ? AND id NOT IN "
@@ -557,7 +563,7 @@ def save_live_ranking(conn, user_id: int, livestream_id: str, total: int, entrie
 def get_live_ranking(conn, user_id: int, livestream_id: str) -> Optional[dict]:
     import json
     row = conn.execute(
-        "SELECT livestream_id, total_diamonds, entries, ended_at, dm_status FROM live_rankings "
+        "SELECT livestream_id, total_diamonds, entries, ended_at, dm_status, ended_by FROM live_rankings "
         "WHERE user_id = ? AND livestream_id = ?", (user_id, str(livestream_id))).fetchone()
     if row is None:
         return None
@@ -566,7 +572,8 @@ def get_live_ranking(conn, user_id: int, livestream_id: str) -> Optional[dict]:
     except ValueError:
         entries = []
     return {"livestream_id": row["livestream_id"], "total_diamonds": row["total_diamonds"],
-            "ended_at": row["ended_at"], "entries": entries, "dm_status": row["dm_status"]}
+            "ended_at": row["ended_at"], "entries": entries, "dm_status": row["dm_status"],
+            "ended_by": row["ended_by"]}
 
 
 def set_live_ranking_dm_status(conn, user_id: int, livestream_id: str, status: str) -> None:
@@ -579,14 +586,15 @@ def list_live_rankings(conn, user_id: int, limit: int = MAX_LIVE_RANKINGS) -> li
     import json
     out = []
     for row in conn.execute(
-            "SELECT livestream_id, total_diamonds, entries, ended_at, dm_status FROM live_rankings "
+            "SELECT livestream_id, total_diamonds, entries, ended_at, dm_status, ended_by FROM live_rankings "
             "WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, max(1, min(int(limit), MAX_LIVE_RANKINGS)))):
         try:
             entries = json.loads(row["entries"])
         except ValueError:
             entries = []
         out.append({"livestream_id": row["livestream_id"], "total_diamonds": row["total_diamonds"],
-                    "ended_at": row["ended_at"], "entries": entries, "dm_status": row["dm_status"]})
+                    "ended_at": row["ended_at"], "entries": entries, "dm_status": row["dm_status"],
+                    "ended_by": row["ended_by"]})
     return out
 
 

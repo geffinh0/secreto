@@ -362,6 +362,9 @@ class LiveRanking {
   /// What happened to the private message to the streamer (null = not attempted).
   final String? dmStatus;
 
+  /// 'premium' when the robot left because the live turned premium (counted up to then).
+  final String? endedBy;
+
   const LiveRanking({
     required this.livestreamId,
     required this.endedAt,
@@ -369,6 +372,7 @@ class LiveRanking {
     required this.entries,
     required this.text,
     this.dmStatus,
+    this.endedBy,
   });
 
   factory LiveRanking.fromJson(Map<String, dynamic> json) {
@@ -392,6 +396,7 @@ class LiveRanking {
       ],
       text: json['text']?.toString() ?? '',
       dmStatus: json['dm_status']?.toString(),
+      endedBy: json['ended_by']?.toString(),
     );
   }
 }

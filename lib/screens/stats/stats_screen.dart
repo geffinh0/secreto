@@ -139,9 +139,9 @@ class _DiamondRankings extends StatelessWidget {
               children: [
                 AppSwitchRow(
                   title: 'Guardar o ranking quando a live acabar',
-                  subtitle: 'Mostra quem enviou diamantes e quanto, só naquela live. '
-                      'Conta os presentes que o robô viu enquanto estava na live; '
-                      'lives sem presentes não geram ranking.',
+                  subtitle: 'Resumo da live pública: quem enviou diamantes e quanto, só naquela live. '
+                      'Conta os presentes que o robô viu enquanto estava na live; se ela virar '
+                      'premium, o que vem depois não entra. Lives sem presentes não geram ranking.',
                   value: enabled,
                   onChanged: (v) => _toggle(context, 'live_ranking_enabled', v),
                 ),
@@ -206,7 +206,7 @@ class _RankingCard extends StatelessWidget {
             runSpacing: AppSpacing.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('Live de $when', style: AppType.bodyStrong),
+              Text('Resumo da live pública de $when', style: AppType.bodyStrong),
               Text(
                 '${fmt.format(ranking.totalDiamonds)} diamantes · '
                 '${entries.length} ${entries.length == 1 ? 'pessoa' : 'pessoas'}',
@@ -230,6 +230,11 @@ class _RankingCard extends StatelessWidget {
               child: Text('e mais ${entries.length - _shown} (todos vão no texto copiado)',
                   style: AppType.meta),
             ),
+          if (ranking.endedBy == 'premium') ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text('A live virou premium: este resumo cobre só a parte pública, até esse momento.',
+                style: AppType.meta),
+          ],
           if (ranking.dmStatus != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(ranking.dmStatus!, style: AppType.meta),
